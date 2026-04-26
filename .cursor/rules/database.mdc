@@ -1,0 +1,66 @@
+---
+description: Database conventions
+globs: ["packages/db/**/*.ts", "services/**/repositories/**/*.ts"]
+alwaysApply: true
+---
+
+# Database Rules
+
+## ORM
+- Drizzle ORM only
+- Schema in `packages/db/src/schema/`
+- One file per table group
+
+## Naming
+- Tables: snake_case, plural (users, agent_tasks)
+- Columns: snake_case
+- IDs: `id` (UUID v7)
+- Timestamps: `created_at`, `updated_at`
+- Foreign keys: `<table>_id`
+- Booleans: `is_*`, `has_*`, `requires_*`
+
+## ID Strategy
+- UUID v7 (sortable, time-ordered)
+- Generated app-side
+- Never expose internal sequences
+
+## Indexes
+- All foreign keys indexed
+- Lookup columns indexed
+- Composite indexes for common query patterns
+- Partial indexes where applicable
+- HNSW for pgvector
+
+## Constraints
+- NOT NULL by default
+- Foreign keys with ON DELETE behavior explicit
+- CHECK constraints for enums
+- UNIQUE for natural keys
+
+## Migrations
+- One migration per change
+- Up + down required
+- Idempotent where possible
+- Test on production-sized data
+- Backfill scripts separate
+
+## Queries
+- Always tenant-scoped
+- Use transactions for multi-step writes
+- Limit + offset OR cursor pagination
+- No SELECT *
+- Explicit columns
+
+## JSONB
+- Use sparingly
+- Index with GIN if queried
+- Schema-validate before insert (Zod)
+
+## Soft Delete
+- `deleted_at` column nullable
+- Filter in default query
+- Hard delete for compliance (GDPR)
+
+## Audit Trail
+- audit_logs table for security events
+- Triggers for sensitive tables (V2)

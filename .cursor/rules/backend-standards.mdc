@@ -1,0 +1,80 @@
+---
+description: Backend coding standards
+globs: ["services/**/*.ts", "apps/api/**/*.ts", "packages/**/*.ts"]
+alwaysApply: true
+---
+
+# Backend Standards
+
+## TypeScript
+- Strict mode always on
+- No `any` (use `unknown` if needed)
+- No non-null assertions (`!`) without comment
+- Prefer interfaces for object shapes
+- Use `type` for unions/intersections
+- Branded types for IDs (UserId, WorkspaceId)
+
+## File Naming
+- kebab-case for files: `user-service.ts`
+- PascalCase for classes: `UserService`
+- camelCase for functions/variables
+- UPPER_SNAKE for constants
+
+## Imports
+- Absolute imports via tsconfig paths
+- Group: std lib → external → internal → relative
+- No circular dependencies
+
+## Async
+- Always async/await, no raw promises
+- Always handle errors (try/catch or .catch)
+- No floating promises
+- Cancellation via AbortSignal
+
+## Validation
+- Zod schemas for ALL external inputs
+- Validate at boundary (HTTP, queue, file)
+- Internal functions trust types
+- DTOs derived from Zod with `z.infer`
+
+## Database
+- Drizzle ORM, no raw SQL unless necessary
+- Transactions for multi-step writes
+- Always include tenant filter
+- Use prepared statements
+- No N+1 queries (use joins/batching)
+
+## API Design
+- RESTful where natural
+- Consistent response shape: `{ data, error, meta }`
+- Pagination: cursor-based
+- Versioning: `/v1/`, `/v2/`
+- OpenAPI spec generated from code
+
+## Testing
+- Vitest for unit/integration
+- Test files: `*.test.ts` next to source
+- AAA pattern (Arrange, Act, Assert)
+- No mocks for DB (use test DB)
+- Mock external services
+
+## Performance
+- Cache where appropriate (Redis)
+- Batch DB queries
+- Stream large responses
+- Avoid sync I/O
+- Profile before optimizing
+
+## Security
+- Never trust client input
+- Sanitize before storing
+- Escape before rendering
+- Use parameterized queries
+- Hash sensitive data
+- Encrypt at rest
+
+## Comments
+- Why, not what
+- TODO with ticket reference
+- No commented-out code
+- JSDoc for public APIs

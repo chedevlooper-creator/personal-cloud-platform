@@ -1,0 +1,28 @@
+{
+  "name": "personal-cloud-platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "infra:up": "cd infra/docker && docker compose up -d",
+    "infra:down": "cd infra/docker && docker compose down",
+    "infra:logs": "cd infra/docker && docker compose logs -f",
+    "db:migrate": "pnpm --filter @pcp/db migrate",
+    "db:seed": "pnpm --filter @pcp/db seed"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

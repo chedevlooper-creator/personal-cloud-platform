@@ -1,0 +1,68 @@
+---
+description: Core architecture rules for the platform
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# Architecture Rules
+
+## Project Type
+Multi-tenant cloud workspace + AI agent platform.
+
+## Service Boundaries
+- auth-service: identity, sessions, OAuth
+- workspace-service: file storage, quotas
+- runtime-service: code execution sandboxes
+- agent-service: AI orchestration, tool calling
+- memory-service: long-term memory, embeddings
+- publish-service: app deployment
+
+## Cross-Service Communication
+- Internal: HTTP with service auth tokens
+- Async: Redis pub/sub or BullMQ
+- No direct DB access across services
+
+## Tenant Isolation
+- Every query MUST scope by user_id or organization_id
+- No raw SQL without tenant filter
+- Storage paths prefixed with tenant ID
+
+## State Management
+- PostgreSQL: source of truth
+- Redis: cache, sessions, rate limits, queues
+- MinIO/S3: file content, build artifacts
+
+## Code Organization
+- Each service in `services/<name>/`
+- Shared types in `packages/shared/`
+- DB schema in `packages/db/`
+- Each service exports: routes, services, repositories, types
+
+## Module Pattern
+- Repository: pure DB access
+- Service: business logic
+- Controller/Route: HTTP handler + validation
+- DTOs: Zod schemas in shared
+
+## Error Handling
+- Custom error classes (AppError, AuthError, ValidationError, etc.)
+- Never leak internal errors to client
+- Always log with correlation ID
+- HTTP status codes consistent
+
+## Logging
+- Structured JSON via pino
+- Required fields: timestamp, level, correlationId, userId, service
+- No PII in logs (mask emails, redact tokens)
+
+## Configuration
+- Environment variables only
+- Validated at startup with Zod
+- No hardcoded secrets
+- Different configs per environment
+
+## Dependencies
+- Prefer standard library
+- Add deps only when justified
+- Pin versions
+- Audit regularly

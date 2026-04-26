@@ -1,0 +1,105 @@
+---
+description: Security requirements for all code
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# Security Rules
+
+## Authentication
+- Argon2id for password hashing (m=19456, t=2, p=1)
+- Generic error messages on auth failure
+- Rate limiting on auth endpoints
+- Session tokens: cryptographically secure random (32+ bytes)
+- HTTP-only, Secure, SameSite=Lax cookies
+- Session expiration: 7 days, refresh on use
+
+## OAuth/OIDC
+- PKCE for all OAuth flows
+- State parameter (112+ bits entropy)
+- Validate redirect URIs against allowlist
+- Refresh token rotation
+- Encrypt refresh tokens at rest
+- Verify ID token signature, issuer, audience
+
+## Authorization
+- Check permissions on EVERY request
+- Tenant scope on EVERY query
+- Principle of least privilege
+- Role-based access control
+- Resource-level checks (not just route-level)
+
+## Input Validation
+- Zod for all inputs
+- Validate types, lengths, formats
+- Sanitize HTML (DOMPurify if rendering)
+- Reject unknown fields (Zod strict)
+- Limit request body size
+
+## SQL Injection
+- Drizzle ORM only
+- No string concatenation in queries
+- Parameterized queries always
+
+## XSS
+- React escapes by default
+- No `dangerouslySetInnerHTML` without sanitization
+- CSP headers strict
+- HttpOnly cookies for tokens
+
+## CSRF
+- Validate Origin header on non-GET
+- SameSite=Lax cookies
+- CSRF tokens for state-changing forms (if not API-only)
+
+## Secrets
+- Never in code or git
+- Environment variables only
+- Encrypt at rest in DB (AES-256-GCM)
+- Rotate regularly
+- No secrets in logs
+
+## File Operations
+- Path traversal protection (resolve + check prefix)
+- MIME type validation
+- File size limits
+- Virus scan for user uploads (V2)
+- Store outside web root
+
+## Sandbox
+- Non-root container execution
+- Read-only rootfs
+- Writable workspace volume only
+- /tmp as tmpfs (size limited)
+- No capabilities (drop ALL, add minimum)
+- Network egress deny by default
+- Resource limits (CPU, memory, disk, pids)
+- Timeout enforcement
+- Command allow/deny list
+
+## Logging
+- No passwords, tokens, or full PII
+- Mask emails in logs (u**@d**.com)
+- Audit security events
+- Tamper-evident audit logs
+
+## Headers
+- Helmet middleware
+- HSTS in production
+- X-Frame-Options: DENY
+- X-Content-Type-Options: nosniff
+- Referrer-Policy: strict-origin-when-cross-origin
+- CSP strict
+
+## Rate Limiting
+- IP-based on auth endpoints
+- Account-based on sensitive ops
+- Per-tenant on resource-intensive ops
+- Token bucket or fixed window
+- Return 429 with Retry-After
+
+## Dependencies
+- Snyk/Trivy scan in CI
+- Update regularly
+- Pin versions
+- Review changes
