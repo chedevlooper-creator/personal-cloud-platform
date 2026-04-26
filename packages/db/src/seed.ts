@@ -10,6 +10,7 @@ async function main() {
     // await db.insert(schema.users).values([
     //   { name: 'Admin User', email: 'admin@example.com' }
     // ]);
+    console.log(db, schema);
     
     console.log('✅ Seeding completed successfully');
   } catch (error) {

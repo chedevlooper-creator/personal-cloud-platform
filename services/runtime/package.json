@@ -1,0 +1,33 @@
+{
+  "name": "@pcp/runtime-service",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pcp/db": "workspace:*",
+    "@pcp/shared": "workspace:*",
+    "@fastify/cookie": "^9.3.1",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/websocket": "^10.0.1",
+    "dockerode": "^4.0.2",
+    "fastify": "^4.26.2",
+    "fastify-type-provider-zod": "^1.1.9",
+    "pino": "^8.19.0",
+    "zod": "^3.22.4",
+    "drizzle-orm": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/dockerode": "^3.3.29",
+    "pino-pretty": "^10.3.1",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.2",
+    "vitest": "^1.4.0"
+  }
+}
