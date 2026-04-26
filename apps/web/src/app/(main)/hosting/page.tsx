@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, RefreshCw, Rocket, Server, Trash2 } from 'lucide-react';
+import { ExternalLink, Globe2, RefreshCw, Rocket, Server, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { WorkspaceSummary } from '@/components/workspace/create-workspace-dialog';
 import { getApiErrorMessage, publishApi, workspaceApi } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -105,132 +108,112 @@ export default function HostingPage() {
   const canCreate = hostingReady && Boolean(defaultWorkspaceId && name.trim());
 
   return (
-    <div className="flex-1 overflow-auto p-6 lg:p-8">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mx-auto max-w-4xl p-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Hosting</h1>
-          <p className="mt-2 max-w-2xl text-base text-zinc-600 dark:text-zinc-400">
-            Create site records and deploy workspace apps when the publish service is online.
-          </p>
+          <h2 className="text-lg font-semibold text-foreground">Hosting</h2>
+          <p className="text-sm text-muted-foreground">Deploy workspace apps as hosted services</p>
         </div>
-        <Button onClick={() => setShowCreate((value) => !value)} disabled={!hostingReady || workspaces.length === 0}>
-          <Rocket className="mr-1 h-4 w-4" />
+        <Button size="sm" onClick={() => setShowCreate((v) => !v)} disabled={!hostingReady || workspaces.length === 0}>
+          <Rocket className="mr-1.5 h-3.5 w-3.5" />
           Create site
         </Button>
-      </header>
+      </div>
 
       {appsQuery.isError && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-          Publish service is not available at the configured endpoint. Hosting actions are disabled until it responds.
+        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
+          Publish service is not available. Hosting actions are disabled until it responds.
         </div>
       )}
 
       {showCreate && (
         <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (canCreate) createApp.mutate();
-          }}
-          className="mb-6 grid gap-4 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+          onSubmit={(e) => { e.preventDefault(); if (canCreate) createApp.mutate(); }}
+          className="mt-4 grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
         >
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="site-name">Site name</Label>
-            <Input id="site-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Docs app" />
+            <Input id="site-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="My App" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="subdomain">Subdomain</Label>
             <Input
               id="subdomain"
               value={subdomain}
-              onChange={(event) => setSubdomain(event.target.value)}
-              placeholder={normalizeSubdomain(name || 'docs-app')}
+              onChange={(e) => setSubdomain(e.target.value)}
+              placeholder={normalizeSubdomain(name || 'my-app')}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="workspace">Workspace</Label>
             <select
               id="workspace"
               value={defaultWorkspaceId}
-              onChange={(event) => setWorkspaceId(event.target.value)}
-              className="h-9 w-full rounded-lg border border-zinc-200 bg-background px-3 text-sm dark:border-zinc-800"
+              onChange={(e) => setWorkspaceId(e.target.value)}
+              className="h-8 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
             >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
           </div>
-          <Button type="submit" disabled={!canCreate || createApp.isPending}>
+          <Button type="submit" size="sm" disabled={!canCreate || createApp.isPending}>
             {createApp.isPending ? 'Creating...' : 'Create'}
           </Button>
         </form>
       )}
 
-      <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mt-6">
         {appsQuery.isLoading ? (
-          <div className="flex h-40 items-center justify-center text-zinc-500">Loading sites...</div>
+          <LoadingSkeleton variant="card" />
         ) : apps.length > 0 ? (
-          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <div className="space-y-3">
             {apps.map((app) => (
-              <li key={app.id} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                    <Server className="h-5 w-5" />
+              <div key={app.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Server className="h-5 w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-semibold">{app.name}</h2>
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-foreground">{app.name}</h3>
+                      <StatusBadge variant={app.status === 'running' ? 'running' : 'stopped'} dot>
                         {app.status}
-                      </span>
+                      </StatusBadge>
                     </div>
-                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                      {app.subdomain}.apps.platform.com · {workspaceNameById.get(app.workspaceId) || 'Workspace'} · Updated{' '}
-                      {formatDate(app.updatedAt)}
+                    <p className="text-xs text-muted-foreground">
+                      {app.subdomain}.apps.platform.com · {workspaceNameById.get(app.workspaceId) || 'Workspace'} · {formatDate(app.updatedAt)}
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => deployApp.mutate(app.id)}
-                    disabled={!hostingReady || deployApp.isPending}
-                  >
-                    <RefreshCw className="mr-1 h-4 w-4" />
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => deployApp.mutate(app.id)} disabled={!hostingReady || deployApp.isPending}>
+                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
                     Deploy
                   </Button>
-                  <Button variant="outline" size="sm" disabled>
-                    <Trash2 className="mr-1 h-4 w-4" />
-                    Delete
-                  </Button>
                   <Button
-                    render={<a href={`http://${app.subdomain}.apps.platform.com`} target="_blank" rel="noreferrer" />}
-                    variant="outline"
                     size="sm"
+                    variant="outline"
+                    render={<a href={`http://${app.subdomain}.apps.platform.com`} target="_blank" rel="noreferrer" />}
                   >
-                    Open <ExternalLink className="ml-1 h-4 w-4" />
+                    Open <ExternalLink className="ml-1 h-3.5 w-3.5" />
                   </Button>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
-        ) : (
-          <div className="flex h-72 flex-col items-center justify-center gap-4 text-center">
-            <Rocket className="h-10 w-10 text-zinc-400" />
-            <div>
-              <h2 className="font-semibold">No sites yet</h2>
-              <p className="mt-1 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
-                Create a site from an existing workspace. Deploy controls activate when the publish service is reachable.
-              </p>
-            </div>
-            <Button onClick={() => setShowCreate(true)} disabled={!hostingReady || workspaces.length === 0}>
-              Create site
-            </Button>
           </div>
+        ) : (
+          <EmptyState
+            icon={<Globe2 className="h-6 w-6" />}
+            title="No sites yet"
+            description="Create a site from an existing workspace."
+            action={{
+              label: 'Create site',
+              onClick: () => setShowCreate(true),
+            }}
+          />
         )}
-      </section>
+      </div>
     </div>
   );
 }
