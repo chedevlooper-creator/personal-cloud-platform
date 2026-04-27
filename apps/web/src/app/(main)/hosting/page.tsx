@@ -33,6 +33,17 @@ type WorkspacesResponse = {
   limit: number;
 };
 
+type HostedService = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  slug: string;
+  status: string;
+  kind: string;
+  updatedAt: string;
+  publicUrl?: string | null;
+};
+
 export default function HostingPage() {
   const { data: user } = useUser();
   const queryClient = useQueryClient();
@@ -61,9 +72,9 @@ export default function HostingPage() {
     retry: false,
     queryFn: async () => {
       const res = await publishApi.get('/hosted-services', {
-        params: { workspaceId: defaultWorkspaceId, userId: user?.id },
+        params: { workspaceId: defaultWorkspaceId },
       });
-      return res.data as any[];
+      return res.data as HostedService[];
     },
   });
 
@@ -78,7 +89,6 @@ export default function HostingPage() {
     mutationFn: async () => {
       if (!user?.id) throw new Error('You must be signed in.');
       await publishApi.post('/hosted-services', {
-        userId: user.id,
         workspaceId: defaultWorkspaceId,
         name: name.trim(),
         slug: normalizeSlug(slug || name),
@@ -100,7 +110,7 @@ export default function HostingPage() {
 
   const startService = useMutation({
     mutationFn: async (id: string) => {
-      await publishApi.post(`/hosted-services/${id}/start`, { userId: user?.id });
+      await publishApi.post(`/hosted-services/${id}/start`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
@@ -111,7 +121,7 @@ export default function HostingPage() {
 
   const stopService = useMutation({
     mutationFn: async (id: string) => {
-      await publishApi.post(`/hosted-services/${id}/stop`, { userId: user?.id });
+      await publishApi.post(`/hosted-services/${id}/stop`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
@@ -122,7 +132,7 @@ export default function HostingPage() {
 
   const deleteService = useMutation({
     mutationFn: async (id: string) => {
-      await publishApi.delete(`/hosted-services/${id}`, { params: { userId: user?.id } });
+      await publishApi.delete(`/hosted-services/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
@@ -233,7 +243,7 @@ export default function HostingPage() {
           <LoadingSkeleton variant="card" />
         ) : services.length > 0 ? (
           <div className="space-y-3">
-            {services.map((svc: any) => {
+            {services.map((svc) => {
               const isRunning = svc.status === 'running';
               const isStarting = svc.status === 'starting';
               return (

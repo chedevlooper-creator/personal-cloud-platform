@@ -21,10 +21,22 @@ type FileContentResponse = {
   updatedAt: string;
 };
 
+type DraftContent = {
+  path: string;
+  content: string;
+};
+
 export default function WorkspaceEditor() {
-  const { currentWorkspaceId, selectedFile, selectedItem, openFiles, setSelectedFile, removeOpenFile } = useWorkspaceStore();
+  const {
+    currentWorkspaceId,
+    selectedFile,
+    selectedItem,
+    openFiles,
+    setSelectedFile,
+    removeOpenFile,
+  } = useWorkspaceStore();
   const { resolvedTheme } = useTheme();
-  const [editedContent, setEditedContent] = useState<string | null>(null);
+  const [draftContent, setDraftContent] = useState<DraftContent | null>(null);
   const editorRef = useRef<unknown>(null);
 
   const {
@@ -44,10 +56,7 @@ export default function WorkspaceEditor() {
     retry: false,
   });
 
-  // Reset edited content when file changes
-  useEffect(() => {
-    setEditedContent(null);
-  }, [selectedFile]);
+  const editedContent = draftContent?.path === selectedFile ? draftContent.content : null;
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -59,7 +68,7 @@ export default function WorkspaceEditor() {
     },
     onSuccess: () => {
       toast.success('File saved');
-      setEditedContent(null);
+      setDraftContent(null);
     },
     onError: (err) => {
       toast.error(getApiErrorMessage(err, 'Failed to save file'));
@@ -113,7 +122,7 @@ export default function WorkspaceEditor() {
                 'group flex h-full min-w-[120px] max-w-[200px] cursor-pointer items-center justify-between border-r border-border px-3 text-xs transition-colors',
                 selectedFile === file
                   ? 'bg-background text-foreground'
-                  : 'bg-muted/30 text-muted-foreground hover:bg-muted/60'
+                  : 'bg-muted/30 text-muted-foreground hover:bg-muted/60',
               )}
               onClick={() => setSelectedFile(file)}
             >
@@ -123,9 +132,12 @@ export default function WorkspaceEditor() {
                 aria-label={`Close ${file}`}
                 className={cn(
                   'ml-2 flex h-5 w-5 items-center justify-center rounded-sm hover:bg-muted',
-                  selectedFile === file ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  selectedFile === file ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
                 )}
-                onClick={(e) => { e.stopPropagation(); removeOpenFile(file); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeOpenFile(file);
+                }}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -158,7 +170,9 @@ export default function WorkspaceEditor() {
             </div>
           </div>
         ) : isLoading ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            Loading...
+          </div>
         ) : isError ? (
           <PreviewError
             title={selectedItem?.name || selectedFile}
@@ -172,8 +186,11 @@ export default function WorkspaceEditor() {
             theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
             path={selectedFile}
             defaultLanguage={getLanguage(selectedFile)}
-            value={fileContent?.content ?? ''}
-            onChange={(value) => setEditedContent(value ?? null)}
+            value={editedContent ?? fileContent?.content ?? ''}
+            onChange={(value) => {
+              if (!selectedFile) return;
+              setDraftContent(value === undefined ? null : { path: selectedFile, content: value });
+            }}
             options={{
               minimap: { enabled: true },
               fontSize: 13,
@@ -226,7 +243,8 @@ function PreviewError({
 
 function getPreviewError(error: unknown) {
   if (typeof error === 'object' && error && 'response' in error) {
-    const response = (error as { response?: { data?: { error?: string; message?: string } } }).response;
+    const response = (error as { response?: { data?: { error?: string; message?: string } } })
+      .response;
     return response?.data?.error || response?.data?.message || 'This file cannot be previewed.';
   }
 

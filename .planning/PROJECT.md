@@ -2,101 +2,87 @@
 
 ## What This Is
 
-CloudMind OS is a multi-tenant, browser-based personal AI cloud computer. Users get persistent workspaces, file management, an AI agent with tool calling, browser terminal access, automation scheduling, app hosting, snapshots, settings, and admin surfaces through a Next.js frontend backed by independent Fastify services.
-
-This is a brownfield TypeScript pnpm monorepo: the major product modules already exist, but the implementation still needs production-readiness work around security hardening, tenant isolation, runtime sandboxing, agent durability, test coverage, and deployment reliability.
+CloudMind OS is a browser-based personal cloud computer for persistent workspaces, files, terminal/runtime execution, AI agent tasks, automations, hosting, snapshots, settings, and administration. The current repository already contains a Next.js frontend and multiple Fastify services, but this reset treats the existing code as a code-inferred MVP baseline that must be audited, hardened, and verified before it is considered complete.
 
 ## Core Value
 
-Users can safely run and automate useful work inside persistent cloud workspaces without leaking tenant data, credentials, or host resources.
+A user can safely run and manage a persistent AI-assisted workspace in the browser without losing data, crossing tenant boundaries, or executing unapproved risky actions.
 
 ## Requirements
 
 ### Validated
 
-- [validated] Next.js app shell and main product pages exist for dashboard, files, chat, terminal, automations, hosting, snapshots, settings, admin, and related workspace surfaces.
-- [validated] Users can register, log in, log out, refresh sessions, and use Google OAuth through the auth service.
-- [validated] Sessions are persisted in PostgreSQL and transported through HTTP-only cookies.
-- [validated] Workspace APIs support creating/listing/getting/deleting workspaces and file operations backed by database metadata plus S3-compatible object storage.
-- [validated] Workspace path traversal protection has dedicated tests.
-- [validated] Runtime service exposes Docker-backed runtime creation, start/stop/delete, command execution, logs/events, and terminal WebSocket attachment.
-- [validated] Agent service stores tasks, task steps, conversations, tool calls, provider-backed LLM calls, and basic tool execution.
-- [validated] Automations are modeled and queued through BullMQ/Redis.
-- [validated] Memory service stores memory entries with pgvector embeddings and supports semantic search.
-- [validated] Publish service can model hosted services and start Docker containers with Traefik routing labels.
-- [validated] Settings/admin/provider credential schema exists, including AES-256-GCM encrypted credential storage.
-- [validated] Local infrastructure exists for PostgreSQL pgvector, Redis, MinIO, Traefik, and Mailhog.
-- [validated] Shared Zod DTOs exist in `packages/shared` and Drizzle owns schema/migrations in `packages/db`.
+Code-inferred existing capabilities, not yet UAT-validated in this reset:
+
+- [x] User-facing app shell and protected routes exist in `apps/web`.
+- [x] Email/password auth, session cookies, OAuth hooks, preferences, provider credentials, and admin routes exist in `services/auth`.
+- [x] Workspace metadata and S3-backed file content paths exist in `services/workspace`.
+- [x] Runtime container lifecycle code exists in `services/runtime`.
+- [x] Agent task, conversation, tool-call, and automation skeletons exist in `services/agent`.
+- [x] Memory, publish, snapshot, notification, terminal, and skill schema foundations exist in `packages/db`.
 
 ### Active
 
-- [ ] Harden startup configuration so production services fail closed when required secrets and provider keys are missing.
-- [ ] Audit and enforce tenant isolation across every DB read/write and file/storage path.
-- [ ] Bring service implementation closer to the repo standard: route -> service -> repository, consistent typed errors, and consistent response envelopes.
-- [ ] Harden auth and OAuth behavior against the security rules: state/PKCE, redirect allowlists, generic failures, cookie policy, and session lifetime.
-- [ ] Harden runtime sandboxing beyond MVP Docker defaults: non-root user, read-only rootfs, capability drops, pids/disk/tmpfs limits, seccomp/apparmor, and command policy tests.
-- [ ] Make agent execution durable and observable: approval enforcement, cancellation, retry/error semantics, token/cost accounting, and realtime task updates.
-- [ ] Align frontend service routing, especially terminal WebSocket behavior, with the intended dev/production proxy model.
-- [ ] Add integration and E2E coverage for critical user journeys and tenant isolation.
-- [ ] Polish deployment assets: Dockerfiles, CI checks, migration flow, health/readiness checks, and production docs.
+- [ ] Re-establish baseline correctness with builds, tests, migrations, and live-service smoke checks.
+- [ ] Close security gaps around secrets, admin access, tenant scoping, and user spoofing.
+- [ ] Turn workspace, runtime, agent, automation, hosting, and snapshot flows from MVP/simulated behavior into verified behavior.
+- [ ] Align frontend modules with real backend behavior and remove misleading placeholder states.
+- [ ] Add test coverage and GSD verification around critical user journeys.
 
 ### Out of Scope
 
-- A single `apps/api` gateway - this repo intentionally uses independent services under `services/*`.
-- Organization/team tenancy - current scope is user/workspace tenancy unless a later milestone explicitly adds organizations.
-- Billing, subscriptions, and payments - no payment code exists and it is not needed for the hardening milestone.
-- Firecracker/Kata microVM runtime - documented as a V2 direction; current active work should harden the Docker abstraction first.
-- Multi-host orchestration for hosted apps - current publish service is Docker/Traefik on one host; cluster scheduling is deferred.
-- Replacing Drizzle/PostgreSQL/pgvector with another persistence stack - current architecture decisions intentionally choose these.
+- Native mobile apps - web-first until core workspace/runtime behavior is reliable.
+- Billing and paid plans - not needed to validate the personal cloud workflow.
+- Enterprise organization management - current schema is user-first and does not consistently model organizations.
+- Public plugin/skill marketplace - internal skill storage can be stabilized first.
+- Multi-region deployment - local Docker Compose and single-node reliability come first.
 
 ## Context
 
-The repo is a pnpm workspace with `apps/web`, six Fastify services, `packages/db`, and `packages/shared`. The frontend is Next.js 16 and React 19, so routing/config changes must consult local Next docs as noted in `apps/web/AGENTS.md`.
-
-Service boundaries are defined by `.cursor/rules/architecture.mdc`: auth, workspace, runtime, agent, memory, and publish are independent services. The backend is not a single gateway. Services should communicate through HTTP, Redis pub/sub, or queues, and DB access is centralized through `packages/db`.
-
-The codebase already contains broad MVP feature coverage. `README.md` claims all nine original phases are implemented, while `docs/PROGRESS.md` still says the foundation phase is in progress and older `docs/BUILD_PLAN.md` mentions a stale `apps/api` gateway. Treat source code, package manifests, `AGENTS.md`, and `.cursor/rules/*` as more authoritative than stale prose.
-
-The existing implementation is intentionally MVP-shaped in several places. Notable examples include dummy/fallback secrets, direct Drizzle access from service classes, many `any` casts around routes/provider boundaries, partial runtime sandbox controls, simulated agent command execution, and limited test coverage outside auth/workspace/memory/agent units.
+- Repo is a pnpm monorepo with `apps/*`, `services/*`, and `packages/*`.
+- Frontend is Next.js 16 + React 19, so routing/config changes must follow local Next docs.
+- Backend is split across independent Fastify services; there is no `apps/api`.
+- Database schema is centralized in `packages/db`, but services directly import the shared DB client.
+- Infrastructure stack is Postgres pgvector, Redis, MinIO, Traefik, and Mailhog.
+- Old GSD plans were archived at `.planning/archive/legacy-20260427-reset/` and are no longer the active baseline.
+- New codebase map is in `.planning/codebase/` and should be used for all future planning.
 
 ## Constraints
 
-- **Runtime**: Node.js 20+ and pnpm 9+ are required by root package metadata.
-- **Database**: PostgreSQL with pgvector is required; memory service depends on vector support.
-- **Architecture**: No cross-service DB ownership changes; schema and migrations stay in `packages/db`.
-- **Frontend**: Next.js 16 and React 19 differ from older conventions; check `apps/web/node_modules/next/dist/docs/` before routing/config work.
-- **Security**: Every resource query and storage path must be tenant scoped by user/workspace/organization context.
-- **Sandbox**: Docker is the MVP runtime boundary; production-readiness work must reduce host escape and resource exhaustion risk before enabling untrusted execution broadly.
-- **Docs**: `README.md` has stale areas; executable config and source code win over prose.
+- **Tenant isolation**: Every data access path must be scoped by authenticated user or workspace ownership because this is a multi-tenant cloud workspace.
+- **Security**: Secrets must come from env and production startup must fail closed; no default production keys.
+- **Runtime safety**: Docker execution must enforce non-root, resource limits, network policy, and approval gates before it can be considered safe.
+- **Service boundaries**: Keep current services independent; do not add a stale `apps/api` gateway assumption.
+- **TypeScript**: Strict mode and `noUncheckedIndexedAccess` are active; new code must satisfy them without broad `any`.
+- **Shared DTOs**: External HTTP inputs should use Zod schemas from `@pcp/shared` or local strict schemas.
+- **Planning**: New work should trace to `.planning/REQUIREMENTS.md` and `.planning/ROADMAP.md`, not archived legacy plans.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use pnpm workspaces | Shared packages and multiple services need one repo-level dependency graph. | Pending |
-| Use independent Fastify services instead of `apps/api` | Service boundaries are already implemented under `services/*`. | Pending |
-| Use Drizzle ORM and keep schema in `packages/db` | SQL-first type-safe schema and migrations are already established. | Pending |
-| Use PostgreSQL with pgvector for memory | Keeps relational and vector data in one operational store for MVP. | Pending |
-| Use Docker for MVP runtime and hosting | Faster to build and already implemented through Dockerode. | Revisit for production isolation |
-| Keep `packages/shared` source-only | Consumers import DTOs directly from `src`; no build contract exists. | Pending |
-| Treat the next milestone as production hardening | Core modules exist; the highest risk is reliability/security, not more feature breadth. | Pending |
+| Archive old GSD root artifacts and create a fresh planning baseline | User requested a clean start while preserving prior context | Pending |
+| Treat current code as MVP baseline, not finished product | Source contains mocks, placeholders, and security gaps despite README completion claims | Pending |
+| Prioritize hardening before feature expansion | Tenant isolation, secrets, and runtime safety are prerequisites for a personal cloud platform | Pending |
+| Use interactive GSD with text mode | Codex default mode cannot use GSD's interactive menu tool; text-mode docs keep the workflow usable | Pending |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `$gsd-transition`):
-1. Requirements invalidated? -> Move to Out of Scope with reason
-2. Requirements validated? -> Move to Validated with phase reference
-3. New requirements emerged? -> Add to Active
-4. Decisions to log? -> Add to Key Decisions
-5. "What This Is" still accurate? -> Update if drifted
+**After each phase transition**:
+1. Requirements invalidated? Move to Out of Scope with reason.
+2. Requirements validated? Move to Validated with phase reference.
+3. New requirements emerged? Add to Active.
+4. Decisions to log? Add to Key Decisions.
+5. "What This Is" still accurate? Update if drifted.
 
-**After each milestone** (via `$gsd-complete-milestone`):
-1. Full review of all sections
+**After each milestone**:
+1. Full review of all sections.
 2. Core Value check - still the right priority?
 3. Audit Out of Scope - reasons still valid?
-4. Update Context with current state
+4. Update Context with current state.
 
 ---
-*Last updated: 2026-04-27 after initialization*
+*Last updated: 2026-04-27 after clean GSD reset and codebase remap*
+

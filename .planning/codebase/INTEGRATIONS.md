@@ -1,121 +1,90 @@
-# External Integrations
-
-**Analysis Date:** 2026-04-27
-
-## APIs & External Services
-
-**LLM Providers:**
-- OpenAI - Chat provider and embeddings.
-  - SDK/Client: `openai` in `services/agent` and `services/memory`.
-  - Auth: `OPENAI_API_KEY`.
-  - Usage: `services/agent/src/llm/openai.ts`, `services/memory/src/embeddings/openai.ts`.
-- Anthropic - Chat provider.
-  - SDK/Client: `@anthropic-ai/sdk`.
-  - Auth: `ANTHROPIC_API_KEY`.
-  - Usage: `services/agent/src/llm/anthropic.ts`.
-- MiniMax Anthropic-compatible endpoint - Default/provider option in the agent service.
-  - Auth: `MINIMAX_TOKEN_PLAN_API_KEY` or `MINIMAX_API_KEY`.
-  - Base URL: `MINIMAX_BASE_URL`.
-  - Usage: `services/agent/src/llm/provider.ts`.
-
-**OAuth:**
-- Google OAuth - Login provider in auth service.
-  - SDK/Client: `@fastify/oauth2`.
-  - Auth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-  - Callback: `services/auth/src/routes.ts`.
-
-**Email:**
-- Mailhog - Local SMTP capture.
-  - Infra: `infra/docker/docker-compose.yml`.
-  - Current app usage: env placeholder only; no production email implementation is evident.
-
-## Data Storage
-
-**Database:**
-- PostgreSQL 16 with pgvector - Main relational and vector store.
-  - Connection: `DATABASE_URL`.
-  - Client: Drizzle ORM via `packages/db/src/client.ts`.
-  - Migrations: `packages/db/src/migrations/`.
-  - Extensions: `uuid-ossp`, `pgcrypto`, `vector` in `infra/docker/postgres/init.sql`.
-
-**Object Storage:**
-- MinIO / S3-compatible storage - Workspace file content and snapshots.
-  - SDK/Client: AWS SDK v3 in `services/workspace`.
-  - Auth: `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`.
-  - Tenant path convention: storage keys must be user/workspace-prefixed per repo rules.
-
-**Queue/Cache:**
-- Redis 7 - BullMQ automation queue backing.
-  - Connection: `REDIS_URL`.
-  - Usage: `services/agent/src/automation/queue.ts`.
-
-## Authentication & Identity
-
-**Session Auth:**
-- Custom email/password and OAuth-backed sessions.
-  - Storage: `sessions` table.
-  - Token transport: `sessionId` HTTP-only cookie.
-  - Password hashing: Argon2 in `services/auth/src/service.ts`.
-
-**Credentials Storage:**
-- Provider credentials and integration secrets are modeled as AES-256-GCM encrypted rows.
-  - Schema: `packages/db/src/schema/provider_credentials.ts`, `packages/db/src/schema/integrations.ts`.
-  - Implementation: `services/auth/src/encryption.ts`.
-
-## Runtime and Hosting
-
-**Docker Engine:**
-- Runtime service creates sandbox containers through Dockerode.
-  - Provider: `services/runtime/src/provider/docker.ts`.
-  - Default runtime network mode: `none`.
-- Publish service creates hosted service containers through Dockerode.
-  - Provider: `services/publish/src/service.ts`.
-  - Traefik labels route `*.apps.localhost`.
-
-**Traefik:**
-- Local reverse proxy and hosted app router.
-  - Config: `infra/docker/docker-compose.yml`.
-  - Publish labels are generated in `services/publish/src/service.ts`.
-
-## Frontend-to-Service APIs
-
-**Browser API Clients:**
-- Auth: `NEXT_PUBLIC_AUTH_API_URL` or `http://localhost:3001/auth`.
-- Workspace: `NEXT_PUBLIC_WORKSPACE_API_URL` or `http://localhost:3002/api`.
-- Runtime: `NEXT_PUBLIC_RUNTIME_API_URL` or `http://localhost:3003/api`.
-- Agent: `NEXT_PUBLIC_AGENT_API_URL` or `http://localhost:3004/api`.
-- Publish: `NEXT_PUBLIC_PUBLISH_API_URL` or `http://localhost:3006/publish`.
-- Client definitions: `apps/web/src/lib/api.ts`.
-
-## Monitoring & Observability
-
-**Logs:**
-- Pino is configured in each Fastify service.
-- Production docs expect structured logs with service/user/correlation context, but current service code often logs minimal context.
-
-**Health Checks:**
-- Each service exposes `GET /health` on its own port.
-- Infra services define Docker health checks in `infra/docker/docker-compose.yml`.
-
-## Environment Configuration
-
-**Development:**
-- `infra/docker/.env.example` provides local infra defaults.
-- `infra/docker/.env` is ignored and must not be committed.
-- Some services currently include insecure fallback secrets for local dev; production must override them.
-
-**Production:**
-- `docs/PRODUCTION.md` recommends managed Postgres/Redis/S3, HTTPS through Traefik, strict CORS, secure cookies, image scanning, and backups.
-
-## Webhooks & Callbacks
-
-**Incoming:**
-- Google OAuth callback: `/auth/oauth/google/callback`.
-- No Stripe/payment webhook implementation is present.
-
-**Outgoing:**
-- Automation webhook notification mode exists in schema/DTOs, but implementation appears incomplete.
-
 ---
-*Integration audit: 2026-04-27*
-*Update when adding/removing external services*
+focus: tech
+mapped_at: 2026-04-27
+last_mapped_commit: c55e9b3bb8f13d990887889dfeb3418507c7a360
+---
+
+# Integrations
+
+## Overview
+
+The app integrates with local infrastructure through Docker Compose and with AI providers through service-level SDK clients. The frontend currently talks directly to service ports rather than through a single API gateway.
+
+## Database
+
+- PostgreSQL is the source of truth through `packages/db/src/client.ts`.
+- `DATABASE_URL` is parsed with Zod in both `packages/db/src/client.ts` and `packages/db/drizzle.config.ts`.
+- Drizzle schema is centralized in `packages/db/src/schema/index.ts`.
+- Services import `@pcp/db/src/client` and `@pcp/db/src/schema` directly.
+- pgvector is required for `services/memory` through the custom vector type in `packages/db/src/schema/memory_entries.ts`.
+
+## Redis And Queues
+
+- Redis URL defaults to `redis://localhost:6379`.
+- BullMQ queue is initialized in `services/agent/src/automation/queue.ts`.
+- Automation jobs create agent tasks and update `automation_runs`.
+- Scheduled repeat jobs are keyed as `automation-<id>`.
+
+## Object Storage
+
+- Workspace file content uses S3-compatible storage in `services/workspace/src/service.ts`.
+- Default endpoint is `http://localhost:9000`, matching MinIO in `infra/docker/docker-compose.yml`.
+- Object keys are tenant/workspace prefixed as `${userId}/${workspaceId}${path}`.
+- Snapshot rows are created with `snapshots/<workspaceId>/<timestamp>.tar.gz`, but actual archive creation/restoration is currently simplified.
+
+## Docker And Container Runtime
+
+- Runtime containers are created with Dockerode in `services/runtime/src/provider/docker.ts`.
+- Runtime containers mount `/tmp/workspaces/<workspaceId>` at `/workspace`.
+- Runtime networking is disabled with `NetworkMode: 'none'`.
+- Publish containers are created in `services/publish/src/service.ts` and attached to Traefik via labels.
+- Publish containers use the Docker network name `pcp_network`, while Compose declares `pcp-network`; this should be verified because Docker Compose often materializes project-prefixed names.
+
+## Traefik
+
+- `infra/docker/docker-compose.yml` runs Traefik v3 on ports 80, 443, and dashboard 8080.
+- Hosted app routing uses labels like `traefik.http.routers.<container>.rule`.
+- Published URLs are shaped as `http://<slug>.apps.localhost`.
+
+## Authentication Providers
+
+- Email/password registration and login are implemented in `services/auth/src/service.ts`.
+- Password hashing uses Argon2 through `argon2.hash` and `argon2.verify`.
+- Google OAuth is registered in `services/auth/src/routes.ts` via `@fastify/oauth2`.
+- OAuth account records are persisted in `packages/db/src/schema/oauth_accounts.ts`.
+
+## AI Providers
+
+- `services/agent/src/llm/provider.ts` selects provider from `LLM_PROVIDER`.
+- Providers:
+  - OpenAI through `services/agent/src/llm/openai.ts`.
+  - Anthropic through `services/agent/src/llm/anthropic.ts`.
+  - Minimax through the Anthropic-compatible class with bearer auth.
+- User BYOK provider credentials are stored in `provider_credentials` through profile routes in `services/auth/src/routes/profile.ts`.
+- Provider credentials are encrypted with AES-256-GCM in `services/auth/src/encryption.ts`.
+
+## Frontend API Endpoints
+
+The web client uses direct service URLs from `apps/web/src/lib/api.ts`:
+
+| Client | Default URL |
+|--------|-------------|
+| Auth | `http://localhost:3001/auth` |
+| Workspace | `http://localhost:3002/api` |
+| Runtime | `http://localhost:3003/api` |
+| Agent | `http://localhost:3004/api` |
+| Publish | `http://localhost:3006/publish` |
+
+## Mail And Notifications
+
+- Mailhog is included in Compose but no full email sending integration is visible yet.
+- Notifications and integrations tables exist in `packages/db/src/schema/notifications.ts`.
+- Automation notification mode supports `none`, `in-app`, `email-mock`, and `webhook` in shared schemas.
+
+## External Surface To Harden
+
+- CORS is currently `origin: true` in services, which reflects origins broadly.
+- Several services use default local secrets when env vars are absent.
+- Publish endpoints accept `userId` in request body/query instead of deriving user identity from session cookies.
+- There is no internal service authentication between services yet.
+

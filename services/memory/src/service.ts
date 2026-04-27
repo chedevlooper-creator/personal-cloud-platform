@@ -3,12 +3,13 @@ import { memoryEntries, users, sessions } from '@pcp/db/src/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { EmbeddingProvider } from './embeddings/types';
 import { OpenAIEmbeddingProvider } from './embeddings/openai';
+import { env } from './env';
 
 export class MemoryService {
   private embeddings: EmbeddingProvider;
 
   constructor(private logger: any) {
-    this.embeddings = new OpenAIEmbeddingProvider(process.env.OPENAI_API_KEY || 'dummy_key');
+    this.embeddings = new OpenAIEmbeddingProvider(env.OPENAI_API_KEY);
     this.logger.info('MemoryService initialized');
   }
 
@@ -28,35 +29,48 @@ export class MemoryService {
     return user?.id || null;
   }
 
-  async addMemory(userId: string, type: string, content: string, metadata?: any, workspaceId?: string) {
+  async addMemory(
+    userId: string,
+    type: string,
+    content: string,
+    metadata?: any,
+    workspaceId?: string,
+  ) {
     const embedding = await this.embeddings.generate(content);
 
-    const [memory] = await db.insert(memoryEntries).values({
-      userId,
-      workspaceId: workspaceId || null,
-      type,
-      content,
-      embedding,
-      metadata,
-    }).returning();
+    const [memory] = await db
+      .insert(memoryEntries)
+      .values({
+        userId,
+        workspaceId: workspaceId || null,
+        type,
+        content,
+        embedding,
+        metadata,
+      })
+      .returning();
 
     return memory;
   }
 
-  async searchMemory(userId: string, query: string, options?: { limit?: number, type?: string, workspaceId?: string }) {
+  async searchMemory(
+    userId: string,
+    query: string,
+    options?: { limit?: number; type?: string; workspaceId?: string },
+  ) {
     const queryEmbedding = await this.embeddings.generate(query);
     const limit = options?.limit || 5;
-    
+
     // Formatting embedding vector array as string for raw SQL execution
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
 
     // Constructing dynamic SQL query
     let conditions = [sql`user_id = ${userId}`];
-    
+
     if (options?.type) {
       conditions.push(sql`type = ${options.type}`);
     }
-    
+
     if (options?.workspaceId) {
       conditions.push(sql`workspace_id = ${options.workspaceId}`);
     }
@@ -76,23 +90,28 @@ export class MemoryService {
     return (results as any).rows || results;
   }
 
-  async updateMemory(id: string, userId: string, updates: { content?: string, metadata?: any, type?: string }) {
+  async updateMemory(
+    id: string,
+    userId: string,
+    updates: { content?: string; metadata?: any; type?: string },
+  ) {
     const dataToUpdate: any = { updatedAt: new Date() };
-    
+
     if (updates.content) {
       dataToUpdate.content = updates.content;
       dataToUpdate.embedding = await this.embeddings.generate(updates.content);
     }
-    
+
     if (updates.metadata) {
       dataToUpdate.metadata = updates.metadata;
     }
-    
+
     if (updates.type) {
       dataToUpdate.type = updates.type;
     }
 
-    const [updated] = await db.update(memoryEntries)
+    const [updated] = await db
+      .update(memoryEntries)
       .set(dataToUpdate)
       .where(and(eq(memoryEntries.id, id), eq(memoryEntries.userId, userId)))
       .returning();
@@ -101,7 +120,8 @@ export class MemoryService {
   }
 
   async deleteMemory(id: string, userId: string) {
-    await db.delete(memoryEntries)
+    await db
+      .delete(memoryEntries)
       .where(and(eq(memoryEntries.id, id), eq(memoryEntries.userId, userId)));
     return { success: true };
   }

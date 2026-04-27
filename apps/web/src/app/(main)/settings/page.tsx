@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import type React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Eye,
@@ -29,9 +30,27 @@ import { authApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-type SettingsTab = 'profile' | 'ai-providers' | 'models' | 'workspace' | 'terminal' | 'theme' | 'danger';
+type SettingsTab =
+  | 'profile'
+  | 'ai-providers'
+  | 'models'
+  | 'workspace'
+  | 'terminal'
+  | 'theme'
+  | 'danger';
+type TerminalPolicy = 'strict' | 'normal' | 'permissive';
 
-const settingsTabs: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+type UserPreferences = {
+  bio?: string;
+  terminalRiskLevel?: TerminalPolicy;
+  theme?: string;
+};
+
+const settingsTabs: {
+  id: SettingsTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'ai-providers', label: 'AI Providers', icon: Key },
   { id: 'models', label: 'Models', icon: Sparkles },
@@ -47,6 +66,12 @@ const PROVIDER_OPTIONS = [
   { value: 'google', label: 'Google AI', placeholder: 'AI...' },
 ];
 
+const TERMINAL_POLICIES: { level: TerminalPolicy; label: string; desc: string }[] = [
+  { level: 'strict', label: 'Strict', desc: 'All commands require approval' },
+  { level: 'normal', label: 'Balanced', desc: 'Risky commands require approval (default)' },
+  { level: 'permissive', label: 'Permissive', desc: 'Only blocked commands are prevented' },
+];
+
 export default function SettingsPage() {
   const { data: user } = useUser();
   const logoutMutation = useLogout();
@@ -60,14 +85,12 @@ export default function SettingsPage() {
     queryKey: ['user-preferences'],
     queryFn: async () => {
       const res = await authApi.get('/user/preferences');
-      return res.data;
+      return res.data as UserPreferences;
     },
   });
 
-  const [terminalPolicy, setTerminalPolicy] = useState(prefs?.terminalRiskLevel || 'normal');
-  useEffect(() => {
-    if (prefs?.terminalRiskLevel) setTerminalPolicy(prefs.terminalRiskLevel);
-  }, [prefs?.terminalRiskLevel]);
+  const [terminalPolicyOverride, setTerminalPolicyOverride] = useState<TerminalPolicy | null>(null);
+  const terminalPolicy = terminalPolicyOverride ?? prefs?.terminalRiskLevel ?? 'normal';
 
   const updatePrefsMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -85,7 +108,13 @@ export default function SettingsPage() {
     queryKey: ['user-providers'],
     queryFn: async () => {
       const res = await authApi.get('/user/providers');
-      return res.data as { id: string; provider: string; label: string | null; maskedKey: string; createdAt: string }[];
+      return res.data as {
+        id: string;
+        provider: string;
+        label: string | null;
+        maskedKey: string;
+        createdAt: string;
+      }[];
     },
   });
 
@@ -136,7 +165,7 @@ export default function SettingsPage() {
                 'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 activeTab === tab.id
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               <tab.icon className="h-4 w-4" />
@@ -157,11 +186,20 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="settings-email">Email</Label>
-                  <Input id="settings-email" defaultValue={user?.email || ''} readOnly className="opacity-60" />
+                  <Input
+                    id="settings-email"
+                    defaultValue={user?.email || ''}
+                    readOnly
+                    className="opacity-60"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="settings-bio">Bio</Label>
-                  <Input id="settings-bio" defaultValue={prefs?.bio || ''} placeholder="A short bio about yourself..." />
+                  <Input
+                    id="settings-bio"
+                    defaultValue={prefs?.bio || ''}
+                    placeholder="A short bio about yourself..."
+                  />
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm">Save changes</Button>
@@ -177,18 +215,24 @@ export default function SettingsPage() {
             <section className="rounded-xl border border-border bg-card p-6">
               <h3 className="text-base font-semibold text-foreground">AI Providers</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                API keys are encrypted with AES-256-GCM before storage. We never store or log plaintext keys.
+                API keys are encrypted with AES-256-GCM before storage. We never store or log
+                plaintext keys.
               </p>
               <div className="mt-4 space-y-4">
                 {providersLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
                 ) : (
                   PROVIDER_OPTIONS.map((opt) => {
                     const existing = (providers || []).find((p) => p.provider === opt.value);
                     const isAdding = addingProvider === opt.value;
 
                     return (
-                      <div key={opt.value} className="flex items-end gap-3 rounded-lg border border-border p-4">
+                      <div
+                        key={opt.value}
+                        className="flex items-end gap-3 rounded-lg border border-border p-4"
+                      >
                         <div className="min-w-0 flex-1 space-y-1.5">
                           <div className="flex items-center gap-2">
                             <Label>{opt.label}</Label>
@@ -220,7 +264,7 @@ export default function SettingsPage() {
                                 type={apiKeyVisible ? 'text' : 'password'}
                                 placeholder={opt.placeholder}
                                 value={newApiKey}
-                                onChange={(e: any) => setNewApiKey(e.target.value)}
+                                onChange={(e) => setNewApiKey(e.target.value)}
                                 autoFocus
                               />
                               <button
@@ -228,7 +272,11 @@ export default function SettingsPage() {
                                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
                                 onClick={() => setApiKeyVisible(!apiKeyVisible)}
                               >
-                                {apiKeyVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                {apiKeyVisible ? (
+                                  <EyeOff className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
                               </button>
                             </div>
                           ) : null}
@@ -238,18 +286,38 @@ export default function SettingsPage() {
                           <div className="flex gap-1">
                             <Button
                               size="sm"
-                              onClick={() => addProviderMutation.mutate({ provider: opt.value, key: newApiKey })}
+                              onClick={() =>
+                                addProviderMutation.mutate({ provider: opt.value, key: newApiKey })
+                              }
                               disabled={!newApiKey || addProviderMutation.isPending}
                             >
-                              {addProviderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1 h-3.5 w-3.5" />}
+                              {addProviderMutation.isPending ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Check className="mr-1 h-3.5 w-3.5" />
+                              )}
                               Save
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => { setAddingProvider(null); setNewApiKey(''); }}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setAddingProvider(null);
+                                setNewApiKey('');
+                              }}
+                            >
                               Cancel
                             </Button>
                           </div>
                         ) : (
-                          <Button size="sm" variant="outline" onClick={() => { setAddingProvider(opt.value); setNewApiKey(''); }}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setAddingProvider(opt.value);
+                              setNewApiKey('');
+                            }}
+                          >
                             <Plus className="mr-1 h-3.5 w-3.5" /> Add Key
                           </Button>
                         )}
@@ -264,26 +332,30 @@ export default function SettingsPage() {
           {activeTab === 'models' && (
             <section className="rounded-xl border border-border bg-card p-6">
               <h3 className="text-base font-semibold text-foreground">Default Model</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Select the AI model for new conversations.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Select the AI model for new conversations.
+              </p>
               <div className="mt-4 space-y-2">
-                {['Mock AI (Free)', 'GPT-4', 'GPT-4o', 'Claude 3.5 Sonnet', 'Gemini 2.0 Flash'].map((model, i) => (
-                  <button
-                    key={model}
-                    type="button"
-                    className={cn(
-                      'flex w-full items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors',
-                      i === 0
-                        ? 'border-primary bg-primary/5 text-foreground'
-                        : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      <span className="font-medium">{model}</span>
-                    </div>
-                    {i === 0 && <StatusBadge variant="success">Active</StatusBadge>}
-                  </button>
-                ))}
+                {['Mock AI (Free)', 'GPT-4', 'GPT-4o', 'Claude 3.5 Sonnet', 'Gemini 2.0 Flash'].map(
+                  (model, i) => (
+                    <button
+                      key={model}
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors',
+                        i === 0
+                          ? 'border-primary bg-primary/5 text-foreground'
+                          : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-muted hover:text-foreground',
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        <span className="font-medium">{model}</span>
+                      </div>
+                      {i === 0 && <StatusBadge variant="success">Active</StatusBadge>}
+                    </button>
+                  ),
+                )}
               </div>
             </section>
           )}
@@ -299,7 +371,9 @@ export default function SettingsPage() {
                 <div className="h-2 w-full rounded-full bg-muted">
                   <div className="h-2 rounded-full bg-primary" style={{ width: '0%' }} />
                 </div>
-                <p className="text-xs text-muted-foreground">Storage includes all files, snapshots, and hosted site assets.</p>
+                <p className="text-xs text-muted-foreground">
+                  Storage includes all files, snapshots, and hosted site assets.
+                </p>
               </div>
             </section>
           )}
@@ -307,25 +381,23 @@ export default function SettingsPage() {
           {activeTab === 'terminal' && (
             <section className="rounded-xl border border-border bg-card p-6">
               <h3 className="text-base font-semibold text-foreground">Terminal Security Policy</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Configure which commands require approval.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Configure which commands require approval.
+              </p>
               <div className="mt-4 space-y-3">
-                {[
-                  { level: 'strict', label: 'Strict', desc: 'All commands require approval' },
-                  { level: 'normal', label: 'Balanced', desc: 'Risky commands require approval (default)' },
-                  { level: 'permissive', label: 'Permissive', desc: 'Only blocked commands are prevented' },
-                ].map((policy) => (
+                {TERMINAL_POLICIES.map((policy) => (
                   <button
                     key={policy.level}
                     type="button"
                     onClick={() => {
-                      setTerminalPolicy(policy.level);
+                      setTerminalPolicyOverride(policy.level);
                       updatePrefsMutation.mutate({ terminalRiskLevel: policy.level });
                     }}
                     className={cn(
                       'flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
                       terminalPolicy === policy.level
                         ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/30 hover:bg-muted'
+                        : 'border-border hover:border-primary/30 hover:bg-muted',
                     )}
                   >
                     <Shield className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -333,7 +405,11 @@ export default function SettingsPage() {
                       <span className="text-sm font-medium text-foreground">{policy.label}</span>
                       <p className="text-xs text-muted-foreground">{policy.desc}</p>
                     </div>
-                    {terminalPolicy === policy.level && <StatusBadge variant="info" className="ml-auto">Active</StatusBadge>}
+                    {terminalPolicy === policy.level && (
+                      <StatusBadge variant="info" className="ml-auto">
+                        Active
+                      </StatusBadge>
+                    )}
                   </button>
                 ))}
               </div>
@@ -358,9 +434,11 @@ export default function SettingsPage() {
                     }}
                     className={cn(
                       'flex flex-col items-center gap-2 rounded-xl border px-4 py-4 transition-colors',
-                      resolvedTheme === option.value || (option.value === 'system' && !['light', 'dark'].includes(resolvedTheme || ''))
+                      resolvedTheme === option.value ||
+                        (option.value === 'system' &&
+                          !['light', 'dark'].includes(resolvedTheme || ''))
                         ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-muted hover:text-foreground'
+                        : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-muted hover:text-foreground',
                     )}
                   >
                     <option.icon className="h-5 w-5" />

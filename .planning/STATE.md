@@ -1,71 +1,75 @@
-# Project State
+# State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-27)
+See: `.planning/PROJECT.md` (updated 2026-04-27)
 
-**Core value:** Users can safely run and automate useful work inside persistent cloud workspaces without leaking tenant data, credentials, or host resources.
-**Current focus:** Phase 1: Configuration & Verification Baseline
+**Core value:** A user can safely run and manage a persistent AI-assisted workspace in the browser without losing data, crossing tenant boundaries, or executing unapproved risky actions.
+
+**Current focus:** Phase 2 - Auth, Admin, Secrets, Tenant Isolation
 
 ## Current Position
 
-Phase: 1 of 5 (Configuration & Verification Baseline)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-04-27 - Initialized brownfield GSD project, mapped codebase, defined requirements, and created roadmap.
+- Old root GSD artifacts were archived under `.planning/archive/legacy-20260427-reset/`.
+- Fresh codebase map was created under `.planning/codebase/`.
+- New active requirements are in `.planning/REQUIREMENTS.md`.
+- New active roadmap is in `.planning/ROADMAP.md`.
+- Phase 1 context, research, and three executable plans have been created and executed for pure local checks.
+- `pnpm smoke:local` now passes.
+- Docker-backed BASE-02/BASE-03 verification is blocked in this session because `docker` is not installed.
+- Phase 2 context, research, plans, and execution summaries have been created for auth/admin/provider/publish/automation hardening.
+- Phase 2 local security execution passed `pnpm smoke:local`.
 
-Progress: [----------] 0%
+## Next Action
 
-## Performance Metrics
+Continue Phase 2 gap closure:
 
-**Velocity:**
-- Total plans completed: 0
-- Average duration: n/a
-- Total execution time: 0.0 hours
+1. Normalize auth/profile error shapes for AUTH-04.
+2. Add route-by-route tenant verification for workspace, runtime, memory, snapshots, and agent conversations/tasks for TENANT-02/TENANT-03.
+3. Keep BASE-02/BASE-03 blocked until Docker is available.
 
-**By Phase:**
+## Important Findings From Reset
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
+- README's completed roadmap should not be treated as the active source of truth.
+- Publish routes currently trust client-supplied `userId`.
+- Automation routes need stronger tenant filters.
+- Admin routes are permissive if `ADMIN_EMAIL` is unset.
+- Several services use development secret fallbacks.
+- Agent tools are simulated.
+- Runtime sandboxing is partial.
+- Snapshots are simplified/mocked.
+- Frontend has several modules that may not match real backend behavior.
 
-**Recent Trend:**
-- Last 5 plans: none
-- Trend: n/a
+## Completed In Phase 1 Local Execution
 
-*Updated after each plan completion*
+- Added meaningful package `typecheck` scripts and root `pnpm typecheck` fan-out.
+- Added `pnpm smoke:local` with typecheck, lint, and test checks.
+- Added service env validation modules with production fail-closed behavior.
+- Removed stale README/env references to a non-existent `apps/api` or port 4000 gateway.
+- Added missing local Vitest configs to prevent parent directory config leakage.
+- Phase 2: admin routes fail closed without `ADMIN_EMAIL`.
+- Phase 2: provider credential responses no longer spread encrypted DB rows.
+- Phase 2: publish APIs derive `userId` from session instead of client body/query.
+- Phase 2: automation update/delete/run/history routes scope by authenticated owner.
 
-## Accumulated Context
+## Workflow Config
 
-### Decisions
+- Mode: interactive
+- Granularity: standard
+- Parallelization: enabled
+- Planning docs: committed by default
+- Research: enabled
+- Plan check: enabled
+- Verifier: enabled
+- Text mode: enabled for Codex compatibility
+- Worktrees: disabled for simpler local execution in this dirty working tree
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+## Session Notes
 
-- [Initialization]: Treat this as brownfield production hardening, not a greenfield rebuild.
-- [Initialization]: Keep independent Fastify services; do not introduce `apps/api`.
-- [Initialization]: Use coarse roadmap granularity with 5 phases.
+- The working tree had pre-existing unrelated `.agent` deletions and `.codex`/README/AGENTS changes before this reset.
+- Those unrelated changes were not reverted.
+- Planning artifacts were written without committing because the working tree already contains unrelated changes.
 
-### Pending Todos
+---
 
-None yet.
-
-### Blockers/Concerns
-
-- GSD project-research/roadmap helper agents were not available to the SDK in this runtime, so research and roadmapping were performed inline.
-- Existing tracked `.planning` deletions were present before initialization; the first GSD commit helper included those deletions along with the new codebase map.
-- README/progress docs contain stale or conflicting project state; source code, package manifests, AGENTS.md, and `.cursor/rules/*` are authoritative.
-
-## Deferred Items
-
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| Runtime | Firecracker/Kata microVM provider | Deferred to v2 | Initialization |
-| Product | Organizations and billing | Deferred to v2 | Initialization |
-| Platform | Multi-host app hosting | Deferred to v2 | Initialization |
-
-## Session Continuity
-
-Last session: 2026-04-27 04:35
-Stopped at: Project initialized and ready for `$gsd-discuss-phase 1`.
-Resume file: None
+_Last updated: 2026-04-27 after Phase 2 security execution_

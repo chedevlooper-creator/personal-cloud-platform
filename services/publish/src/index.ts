@@ -4,6 +4,7 @@ import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { publishRoutes } from './routes';
+import { env } from './env';
 
 const envToLogger = {
   development: {
@@ -20,7 +21,7 @@ const envToLogger = {
 };
 
 const app = Fastify({
-  logger: envToLogger[process.env.NODE_ENV as keyof typeof envToLogger] ?? true,
+  logger: envToLogger[env.NODE_ENV] ?? true,
 });
 
 app.setValidatorCompiler(validatorCompiler);
@@ -41,9 +42,8 @@ app.get('/health', async () => {
 
 const start = async () => {
   try {
-    const port = parseInt(process.env.PORT || '3006', 10);
-    await app.listen({ port, host: '0.0.0.0' });
-    app.log.info(`Publish service listening on port ${port}`);
+    await app.listen({ port: env.PORT, host: '0.0.0.0' });
+    app.log.info(`Publish service listening on port ${env.PORT}`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

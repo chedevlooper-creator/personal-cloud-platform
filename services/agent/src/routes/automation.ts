@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { db } from '@pcp/db/src/client';
 import { automations, automationRuns } from '@pcp/db/src/schema';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { createAutomationSchema, updateAutomationSchema } from '@pcp/shared';
 import { automationQueue } from '../automation/queue';
 import { z } from 'zod';
@@ -19,54 +19,68 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     const session = await db.query.sessions.findFirst({
       where: (s) => eq(s.id, sessionId),
     });
-    return session?.expiresAt.getTime()! > Date.now() ? session?.userId || null : null;
+    if (!session || session.expiresAt.getTime() <= Date.now()) {
+      return null;
+    }
+
+    return session.userId;
   }
 
   server.get(
     '/automations',
     {
       schema: {
-        querystring: z.object({ workspaceId: z.string().uuid().optional() })
-      }
+        querystring: z.object({ workspaceId: z.string().uuid().optional() }),
+      },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      const { workspaceId } = request.query;
 
       const items = await db.query.automations.findMany({
-        where: eq(automations.userId, userId),
-        orderBy: [desc(automations.createdAt)]
+        where: workspaceId
+          ? and(eq(automations.userId, userId), eq(automations.workspaceId, workspaceId))
+          : eq(automations.userId, userId),
+        orderBy: [desc(automations.createdAt)],
       });
 
       return { automations: items };
-    }
+    },
   );
 
   server.post(
     '/automations',
     {
-      schema: { body: createAutomationSchema }
+      schema: { body: createAutomationSchema },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      const [automation] = await db.insert(automations).values({
-        userId,
-        ...request.body,
-      }).returning();
+      const [automation] = await db
+        .insert(automations)
+        .values({
+          userId,
+          ...request.body,
+        })
+        .returning();
       if (!automation) throw new Error('Failed to create automation');
 
       // If it's a cron/schedule, we should add it to bullmq
       if (automation.scheduleType !== 'manual' && automation.cronExpression) {
-        await automationQueue.add('scheduled-run', { automationId: automation.id }, {
-          repeat: { pattern: automation.cronExpression },
-          jobId: `automation-${automation.id}`
-        });
+        await automationQueue.add(
+          'scheduled-run',
+          { automationId: automation.id },
+          {
+            repeat: { pattern: automation.cronExpression },
+            jobId: `automation-${automation.id}`,
+          },
+        );
       }
 
       return reply.code(201).send(automation);
-    }
+    },
   );
 
   server.patch(
@@ -74,18 +88,19 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: z.object({ id: z.string().uuid() }),
-        body: updateAutomationSchema
-      }
+        body: updateAutomationSchema,
+      },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
       const { id } = request.params;
-      
-      const [updated] = await db.update(automations)
+
+      const [updated] = await db
+        .update(automations)
         .set({ ...request.body, updatedAt: new Date() })
-        .where(eq(automations.id, id))
+        .where(and(eq(automations.id, id), eq(automations.userId, userId)))
         .returning();
 
       if (!updated) return reply.code(404).send({ error: 'Not found' } as any);
@@ -97,7 +112,7 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       }
 
       return updated;
-    }
+    },
   );
 
   server.delete(
@@ -105,18 +120,20 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: z.object({ id: z.string().uuid() }),
-      }
+      },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
       const { id } = request.params;
-      await db.delete(automations).where(eq(automations.id, id));
+      await db
+        .delete(automations)
+        .where(and(eq(automations.id, id), eq(automations.userId, userId)));
       await automationQueue.removeRepeatableByKey(`automation-${id}`);
 
       return { success: true };
-    }
+    },
   );
 
   // Manual trigger
@@ -125,7 +142,7 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: z.object({ id: z.string().uuid() }),
-      }
+      },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
@@ -133,31 +150,34 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
 
       const { id } = request.params;
       const automation = await db.query.automations.findFirst({
-        where: eq(automations.id, id)
+        where: and(eq(automations.id, id), eq(automations.userId, userId)),
       });
 
       if (!automation) return reply.code(404).send({ error: 'Not found' } as any);
 
       // Create a run record
-      const [run] = await db.insert(automationRuns).values({
-        automationId: automation.id,
-        userId,
-        trigger: 'manual',
-        status: 'queued',
-      }).returning();
+      const [run] = await db
+        .insert(automationRuns)
+        .values({
+          automationId: automation.id,
+          userId,
+          trigger: 'manual',
+          status: 'queued',
+        })
+        .returning();
       if (!run) throw new Error('Failed to create run');
 
       // Add to BullMQ
       await automationQueue.add('manual-run', {
         runId: run.id,
         automationId: automation.id,
-        userId: automation.userId,
+        userId,
         workspaceId: automation.workspaceId,
         prompt: automation.prompt,
       });
 
       return run;
-    }
+    },
   );
 
   // Get runs
@@ -166,19 +186,24 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: z.object({ id: z.string().uuid() }),
-      }
+      },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
       const { id } = request.params;
+      const automation = await db.query.automations.findFirst({
+        where: and(eq(automations.id, id), eq(automations.userId, userId)),
+      });
+      if (!automation) return reply.code(404).send({ error: 'Not found' } as any);
+
       const runs = await db.query.automationRuns.findMany({
-        where: eq(automationRuns.automationId, id),
-        orderBy: [desc(automationRuns.createdAt)]
+        where: and(eq(automationRuns.automationId, id), eq(automationRuns.userId, userId)),
+        orderBy: [desc(automationRuns.createdAt)],
       });
 
       return { runs };
-    }
+    },
   );
 }

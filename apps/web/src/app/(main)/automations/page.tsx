@@ -2,16 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Clock3,
-  Loader2,
-  MoreHorizontal,
-  Pause,
-  Play,
-  Plus,
-  Trash2,
-  Zap,
-} from 'lucide-react';
+import { Clock3, Loader2, MoreHorizontal, Pause, Play, Plus, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -28,6 +19,14 @@ import {
 
 type Tab = 'active' | 'paused' | 'history';
 
+type Automation = {
+  id: string;
+  title: string;
+  enabled: boolean;
+  scheduleType: string;
+  prompt?: string | null;
+};
+
 const tabs: { id: Tab; label: string }[] = [
   { id: 'active', label: 'Active' },
   { id: 'paused', label: 'Paused' },
@@ -42,7 +41,7 @@ export default function AutomationsPage() {
     queryKey: ['automations'],
     queryFn: async () => {
       const res = await agentApi.get('/automations');
-      return res.data as any[];
+      return res.data as Automation[];
     },
   });
 
@@ -110,7 +109,7 @@ export default function AutomationsPage() {
               'border-b-2 px-4 py-2 text-sm font-medium transition-colors',
               activeTab === tab.id
                 ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
             {tab.label}
@@ -126,7 +125,7 @@ export default function AutomationsPage() {
           </div>
         ) : filtered.length > 0 ? (
           <div className="space-y-3">
-            {filtered.map((auto: any) => (
+            {filtered.map((auto) => (
               <div
                 key={auto.id}
                 className="flex items-center justify-between rounded-xl border border-border bg-card p-4"

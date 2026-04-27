@@ -14,19 +14,30 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { getApiErrorMessage, workspaceApi } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 
+type WorkspacesResponse = {
+  workspaces?: { id: string }[];
+};
+
+type Snapshot = {
+  id: string;
+  name: string;
+  description?: string | null;
+  createdAt: string;
+};
+
 export default function SnapshotsPage() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [restoreTarget, setRestoreTarget] = useState<any>(null);
+  const [restoreTarget, setRestoreTarget] = useState<Snapshot | null>(null);
 
   // We need a workspaceId. For now, get user's first workspace.
   const { data: wsData } = useQuery({
     queryKey: ['workspaces'],
     queryFn: async () => {
       const res = await workspaceApi.get('/workspaces');
-      return res.data;
+      return res.data as WorkspacesResponse;
     },
   });
 
@@ -37,7 +48,7 @@ export default function SnapshotsPage() {
     enabled: Boolean(workspaceId),
     queryFn: async () => {
       const res = await workspaceApi.get(`/workspaces/${workspaceId}/snapshots`);
-      return res.data.snapshots as any[];
+      return (res.data as { snapshots: Snapshot[] }).snapshots;
     },
   });
 
@@ -119,7 +130,7 @@ export default function SnapshotsPage() {
           <LoadingSkeleton variant="card" />
         ) : items.length > 0 ? (
           <div className="space-y-3">
-            {items.map((snap: any) => (
+            {items.map((snap) => (
               <div
                 key={snap.id}
                 className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
@@ -136,11 +147,7 @@ export default function SnapshotsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setRestoreTarget(snap)}
-                  >
+                  <Button size="sm" variant="outline" onClick={() => setRestoreTarget(snap)}>
                     <RotateCcw className="mr-1 h-3.5 w-3.5" /> Restore
                   </Button>
                 </div>

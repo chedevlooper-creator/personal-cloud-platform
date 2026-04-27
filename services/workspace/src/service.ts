@@ -9,6 +9,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { db } from '@pcp/db/src/client';
 import { sessions, users, workspaceFiles, workspaces } from '@pcp/db/src/schema';
 import { and, eq, isNull } from 'drizzle-orm';
+import { env } from './env';
 
 const MAX_TEXT_PREVIEW_BYTES = 256 * 1024;
 
@@ -19,7 +20,10 @@ export interface WorkspaceObjectStorage {
 }
 
 export class WorkspaceError extends Error {
-  constructor(message: string, public statusCode = 400) {
+  constructor(
+    message: string,
+    public statusCode = 400,
+  ) {
     super(message);
     this.name = 'WorkspaceError';
   }
@@ -31,14 +35,14 @@ class S3WorkspaceObjectStorage implements WorkspaceObjectStorage {
   private bucketReady = false;
 
   constructor() {
-    this.bucket = process.env.S3_BUCKET || 'pcp-workspace';
+    this.bucket = env.S3_BUCKET;
     this.client = new S3Client({
-      region: process.env.S3_REGION || 'us-east-1',
-      endpoint: process.env.S3_ENDPOINT || 'http://localhost:9000',
+      region: env.S3_REGION,
+      endpoint: env.S3_ENDPOINT,
       forcePathStyle: true,
       credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY || process.env.MINIO_ROOT_USER || 'minioadmin',
-        secretAccessKey: process.env.S3_SECRET_KEY || process.env.MINIO_ROOT_PASSWORD || 'minioadmin123',
+        accessKeyId: env.S3_ACCESS_KEY,
+        secretAccessKey: env.S3_SECRET_KEY,
       },
     });
   }
@@ -51,7 +55,7 @@ class S3WorkspaceObjectStorage implements WorkspaceObjectStorage {
         Key: key,
         Body: content,
         ContentType: contentType,
-      })
+      }),
     );
   }
 
@@ -75,7 +79,7 @@ class S3WorkspaceObjectStorage implements WorkspaceObjectStorage {
       new GetObjectCommand({
         Bucket: this.bucket,
         Key: key,
-      })
+      }),
     );
 
     return this.bodyToString(response.Body);
@@ -98,7 +102,8 @@ class S3WorkspaceObjectStorage implements WorkspaceObjectStorage {
     if (typeof body === 'string') return body;
     if (body instanceof Uint8Array) return Buffer.from(body).toString('utf8');
 
-    const transformToString = (body as { transformToString?: () => Promise<string> }).transformToString;
+    const transformToString = (body as { transformToString?: () => Promise<string> })
+      .transformToString;
     if (transformToString) {
       return transformToString.call(body);
     }
@@ -162,7 +167,7 @@ const starterFiles: StarterFile[] = [
 export class WorkspaceService {
   constructor(
     private logger: any,
-    private storage: WorkspaceObjectStorage = new S3WorkspaceObjectStorage()
+    private storage: WorkspaceObjectStorage = new S3WorkspaceObjectStorage(),
   ) {}
 
   /**
@@ -172,11 +177,7 @@ export class WorkspaceService {
   private assertSafePath(path: string): void {
     // Normalize and check for traversal
     const normalized = path.replace(/\\/g, '/');
-    if (
-      normalized.includes('..') ||
-      normalized.includes('\0') ||
-      normalized.startsWith('~')
-    ) {
+    if (normalized.includes('..') || normalized.includes('\0') || normalized.startsWith('~')) {
       throw new WorkspaceError('Path traversal detected — access denied', 403);
     }
   }
@@ -252,7 +253,9 @@ export class WorkspaceService {
       where: and(eq(workspaceFiles.workspaceId, workspaceId), isNull(workspaceFiles.deletedAt)),
     });
 
-    return files.filter((file) => file.parentPath === parentPathCondition).map((file) => this.toFileMetadata(file));
+    return files
+      .filter((file) => file.parentPath === parentPathCondition)
+      .map((file) => this.toFileMetadata(file));
   }
 
   async getFile(workspaceId: string, userId: string, filePath: string): Promise<any> {
@@ -264,7 +267,7 @@ export class WorkspaceService {
       where: and(
         eq(workspaceFiles.workspaceId, workspaceId),
         eq(workspaceFiles.path, this.normalizeFilePath(filePath)),
-        isNull(workspaceFiles.deletedAt)
+        isNull(workspaceFiles.deletedAt),
       ),
     });
 
@@ -312,7 +315,7 @@ export class WorkspaceService {
       storageKey: string;
       isDirectory: boolean;
       parentPath?: string | null;
-    }
+    },
   ): Promise<any> {
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
@@ -354,7 +357,7 @@ export class WorkspaceService {
     path: string,
     name: string,
     mimeType: string,
-    stream: NodeJS.ReadableStream
+    stream: NodeJS.ReadableStream,
   ): Promise<any> {
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
@@ -382,7 +385,7 @@ export class WorkspaceService {
       where: and(
         eq(workspaceFiles.workspaceId, workspaceId),
         eq(workspaceFiles.path, normalizedPath),
-        isNull(workspaceFiles.deletedAt)
+        isNull(workspaceFiles.deletedAt),
       ),
     });
 
@@ -434,7 +437,7 @@ export class WorkspaceService {
     userId: string,
     path: string,
     name: string,
-    parentPath?: string
+    parentPath?: string,
   ): Promise<any> {
     return this.createFile(workspaceId, userId, {
       path,
@@ -456,7 +459,12 @@ export class WorkspaceService {
     await db
       .update(workspaceFiles)
       .set({ deletedAt: new Date() })
-      .where(and(eq(workspaceFiles.workspaceId, workspaceId), eq(workspaceFiles.path, this.normalizeFilePath(filePath))));
+      .where(
+        and(
+          eq(workspaceFiles.workspaceId, workspaceId),
+          eq(workspaceFiles.path, this.normalizeFilePath(filePath)),
+        ),
+      );
 
     const fileSize = parseInt(file.size || '0', 10);
     await db
@@ -468,7 +476,12 @@ export class WorkspaceService {
       .where(eq(workspaces.id, workspaceId));
   }
 
-  async moveFile(workspaceId: string, userId: string, sourcePath: string, destinationPath: string): Promise<any> {
+  async moveFile(
+    workspaceId: string,
+    userId: string,
+    sourcePath: string,
+    destinationPath: string,
+  ): Promise<any> {
     this.assertSafePath(sourcePath);
     this.assertSafePath(destinationPath);
     const workspace = await this.getWorkspace(workspaceId, userId);
@@ -489,7 +502,12 @@ export class WorkspaceService {
         parentPath: newParentPath || null,
         updatedAt: new Date(),
       })
-      .where(and(eq(workspaceFiles.workspaceId, workspaceId), eq(workspaceFiles.path, this.normalizeFilePath(sourcePath))))
+      .where(
+        and(
+          eq(workspaceFiles.workspaceId, workspaceId),
+          eq(workspaceFiles.path, this.normalizeFilePath(sourcePath)),
+        ),
+      )
       .returning();
 
     return updatedFile;
@@ -498,10 +516,16 @@ export class WorkspaceService {
   private async seedStarterFiles(workspaceId: string, userId: string): Promise<void> {
     for (const starterFile of starterFiles) {
       const size = starterFile.content ? Buffer.byteLength(starterFile.content, 'utf8') : 0;
-      const storageKey = starterFile.content ? this.getStorageKey(userId, workspaceId, starterFile.path) : '';
+      const storageKey = starterFile.content
+        ? this.getStorageKey(userId, workspaceId, starterFile.path)
+        : '';
 
       if (starterFile.content) {
-        await this.storage.putText(storageKey, starterFile.content, starterFile.mimeType || 'text/plain');
+        await this.storage.putText(
+          storageKey,
+          starterFile.content,
+          starterFile.mimeType || 'text/plain',
+        );
       }
 
       await this.createFile(workspaceId, userId, {
@@ -538,28 +562,40 @@ export class WorkspaceService {
     if (mimeType?.startsWith('text/')) return true;
     if (
       mimeType &&
-      ['application/json', 'application/javascript', 'application/typescript', 'application/xml', 'application/yaml'].includes(
-        mimeType
-      )
+      [
+        'application/json',
+        'application/javascript',
+        'application/typescript',
+        'application/xml',
+        'application/yaml',
+      ].includes(mimeType)
     ) {
       return true;
     }
 
     return /\.(cjs|css|csv|env|html|js|json|jsx|md|mdx|mjs|ts|tsx|txt|xml|yaml|yml)$/i.test(path);
   }
-  async createSnapshot(workspaceId: string, userId: string, name: string, description?: string): Promise<any> {
+  async createSnapshot(
+    workspaceId: string,
+    userId: string,
+    name: string,
+    description?: string,
+  ): Promise<any> {
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
 
     const { snapshots } = await import('@pcp/db/src/schema');
-    const [snapshot] = await db.insert(snapshots).values({
-      userId,
-      workspaceId,
-      name,
-      description,
-      storageKey: `snapshots/${workspaceId}/${Date.now()}.tar.gz`,
-      status: 'ready', // Simplification: we mark it ready immediately without actual tar logic for MVP
-    }).returning();
+    const [snapshot] = await db
+      .insert(snapshots)
+      .values({
+        userId,
+        workspaceId,
+        name,
+        description,
+        storageKey: `snapshots/${workspaceId}/${Date.now()}.tar.gz`,
+        status: 'ready', // Simplification: we mark it ready immediately without actual tar logic for MVP
+      })
+      .returning();
 
     return snapshot;
   }
@@ -568,18 +604,22 @@ export class WorkspaceService {
     const { snapshots } = await import('@pcp/db/src/schema');
     const { desc } = await import('drizzle-orm');
     return db.query.snapshots.findMany({
-      where: and(eq(snapshots.workspaceId, workspaceId), eq(snapshots.userId, userId), isNull(snapshots.deletedAt)),
-      orderBy: [desc(snapshots.createdAt)]
+      where: and(
+        eq(snapshots.workspaceId, workspaceId),
+        eq(snapshots.userId, userId),
+        isNull(snapshots.deletedAt),
+      ),
+      orderBy: [desc(snapshots.createdAt)],
     });
   }
 
   async restoreSnapshot(snapshotId: string, userId: string): Promise<void> {
     const { snapshots } = await import('@pcp/db/src/schema');
     const snapshot = await db.query.snapshots.findFirst({
-      where: and(eq(snapshots.id, snapshotId), eq(snapshots.userId, userId))
+      where: and(eq(snapshots.id, snapshotId), eq(snapshots.userId, userId)),
     });
     if (!snapshot) throw new WorkspaceError('Snapshot not found', 404);
-    
+
     // Simplification for MVP: We just log the restore since full tar.gz restore requires streams.
     this.logger.info({ snapshotId }, 'Snapshot restore triggered (Mocked for MVP)');
   }

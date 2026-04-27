@@ -1,159 +1,161 @@
-# Requirements: CloudMind OS Production Hardening
+# Requirements: CloudMind OS
 
 **Defined:** 2026-04-27
-**Core Value:** Users can safely run and automate useful work inside persistent cloud workspaces without leaking tenant data, credentials, or host resources.
+**Core Value:** A user can safely run and manage a persistent AI-assisted workspace in the browser without losing data, crossing tenant boundaries, or executing unapproved risky actions.
 
 ## v1 Requirements
 
-Requirements for the current hardening milestone. Each maps to exactly one roadmap phase.
+### Baseline And Infrastructure
 
-### Configuration
+- [x] **BASE-01**: Repository build, lint, test, and per-package typecheck commands are documented and runnable.
+- [ ] **BASE-02**: Docker Compose infrastructure starts cleanly with Postgres pgvector, Redis, MinIO, Traefik, and Mailhog. Verification blocked in this session because `docker` is not installed.
+- [ ] **BASE-03**: Database migrations apply from a clean database and match Drizzle schema. Verification blocked in this session because `docker` is not installed.
+- [x] **BASE-04**: Runtime config is validated at service startup with fail-closed production rules.
 
-- [ ] **CONF-01**: Operator cannot start a production service when required secrets are missing, dummy, or development defaults.
-- [ ] **CONF-02**: Operator can see a documented, validated env contract for each service and local infrastructure dependency.
-- [ ] **CONF-03**: Service startup validates required env vars with typed schemas and fails with actionable errors.
-- [ ] **CONF-04**: Development fallback values are limited to explicit local-development mode and cannot silently run in production.
+### Authentication And Authorization
 
-### Auth and Tenant Security
+- [ ] **AUTH-01**: Users can register, log in, refresh, and log out with secure HTTP-only session cookies.
+- [x] **AUTH-02**: Admin endpoints are inaccessible unless an explicit admin policy is configured and satisfied.
+- [x] **AUTH-03**: Provider API keys are encrypted at rest and never returned or logged in plaintext.
+- [ ] **AUTH-04**: Auth and profile routes avoid PII logging and return consistent error shapes. PII logging was reduced for touched auth flows; consistent error envelopes remain open.
 
-- [ ] **AUTH-01**: User auth failures return generic messages while logs preserve enough non-PII context for diagnosis.
-- [ ] **AUTH-02**: User sessions follow the security policy for cookie flags, expiration, refresh behavior, and invalidation.
-- [ ] **AUTH-03**: Google OAuth uses state/PKCE protections and validates callback/redirect behavior against an allowlist.
-- [ ] **TEN-01**: User cannot read, update, delete, execute, or host resources owned by another user.
-- [ ] **TEN-02**: Workspace file/object storage keys are tenant/workspace-prefixed and path traversal-safe.
-- [ ] **TEN-03**: Tenant isolation tests cover auth, workspace, runtime, agent, memory, publish, settings, and snapshots.
+### Tenant Isolation
 
-### API and Service Quality
+- [x] **TENANT-01**: Every service derives user identity from authenticated session or internal service auth, not client-supplied `userId`.
+- [ ] **TENANT-02**: Workspace, runtime, agent, memory, publish, automation, snapshot, and settings queries are scoped by user ownership. Publish and automation gaps were fixed; full route-by-route verification remains open.
+- [ ] **TENANT-03**: Automated tests cover cross-user access denial for all critical resource routes. Added admin/provider/publish/automation coverage; full critical route coverage remains open.
 
-- [ ] **API-01**: API routes return a consistent typed success/error shape that frontend clients can handle predictably.
-- [ ] **API-02**: Service errors use typed domain errors at service boundaries instead of leaking raw implementation details.
-- [ ] **API-03**: DB access touched during the milestone is tenant-scoped and organized behind repository/helper boundaries where it reduces risk.
-- [ ] **API-04**: Structured service logs include service and request/user context without logging secrets or full PII.
-- [ ] **API-05**: Root verification commands accurately check the intended packages, including explicit typecheck commands where root scripts are partial.
+### Workspace Files And Snapshots
 
-### Runtime Sandbox
+- [ ] **WORK-01**: Users can create, list, open, move, delete, and upload files within owned workspaces.
+- [ ] **WORK-02**: Storage object keys are tenant-prefixed and path traversal is blocked for all file operations.
+- [ ] **WORK-03**: Workspace storage usage is accurate for create, upload, delete, and replace flows.
+- [ ] **WORK-04**: Snapshots create real archives and restore them with a safety backup.
 
-- [ ] **SAND-01**: Runtime containers run with non-root user, read-only root filesystem where possible, restricted writable mounts, and dropped capabilities.
-- [ ] **SAND-02**: Runtime execution enforces CPU, memory, pids, disk/tmpfs, timeout, and output-size limits.
-- [ ] **SAND-03**: Runtime network behavior is explicit, tested, and defaults to no unapproved egress.
-- [ ] **SAND-04**: Command filtering and terminal execution share one server-enforced policy rather than relying on frontend-only checks.
-- [ ] **SAND-05**: Runtime logs and events capture command execution outcomes without leaking sensitive command payloads beyond intended audit fields.
+### Runtime And Terminal
 
-### Agent Execution
+- [ ] **RUN-01**: Users can create, start, stop, delete, and inspect runtimes only for owned workspaces.
+- [ ] **RUN-02**: Command execution has approval-aware policy, timeout, output limits, and audit logs.
+- [ ] **RUN-03**: Runtime containers enforce non-root, resource limits, read-only rootfs where possible, network policy, and dropped capabilities.
+- [ ] **RUN-04**: Browser terminal attaches reliably to runtime streams and handles reconnect/error states.
 
-- [ ] **AGNT-01**: Agent tools declare risk, input schema, timeout, idempotency, and required scopes in a typed registry.
-- [ ] **AGNT-02**: High-risk tool calls pause execution until approval is recorded and cannot execute through bypass paths.
-- [ ] **AGNT-03**: Agent tasks support durable cancellation, failure status, retry-safe persistence, and observable task-step history.
-- [ ] **AGNT-04**: LLM provider calls have validated configuration, timeout/retry behavior, and no dummy-key production fallback.
-- [ ] **AGNT-05**: Automations reflect actual task completion/failure rather than marking queued agent work complete prematurely.
+### Agent And Automations
 
-### Frontend Integration
+- [ ] **AGENT-01**: Agent chat creates conversations and tasks scoped to the current user and workspace.
+- [ ] **AGENT-02**: Agent tools operate on real workspace/runtime APIs instead of simulated responses.
+- [ ] **AGENT-03**: High-risk tool calls require approval and cannot execute after rejection or timeout.
+- [ ] **AUTO-01**: Users can create, update, delete, manually run, and view automations only for owned resources.
+- [ ] **AUTO-02**: Scheduled automation jobs record accurate run status, task linkage, output, and failure details.
 
-- [ ] **WEB-01**: Frontend REST and WebSocket clients use one documented dev/production routing strategy.
-- [ ] **WEB-02**: Terminal UI connects to the runtime terminal endpoint reliably in local development and production proxy setups.
-- [ ] **WEB-03**: User-facing flows expose loading, error, empty, and unauthorized states for critical workspace, agent, terminal, and settings actions.
-- [ ] **WEB-04**: Frontend API types align with shared DTOs or generated typed client contracts for touched flows.
+### Memory And AI Providers
 
-### Delivery and Operations
+- [ ] **MEM-01**: Users can add, search, update, and delete memory entries scoped to their account and workspace.
+- [ ] **MEM-02**: pgvector search works against migrated schema and handles provider failures gracefully.
+- [ ] **AI-01**: OpenAI, Anthropic, and Minimax provider selection is explicit, validated, and testable.
+- [ ] **AI-02**: User-supplied provider credentials are used only for that user's requests.
 
-- [ ] **OPS-01**: Local `pnpm infra:up`, migrations, seed, service startup, and web startup have an up-to-date documented path.
-- [ ] **OPS-02**: Production deployment docs match the actual service topology and remove stale gateway references.
-- [ ] **OPS-03**: Docker/CI assets can build and verify web plus all services using deterministic commands.
-- [ ] **OPS-04**: Health/readiness checks exist for each service and cover critical dependencies where appropriate.
-- [ ] **OPS-05**: Build artifacts and generated files have an intentional git policy.
+### Hosting And Publish
 
-### Testing
+- [ ] **HOST-01**: Users can create, update, list, start, stop, restart, and delete hosted services only for owned workspaces.
+- [ ] **HOST-02**: Publish service derives identity from auth context and rejects spoofed `userId` input.
+- [ ] **HOST-03**: Docker/Traefik launch works with Compose network names and produces reachable local URLs.
+- [ ] **HOST-04**: Hosted service logs, status, crash counts, and health metadata are accurate.
 
-- [ ] **TEST-01**: Auth/session/OAuth security behavior has focused automated tests.
-- [ ] **TEST-02**: Tenant isolation has cross-user negative tests for every service that reads or mutates user data.
-- [ ] **TEST-03**: Runtime sandbox restrictions have unit or integration tests for dangerous commands, limits, and network defaults.
-- [ ] **TEST-04**: Agent approval and cancellation behavior has automated tests.
-- [ ] **TEST-05**: At least one E2E smoke path covers login, workspace access, file operation, agent task creation, and terminal/hosting availability where feasible.
+### Frontend Experience
+
+- [ ] **WEB-01**: Auth pages, app shell, dashboard, workspace, chat, terminal, automations, hosting, snapshots, settings, and admin pages match real backend behavior.
+- [ ] **WEB-02**: Placeholder modules are either implemented, clearly gated, or removed from navigation.
+- [ ] **WEB-03**: Frontend handles loading, empty, error, unauthorized, and permission-denied states consistently.
+- [ ] **WEB-04**: Core flows pass browser smoke tests on desktop and mobile widths.
+
+### Quality And Documentation
+
+- [ ] **QUAL-01**: Critical services have unit/integration tests for success, failure, and tenant isolation paths.
+- [ ] **QUAL-02**: Web has smoke or E2E tests for primary user journeys.
+- [ ] **QUAL-03**: README and docs describe the actual architecture and do not reference stale `apps/api` or completed legacy plans.
+- [ ] **QUAL-04**: Generated artifacts and build outputs are intentionally tracked or ignored.
 
 ## v2 Requirements
 
-Deferred to future releases. Tracked but not in the current roadmap.
+### Collaboration And Organizations
 
-### Runtime
+- **ORG-01**: Organizations, teams, roles, and resource sharing.
+- **ORG-02**: Fine-grained RBAC beyond single-user ownership.
 
-- **RUNTIME-01**: Runtime execution can move from Docker to Firecracker or another microVM provider.
-- **RUNTIME-02**: Runtime scheduling supports multiple execution hosts and placement decisions.
+### Production Operations
 
-### Product
+- **OPS-01**: CI/CD workflows with lint, typecheck, tests, image builds, and deploy gates.
+- **OPS-02**: Structured metrics, traces, dashboards, and alerting.
+- **OPS-03**: Backup, disaster recovery, and migration rollback playbooks.
 
-- **ORG-01**: Organizations, memberships, roles, and organization-scoped tenancy are supported.
-- **BILL-01**: Billing, plans, quotas, and subscription enforcement are supported.
-- **MOBILE-01**: A dedicated mobile app is available for core workflows.
+### Product Expansion
 
-### Platform
-
-- **HOST-01**: Hosted apps can run across a multi-host orchestration layer rather than a single Docker socket.
-- **OBS-01**: Metrics, traces, dashboards, and alerting are integrated with production observability tooling.
+- **MARKET-01**: Public skill/plugin marketplace.
+- **MOBILE-01**: Native mobile clients.
+- **BILL-01**: Billing, quotas, subscriptions, and usage plans.
 
 ## Out of Scope
 
-Explicitly excluded from this hardening milestone.
-
-| Feature | Reason |
-|---------|--------|
-| `apps/api` gateway | The repo intentionally uses independent services; creating a gateway would conflict with current architecture. |
-| Organization tenancy | Current implementation is user/workspace scoped; org support needs a separate product/data-model milestone. |
-| Billing/payments | Not needed to make existing workspace/agent/runtime flows safe and reliable. |
-| MicroVM runtime | Docker hardening is the immediate risk-reduction step; provider replacement is v2. |
-| Multi-host app hosting | Current publish service is single-host Docker/Traefik; clustering is a later platform milestone. |
-| Full visual redesign | The milestone is production hardening, not a UI rebrand. |
+| Feature                            | Reason                                                            |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| Mobile apps                        | Web core is not production-stable yet.                            |
+| Billing                            | Security and workspace correctness are higher leverage right now. |
+| Enterprise org model               | Current code is user-first; orgs would multiply auth complexity.  |
+| Public marketplace                 | Internal skill model should stabilize first.                      |
+| Multi-region production deployment | Local Compose and single-node behavior need to work first.        |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
-| CONF-03 | Phase 1 | Pending |
-| CONF-04 | Phase 1 | Pending |
-| AUTH-01 | Phase 2 | Pending |
-| AUTH-02 | Phase 2 | Pending |
-| AUTH-03 | Phase 2 | Pending |
-| TEN-01 | Phase 2 | Pending |
-| TEN-02 | Phase 2 | Pending |
-| TEN-03 | Phase 2 | Pending |
-| API-01 | Phase 4 | Pending |
-| API-02 | Phase 4 | Pending |
-| API-03 | Phase 4 | Pending |
-| API-04 | Phase 4 | Pending |
-| API-05 | Phase 1 | Pending |
-| SAND-01 | Phase 3 | Pending |
-| SAND-02 | Phase 3 | Pending |
-| SAND-03 | Phase 3 | Pending |
-| SAND-04 | Phase 3 | Pending |
-| SAND-05 | Phase 3 | Pending |
-| AGNT-01 | Phase 3 | Pending |
-| AGNT-02 | Phase 3 | Pending |
-| AGNT-03 | Phase 3 | Pending |
-| AGNT-04 | Phase 3 | Pending |
-| AGNT-05 | Phase 3 | Pending |
-| WEB-01 | Phase 4 | Pending |
-| WEB-02 | Phase 4 | Pending |
-| WEB-03 | Phase 4 | Pending |
-| WEB-04 | Phase 4 | Pending |
-| OPS-01 | Phase 1 | Pending |
-| OPS-02 | Phase 5 | Pending |
-| OPS-03 | Phase 5 | Pending |
-| OPS-04 | Phase 5 | Pending |
-| OPS-05 | Phase 1 | Pending |
-| TEST-01 | Phase 5 | Pending |
-| TEST-02 | Phase 5 | Pending |
-| TEST-03 | Phase 5 | Pending |
-| TEST-04 | Phase 5 | Pending |
-| TEST-05 | Phase 5 | Pending |
+| Requirement | Phase   | Status                          |
+| ----------- | ------- | ------------------------------- |
+| BASE-01     | Phase 1 | Complete                        |
+| BASE-02     | Phase 1 | Blocked: Docker CLI unavailable |
+| BASE-03     | Phase 1 | Blocked: Docker CLI unavailable |
+| BASE-04     | Phase 1 | Complete                        |
+| AUTH-01     | Phase 2 | Pending                         |
+| AUTH-02     | Phase 2 | Complete                        |
+| AUTH-03     | Phase 2 | Complete                        |
+| AUTH-04     | Phase 2 | Partial: error envelopes remain |
+| TENANT-01   | Phase 2 | Complete                        |
+| TENANT-02   | Phase 2 | Partial: full verification open |
+| TENANT-03   | Phase 2 | Partial: broader route coverage |
+| WORK-01     | Phase 3 | Pending                         |
+| WORK-02     | Phase 3 | Pending                         |
+| WORK-03     | Phase 3 | Pending                         |
+| WORK-04     | Phase 3 | Pending                         |
+| RUN-01      | Phase 4 | Pending                         |
+| RUN-02      | Phase 4 | Pending                         |
+| RUN-03      | Phase 4 | Pending                         |
+| RUN-04      | Phase 4 | Pending                         |
+| AGENT-01    | Phase 5 | Pending                         |
+| AGENT-02    | Phase 5 | Pending                         |
+| AGENT-03    | Phase 5 | Pending                         |
+| AUTO-01     | Phase 5 | Pending                         |
+| AUTO-02     | Phase 5 | Pending                         |
+| MEM-01      | Phase 5 | Pending                         |
+| MEM-02      | Phase 5 | Pending                         |
+| AI-01       | Phase 5 | Pending                         |
+| AI-02       | Phase 5 | Pending                         |
+| HOST-01     | Phase 6 | Pending                         |
+| HOST-02     | Phase 6 | Pending                         |
+| HOST-03     | Phase 6 | Pending                         |
+| HOST-04     | Phase 6 | Pending                         |
+| WEB-01      | Phase 7 | Pending                         |
+| WEB-02      | Phase 7 | Pending                         |
+| WEB-03      | Phase 7 | Pending                         |
+| WEB-04      | Phase 7 | Pending                         |
+| QUAL-01     | Phase 8 | Pending                         |
+| QUAL-02     | Phase 8 | Pending                         |
+| QUAL-03     | Phase 8 | Pending                         |
+| QUAL-04     | Phase 8 | Pending                         |
 
 **Coverage:**
-- v1 requirements: 39 total
-- Mapped to phases: 39
+
+- v1 requirements: 40 total
+- Mapped to phases: 40
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-04-27*
-*Last updated: 2026-04-27 after roadmap creation*
+
+_Requirements defined: 2026-04-27_
+_Last updated: 2026-04-27 after Phase 2 security execution_

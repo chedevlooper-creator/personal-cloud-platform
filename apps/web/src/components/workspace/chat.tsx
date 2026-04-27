@@ -11,7 +11,7 @@ import { agentApi, getApiErrorMessage } from '@/lib/api';
 
 type ToolCall = {
   name: string;
-  args: any;
+  args: unknown;
 };
 
 type Message = {
@@ -57,7 +57,9 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
     enabled: !!activeConversationId,
     refetchInterval: (query) => {
       // Poll if any task is executing or waiting approval
-      const isPending = query.state?.data?.messages.some((m: Message) => ['pending', 'executing'].includes(m.taskStatus));
+      const isPending = query.state?.data?.messages.some((m: Message) =>
+        ['pending', 'executing'].includes(m.taskStatus),
+      );
       return isPending ? 2000 : false;
     },
   });
@@ -91,7 +93,15 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
   });
 
   const approvalMutation = useMutation({
-    mutationFn: async ({ taskId, decision, reason }: { taskId: string; decision: 'approve' | 'reject', reason?: string }) => {
+    mutationFn: async ({
+      taskId,
+      decision,
+      reason,
+    }: {
+      taskId: string;
+      decision: 'approve' | 'reject';
+      reason?: string;
+    }) => {
       await agentApi.post(`/agent/tasks/${taskId}/tool-approval`, { decision, reason });
     },
     onSuccess: (_, variables) => {
@@ -119,7 +129,9 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {isLoadingMessages && !messages.length ? (
-          <div className="flex justify-center text-zinc-500 py-4"><Loader2 className="animate-spin h-5 w-5" /></div>
+          <div className="flex justify-center text-zinc-500 py-4">
+            <Loader2 className="animate-spin h-5 w-5" />
+          </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-zinc-500">
             <Bot className="mb-2 h-10 w-10 text-zinc-600" />
@@ -136,41 +148,55 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
           >
             <div
               className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-[#37373d] text-zinc-200'
+                msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-[#37373d] text-zinc-200'
               }`}
             >
-              {msg.content || (msg.toolCalls?.length ? '' : <span className="italic text-zinc-400">Processing...</span>)}
-              
+              {msg.content ||
+                (msg.toolCalls?.length ? (
+                  ''
+                ) : (
+                  <span className="italic text-zinc-400">Processing...</span>
+                ))}
+
               {/* Tool Calls Rendering */}
               {msg.toolCalls && msg.toolCalls.length > 0 && (
                 <div className="mt-2 space-y-2 border-t border-[#4c4c4c] pt-2">
                   <p className="text-xs font-semibold uppercase text-zinc-400">Tool Calls</p>
                   {msg.toolCalls.map((tc, idx) => (
-                    <div key={idx} className="rounded bg-[#2d2d2d] p-2 text-xs font-mono text-blue-300">
+                    <div
+                      key={idx}
+                      className="rounded bg-[#2d2d2d] p-2 text-xs font-mono text-blue-300"
+                    >
                       <div>{tc.name}</div>
                       <div className="text-zinc-400">{JSON.stringify(tc.args, null, 2)}</div>
                     </div>
                   ))}
-                  
+
                   {/* Approval UI */}
                   {msg.taskStatus === 'waiting_approval' && (
                     <div className="mt-2 flex space-x-2">
-                      <Button 
-                        size="sm" 
-                        variant="default" 
+                      <Button
+                        size="sm"
+                        variant="default"
                         className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500"
-                        onClick={() => approvalMutation.mutate({ taskId: msg.taskId, decision: 'approve' })}
+                        onClick={() =>
+                          approvalMutation.mutate({ taskId: msg.taskId, decision: 'approve' })
+                        }
                         disabled={approvalMutation.isPending}
                       >
                         <CheckCircle2 className="mr-1 h-3 w-3" /> Approve
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="destructive" 
+                      <Button
+                        size="sm"
+                        variant="destructive"
                         className="h-7 text-xs"
-                        onClick={() => approvalMutation.mutate({ taskId: msg.taskId, decision: 'reject', reason: 'User rejected manually' })}
+                        onClick={() =>
+                          approvalMutation.mutate({
+                            taskId: msg.taskId,
+                            decision: 'reject',
+                            reason: 'User rejected manually',
+                          })
+                        }
                         disabled={approvalMutation.isPending}
                       >
                         <XCircle className="mr-1 h-3 w-3" /> Reject
@@ -182,7 +208,9 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
             </div>
             <div className="mt-1 flex items-center space-x-1 text-[10px] text-zinc-500">
               <span>{msg.role === 'user' ? 'You' : 'Agent'}</span>
-              {msg.taskStatus === 'executing' && <Loader2 className="ml-1 h-3 w-3 animate-spin text-blue-400" />}
+              {msg.taskStatus === 'executing' && (
+                <Loader2 className="ml-1 h-3 w-3 animate-spin text-blue-400" />
+              )}
               {msg.taskStatus === 'failed' && <span className="text-red-400">Failed</span>}
             </div>
           </div>
@@ -205,7 +233,11 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
             className="h-9 w-9 bg-blue-600 hover:bg-blue-500"
             disabled={!input.trim() || sendMutation.isPending}
           >
-            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {sendMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </Button>
         </form>
       </div>

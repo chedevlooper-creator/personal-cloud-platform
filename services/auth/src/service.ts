@@ -4,10 +4,30 @@ import { eq, and } from 'drizzle-orm';
 import * as argon2 from 'argon2';
 import crypto from 'crypto';
 
-export class AuthService {
-  constructor(private logger: any) {}
+export type SanitizedUser = {
+  id: string;
+  email: string;
+  name: string | null;
+};
 
-  private async logAudit(action: string, userId: string | null, details: any, ipAddress?: string, userAgent?: string) {
+type AuditDetails = Record<string, unknown> | null;
+type UserRecord = typeof users.$inferSelect;
+
+export class AuthService {
+  constructor(
+    private logger: {
+      info: (obj: object, msg?: string) => void;
+      error: (obj: object, msg?: string) => void;
+    },
+  ) {}
+
+  private async logAudit(
+    action: string,
+    userId: string | null,
+    details: AuditDetails,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     try {
       await db.insert(auditLogs).values({
         action,
@@ -21,8 +41,14 @@ export class AuthService {
     }
   }
 
-  async register(email: string, password: string, name?: string, ipAddress?: string, userAgent?: string) {
-    this.logger.info({ email }, 'Registering new user');
+  async register(
+    email: string,
+    password: string,
+    name?: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    this.logger.info({}, 'Registering new user');
     const existingUser = await db.query.users.findFirst({
       where: eq(users.email, email),
     });
@@ -33,70 +59,116 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(password);
 
-    const [newUser] = await db.insert(users).values({
-      email,
-      passwordHash,
-      name: name || null,
-    }).returning();
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        email,
+        passwordHash,
+        name: name || null,
+      })
+      .returning();
 
     if (!newUser) {
       throw new Error('Failed to create user');
     }
 
     const session = await this.createSession(newUser.id);
-    await this.logAudit('auth.register', newUser.id, { email }, ipAddress, userAgent);
+    await this.logAudit('auth.register', newUser.id, null, ipAddress, userAgent);
     return { user: this.sanitizeUser(newUser), session };
   }
 
   async login(email: string, password: string, ipAddress?: string, userAgent?: string) {
-    this.logger.info({ email }, 'User login attempt');
+    this.logger.info({}, 'User login attempt');
     const user = await db.query.users.findFirst({
       where: eq(users.email, email),
     });
 
     if (!user || !user.passwordHash) {
-      await this.logAudit('auth.login_failed', user?.id || null, { email, reason: 'Invalid credentials' }, ipAddress, userAgent);
+      await this.logAudit(
+        'auth.login_failed',
+        user?.id || null,
+        { reason: 'Invalid credentials' },
+        ipAddress,
+        userAgent,
+      );
       throw new Error('Invalid credentials');
     }
 
     const isValid = await argon2.verify(user.passwordHash, password);
     if (!isValid) {
-      await this.logAudit('auth.login_failed', user.id, { email, reason: 'Invalid credentials' }, ipAddress, userAgent);
+      await this.logAudit(
+        'auth.login_failed',
+        user.id,
+        { reason: 'Invalid credentials' },
+        ipAddress,
+        userAgent,
+      );
       throw new Error('Invalid credentials');
     }
 
     const session = await this.createSession(user.id);
-    await this.logAudit('auth.login', user.id, { email }, ipAddress, userAgent);
+    await this.logAudit('auth.login', user.id, null, ipAddress, userAgent);
     return { user: this.sanitizeUser(user), session };
   }
 
-  async handleOAuthLogin(data: { providerId: string, providerUserId: string, email: string, name: string, accessToken: string, refreshToken?: string }, ipAddress?: string, userAgent?: string) {
+  async handleOAuthLogin(
+    data: {
+      providerId: string;
+      providerUserId: string;
+      email: string;
+      name: string;
+      accessToken: string;
+      refreshToken?: string;
+    },
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     let user = await db.query.users.findFirst({
       where: eq(users.email, data.email),
     });
 
     if (!user) {
-      const [newUser] = await db.insert(users).values({
-        email: data.email,
-        name: data.name,
-      }).returning();
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          email: data.email,
+          name: data.name,
+        })
+        .returning();
       if (!newUser) throw new Error('Failed to create user');
       user = newUser;
-      await this.logAudit('auth.register_oauth', user.id, { provider: data.providerId }, ipAddress, userAgent);
+      await this.logAudit(
+        'auth.register_oauth',
+        user.id,
+        { provider: data.providerId },
+        ipAddress,
+        userAgent,
+      );
     }
 
     if (!user) throw new Error('User not found');
 
     const existingOauth = await db.query.oauthAccounts.findFirst({
-      where: and(eq(oauthAccounts.providerId, data.providerId), eq(oauthAccounts.providerUserId, data.providerUserId))
+      where: and(
+        eq(oauthAccounts.providerId, data.providerId),
+        eq(oauthAccounts.providerUserId, data.providerUserId),
+      ),
     });
 
     if (existingOauth) {
-      await db.update(oauthAccounts).set({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken || existingOauth.refreshToken,
-        updatedAt: new Date(),
-      }).where(and(eq(oauthAccounts.providerId, data.providerId), eq(oauthAccounts.providerUserId, data.providerUserId)));
+      await db
+        .update(oauthAccounts)
+        .set({
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken || existingOauth.refreshToken,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(oauthAccounts.providerId, data.providerId),
+            eq(oauthAccounts.providerUserId, data.providerUserId),
+          ),
+        );
     } else {
       await db.insert(oauthAccounts).values({
         providerId: data.providerId,
@@ -108,7 +180,13 @@ export class AuthService {
     }
 
     const session = await this.createSession(user.id);
-    await this.logAudit('auth.login_oauth', user.id, { provider: data.providerId }, ipAddress, userAgent);
+    await this.logAudit(
+      'auth.login_oauth',
+      user.id,
+      { provider: data.providerId },
+      ipAddress,
+      userAgent,
+    );
 
     return { user: this.sanitizeUser(user), session };
   }
@@ -129,9 +207,7 @@ export class AuthService {
     const fifteenDays = 1000 * 60 * 60 * 24 * 15;
     if (session.expiresAt.getTime() - Date.now() < fifteenDays) {
       const newExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
-      await db.update(sessions)
-        .set({ expiresAt: newExpiresAt })
-        .where(eq(sessions.id, sessionId));
+      await db.update(sessions).set({ expiresAt: newExpiresAt }).where(eq(sessions.id, sessionId));
     }
 
     const user = await db.query.users.findFirst({
@@ -141,7 +217,7 @@ export class AuthService {
     return user ? this.sanitizeUser(user) : null;
   }
 
-  private sanitizeUser(user: any) {
+  private sanitizeUser(user: UserRecord): SanitizedUser {
     return {
       id: user.id,
       email: user.email,
@@ -161,7 +237,7 @@ export class AuthService {
 
     const newSession = await this.createSession(session.userId);
     await this.logout(oldSessionId);
-    await this.logAudit('auth.session_refresh', session.userId, { oldSessionId, newSessionId: newSession.id }, ipAddress, userAgent);
+    await this.logAudit('auth.session_refresh', session.userId, null, ipAddress, userAgent);
 
     return newSession;
   }
@@ -172,7 +248,7 @@ export class AuthService {
     });
 
     if (session) {
-      await this.logAudit('auth.logout', session.userId, { sessionId }, ipAddress, userAgent);
+      await this.logAudit('auth.logout', session.userId, null, ipAddress, userAgent);
       await db.delete(sessions).where(eq(sessions.id, sessionId));
     }
   }
@@ -181,11 +257,14 @@ export class AuthService {
     const sessionId = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // 30 days
 
-    const [session] = await db.insert(sessions).values({
-      id: sessionId,
-      userId,
-      expiresAt,
-    }).returning();
+    const [session] = await db
+      .insert(sessions)
+      .values({
+        id: sessionId,
+        userId,
+        expiresAt,
+      })
+      .returning();
 
     if (!session) {
       throw new Error('Failed to create session');

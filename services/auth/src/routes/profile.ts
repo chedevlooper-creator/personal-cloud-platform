@@ -13,6 +13,33 @@ import {
 import { encrypt } from '../encryption';
 import { AuthService } from '../service';
 
+type ProviderCredentialRow = typeof providerCredentials.$inferSelect;
+
+export function maskProviderKey(provider: string, key: string): string {
+  const suffix = key.slice(-4);
+  return `${provider}-****${suffix}`;
+}
+
+export function toProviderCredentialResponse(credential: ProviderCredentialRow) {
+  const keySuffix =
+    credential.metadata &&
+    typeof credential.metadata === 'object' &&
+    typeof credential.metadata.keySuffix === 'string'
+      ? credential.metadata.keySuffix
+      : '';
+
+  return {
+    id: credential.id,
+    provider: credential.provider,
+    label: credential.label,
+    maskedKey: keySuffix
+      ? `${credential.provider}-****${keySuffix}`
+      : `${credential.provider}-****`,
+    lastUsedAt: credential.lastUsedAt,
+    createdAt: credential.createdAt,
+  };
+}
+
 export async function setupProfileRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const authService = new AuthService(fastify.log);
@@ -56,7 +83,7 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
       }
 
       return reply.code(200).send(prefs);
-    }
+    },
   );
 
   server.patch(
@@ -97,7 +124,7 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
       });
 
       return reply.code(200).send(updated);
-    }
+    },
   );
 
   // Provider Credentials
@@ -118,13 +145,8 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
         where: and(eq(providerCredentials.userId, userId), isNull(providerCredentials.revokedAt)),
       });
 
-      return reply.code(200).send(
-        providers.map((p) => ({
-          ...p,
-          maskedKey: 'sk-****' + p.encryptedKey.substring(p.encryptedKey.length - 4),
-        }))
-      );
-    }
+      return reply.code(200).send(providers.map(toProviderCredentialResponse));
+    },
   );
 
   server.post(
@@ -143,6 +165,7 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
 
       const { provider, label, key } = request.body;
       const { encrypted, iv, authTag } = encrypt(key);
+      const keySuffix = key.slice(-4);
 
       const [credential] = await db
         .insert(providerCredentials)
@@ -153,6 +176,7 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
           encryptedKey: encrypted,
           iv,
           authTag,
+          metadata: { keySuffix },
         })
         .returning();
 
@@ -167,10 +191,14 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
       });
 
       return reply.code(201).send({
-        ...credential,
-        maskedKey: 'sk-****' + credential.encryptedKey.substring(credential.encryptedKey.length - 4),
+        id: credential.id,
+        provider: credential.provider,
+        label: credential.label,
+        maskedKey: maskProviderKey(credential.provider, key),
+        lastUsedAt: credential.lastUsedAt,
+        createdAt: credential.createdAt,
       });
-    }
+    },
   );
 
   server.delete(
@@ -187,7 +215,12 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
       await db
         .update(providerCredentials)
         .set({ revokedAt: new Date() })
-        .where(and(eq(providerCredentials.id, request.params.id), eq(providerCredentials.userId, userId)));
+        .where(
+          and(
+            eq(providerCredentials.id, request.params.id),
+            eq(providerCredentials.userId, userId),
+          ),
+        );
 
       await db.insert(auditLogs).values({
         userId,
@@ -198,6 +231,6 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
       });
 
       return reply.code(204).send();
-    }
+    },
   );
 }

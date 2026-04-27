@@ -1,139 +1,90 @@
-# Coding Conventions
+---
+focus: quality
+mapped_at: 2026-04-27
+last_mapped_commit: c55e9b3bb8f13d990887889dfeb3418507c7a360
+---
 
-**Analysis Date:** 2026-04-27
+# Conventions
 
-## Naming Patterns
+## TypeScript
 
-**Files:**
-- Service entry files use `index.ts`.
-- Service route files use `routes.ts`; larger surfaces use `routes/<feature>.ts`.
-- Service logic commonly uses `service.ts`.
-- Frontend component filenames are kebab-case, e.g. `app-shell.tsx`, `tool-approval-card.tsx`.
-- Test files use `*.test.ts` and some `src/__tests__/*.test.ts`.
+- Backend packages inherit `tsconfig.base.json`.
+- Strict options are enabled, including `noImplicitAny`, `strictNullChecks`, `noUncheckedIndexedAccess`, and `noUnusedLocals`.
+- Current source still contains many explicit `any` usages and casts such as `as any`.
+- Non-null assertions appear in places like `services/agent/src/routes/automation.ts`.
 
-**Functions and Variables:**
-- camelCase for functions, local variables, and object fields.
-- Classes use PascalCase, e.g. `AuthService`, `RuntimeService`, `AgentOrchestrator`.
-- Schema constants use camelCase with `Schema` suffix, e.g. `createTaskSchema`.
+## Imports
 
-**Types:**
-- DTO types are exported from Zod with PascalCase names, e.g. `RegisterDto`.
-- Interfaces are PascalCase, e.g. `WorkspaceState`, `UseTerminalOptions`.
+- Workspace packages are imported with pnpm workspace names:
+  - `@pcp/db`
+  - `@pcp/shared`
+- Services often import directly from `@pcp/db/src/client` and `@pcp/db/src/schema`.
+- Web imports use `@/*` aliases for `apps/web/src/*`.
 
-## Code Style
+## Backend Route Style
 
-**Formatting:**
-- Prettier config: single quotes, semicolons, print width 100, trailing commas.
-- TypeScript strictness is high via `tsconfig.base.json`.
-- `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, and `isolatedModules` are enabled.
+- Routes generally use `fastify-type-provider-zod`.
+- Shared request/response DTOs usually come from `@pcp/shared`.
+- Inline route schemas use `z.object(...)` where no shared DTO exists.
+- Error responses are commonly sent as `{ error: string } as any`.
+- Response shapes are not consistently wrapped in `{ data, error, meta }` despite the backend rule.
 
-**Linting:**
-- Root `pnpm lint` fans out to packages with a lint script.
-- Current lint scripts exist in `apps/web` and `packages/db`.
+## Backend Service Style
 
-## Import Organization
+- Service classes hold business logic and database access.
+- There is no repository layer yet, despite the intended repository -> service -> route pattern.
+- Session validation is duplicated in multiple services.
+- Tenant scoping is usually done with Drizzle `and(eq(...userId...))`, but not consistently.
+- Some service methods update/delete by resource ID after an ownership pre-check; this is acceptable only if the pre-check and mutation remain adjacent and transactional risks are low.
 
-**Observed Order:**
-1. External packages such as `fastify`, `zod`, `drizzle-orm`.
-2. Workspace packages such as `@pcp/db` and `@pcp/shared`.
-3. Relative modules such as `./routes`, `./service`.
+## Database Style
 
-**Path Aliases:**
-- Frontend uses `@/` for `apps/web/src`.
-- Backend imports workspace packages through `@pcp/db` and `@pcp/shared`.
-- Services currently import DB internals directly from `@pcp/db/src/...`.
+- Drizzle table definitions use snake_case table and column names.
+- Most tables use UUID primary keys with `.defaultRandom()`, not UUID v7.
+- Timestamps use `createdAt`, `updatedAt`, and soft-delete columns like `deletedAt` in TypeScript mapped to snake_case SQL.
+- Several important indexes exist on user/workspace/status fields.
+- Raw SQL is used in memory vector search through `db.execute(sql\`...\`)`.
 
-## Validation
+## Frontend Style
 
-**HTTP Boundary:**
-- Fastify routes use `fastify-type-provider-zod`.
-- DTOs should live in `packages/shared/src/` when consumed across services/frontend.
-
-**Environment:**
-- Prefer Zod-validated env parsing at startup.
-- `packages/db/src/client.ts` shows the target pattern.
-- Several services still rely on raw `process.env` fallback values; this should be tightened.
+- Most protected UI components are client components.
+- TanStack Query hooks are used for auth state in `apps/web/src/lib/auth.ts`.
+- Zustand is used for workspace UI state.
+- API clients use axios instances with `withCredentials: true`.
+- UI is built from local primitives under `apps/web/src/components/ui`.
+- Workspace UI uses VS Code-like colors and resizable panels.
 
 ## Error Handling
 
-**Observed Patterns:**
-- Service methods throw `Error` for failures.
-- Routes often send ad hoc `{ error: string }` responses.
-- Workspace has a `WorkspaceError` class for status-aware errors.
-
-**Repo Standard:**
-- Use custom error classes.
-- Do not leak internal errors to clients.
-- Log with correlation/user/service context.
-- Return consistent response shapes.
+- Many services throw generic `Error`.
+- `WorkspaceService` has a custom `WorkspaceError` with HTTP status codes.
+- There is no shared app error hierarchy yet.
+- Internal errors may bubble to Fastify defaults unless route handlers catch them.
 
 ## Logging
 
-**Framework:**
-- Pino via Fastify logger.
+- Fastify/pino logging is enabled.
+- Development uses `pino-pretty`.
+- Required structured fields from repo rules (`correlationId`, `userId`, `service`) are not consistently present.
+- Auth service logs email addresses in some paths, which conflicts with the no-PII logging rule.
 
-**Observed Patterns:**
-- Development can use `pino-pretty`.
-- Some services log operational events, e.g. auth attempts, automation run processing.
-- Some code paths use `console.error`, especially provider/service catch handlers.
+## Environment Configuration
 
-**Preferred Pattern:**
-- Use `fastify.log` or injected service logger.
-- Avoid PII and secrets in log payloads.
-- Include `correlationId`, `userId`, and `service` where available.
+- `packages/db` validates `DATABASE_URL` with Zod.
+- Most services read env vars directly from `process.env`.
+- `services/agent/src/env.ts` manually loads local env files for the agent service.
+- Several secrets have local fallback values; these should be dev-only and blocked in production startup.
 
-## Database Access
+## Formatting And Naming
 
-**Current Pattern:**
-- Services import Drizzle client and schema directly from `@pcp/db/src`.
-- Queries should be scoped by `userId` or `organizationId`.
-- Soft-delete tables use `deletedAt`/`deleted_at` where relevant.
+- Prettier config is declared in repo instructions: single quotes, semicolons, width 100, trailing commas.
+- Files use a mix of kebab-case, snake-like names, and simple names.
+- Route submodules use `routes/<area>.ts`.
+- Test files are colocated as `*.test.ts` or under `src/__tests__`.
 
-**Target Pattern from Rules:**
-- Repository layer owns DB access.
-- Service layer owns business logic.
-- Route layer owns HTTP and Zod validation.
+## GSD Planning Convention For This Reset
 
-## Comments
+- Old planning files are archived under `.planning/archive/legacy-20260427-reset/`.
+- New source-of-truth planning files live at `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, and `.planning/STATE.md`.
+- Future phase plans should use this new codebase map, not the archived legacy roadmap.
 
-**Observed:**
-- Comments are common around security, temporary implementations, and TODO-like MVP shortcuts.
-- Some comments identify simulated or incomplete behavior in agent and automation flows.
-
-**Preferred:**
-- Explain why and risk, not obvious mechanics.
-- Avoid commented-out code.
-- Add ticket/context for TODOs when they survive beyond local work.
-
-## Function and Module Design
-
-**Observed:**
-- Service classes are large and own both domain logic and provider/database access.
-- Routes create service instances directly.
-- Several DTOs use `z.any()` or route casts to `as any` to work around Fastify/Zod typing.
-
-**Preferred for New Work:**
-- Keep route handlers thin.
-- Add focused repositories/helpers when logic grows.
-- Avoid adding new `any` unless the boundary truly is unknown and immediately narrowed.
-- Preserve tenant checks in every DB operation.
-
-## Frontend Conventions
-
-**Structure:**
-- App shell wraps authenticated pages through `apps/web/src/app/(main)/layout.tsx`.
-- Shared UI primitives live in `apps/web/src/components/ui`.
-- Feature components live under `apps/web/src/components/<feature>`.
-
-**State:**
-- TanStack Query for API data.
-- Zustand for current workspace/editor state.
-- Client components are used for interactive app surfaces.
-
-**Styling:**
-- Tailwind v4 theme tokens in `apps/web/src/app/globals.css`.
-- shadcn-compatible UI primitives.
-
----
-*Convention analysis: 2026-04-27*
-*Update when patterns change*

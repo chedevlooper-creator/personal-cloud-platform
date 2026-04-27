@@ -3,6 +3,21 @@ import { hostedServices, hostedServiceLogs } from '@pcp/db/src/schema';
 import { eq, desc, and } from 'drizzle-orm';
 import Docker from 'dockerode';
 
+type HostedServiceUpdate = Partial<{
+  workspaceId: string;
+  name: string;
+  slug: string;
+  kind: 'static' | 'vite' | 'node';
+  rootPath: string;
+  startCommand: string;
+  envVars: Record<string, string>;
+  isPublic: boolean;
+  autoRestart: boolean;
+  customDomain: string;
+}>;
+
+type HostedServiceRow = typeof hostedServices.$inferSelect;
+
 export class PublishService {
   private docker: Docker;
 
@@ -45,13 +60,13 @@ export class PublishService {
     return service;
   }
 
-  async updateService(serviceId: string, userId: string, data: Partial<any>) {
+  async updateService(serviceId: string, userId: string, data: HostedServiceUpdate) {
     const [service] = await db
       .update(hostedServices)
       .set({ ...data, updatedAt: new Date() })
       .where(and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)))
       .returning();
-      
+
     if (!service) throw new Error('Service not found or update failed');
     return service;
   }
@@ -88,7 +103,7 @@ export class PublishService {
     });
 
     if (!service) throw new Error('Service not found');
-    
+
     if (service.runnerProcessId) {
       try {
         const container = this.docker.getContainer(service.runnerProcessId);
@@ -107,7 +122,7 @@ export class PublishService {
     return { status: 'stopped' };
   }
 
-  private async runContainer(service: any) {
+  private async runContainer(service: HostedServiceRow) {
     try {
       const containerName = `hosted-${service.id}`;
       const workspaceVolume = `/tmp/workspaces/${service.workspaceId}`;
@@ -115,7 +130,7 @@ export class PublishService {
       // In MVP, we just use node alpine or nginx depending on kind
       let image = 'node:20-alpine';
       let cmd: string[] = [];
-      
+
       if (service.kind === 'static') {
         image = 'nginx:alpine';
       } else if (service.startCommand) {
@@ -136,7 +151,11 @@ export class PublishService {
           'traefik.enable': 'true',
           [`traefik.http.routers.${containerName}.rule`]: `Host(\`${service.slug}.apps.localhost\`)`,
           [`traefik.http.routers.${containerName}.entrypoints`]: 'web',
-          [`traefik.http.services.${containerName}.loadbalancer.server.port`]: service.port ? service.port.toString() : (service.kind === 'static' ? '80' : '3000'),
+          [`traefik.http.services.${containerName}.loadbalancer.server.port`]: service.port
+            ? service.port.toString()
+            : service.kind === 'static'
+              ? '80'
+              : '3000',
         },
         HostConfig: {
           NetworkMode: 'pcp_network',
@@ -149,32 +168,34 @@ export class PublishService {
 
       await db
         .update(hostedServices)
-        .set({ 
+        .set({
           status: 'running',
           runnerProcessId: container.id,
-          publicUrl: `http://${service.slug}.apps.localhost`
+          publicUrl: `http://${service.slug}.apps.localhost`,
         })
         .where(eq(hostedServices.id, service.id));
-
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown publish container error';
       await db
         .update(hostedServices)
-        .set({ 
+        .set({
           status: 'crashed',
           crashCount: service.crashCount + 1,
         })
         .where(eq(hostedServices.id, service.id));
-        
+
       await db.insert(hostedServiceLogs).values({
         serviceId: service.id,
         stream: 'stderr',
-        line: error.message,
+        line: message,
       });
     }
   }
 
   async deleteService(serviceId: string, userId: string) {
     await this.stopService(serviceId, userId).catch(() => {});
-    await db.delete(hostedServices).where(and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)));
+    await db
+      .delete(hostedServices)
+      .where(and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)));
   }
 }

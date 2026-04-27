@@ -1,3 +1,9 @@
-# disabled old GSD config
+# GSD Agent Configuration — managed by get-shit-done installer
+# GSD codex_hooks ownership: section
+
 [features]
 codex_hooks = false
+
+# Agent roles are auto-discovered from `.codex/agents/*.toml`.
+# The old `[[agents]]` array format breaks current Codex builds because
+# `agents` is now expected to be a keyed table, not a sequence.
