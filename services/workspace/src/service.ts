@@ -9,6 +9,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { db } from '@pcp/db/src/client';
 import { sessions, snapshots, users, workspaceFiles, workspaces } from '@pcp/db/src/schema';
 import { and, desc, eq, isNull } from 'drizzle-orm';
+import { PassThrough } from 'node:stream';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { env } from './env';
 
@@ -413,16 +414,16 @@ export class WorkspaceService {
     const normalizedPath = this.normalizeFilePath(path);
     const storageKey = this.getStorageKey(userId, workspaceId, normalizedPath);
 
-    // Stream directly to S3
-    await this.storage.putStream(storageKey, stream, mimeType);
-
-    // Assume S3 upload succeeded. If we needed exact size we'd have to track it during stream.
-    // For now, we will update the size if provided via header or leave it 0 (which is a limitation, but acceptable for MVP).
-    // In a real app we'd attach an event listener to the stream to count bytes.
+    // Tee the upload through a PassThrough so we can count bytes exactly as they
+    // flow to S3, regardless of whether the source stream exposes a byte count.
     let size = 0;
-    if (stream.hasOwnProperty('byteCount')) {
-      size = (stream as any).byteCount;
-    }
+    const counter = new PassThrough();
+    counter.on('data', (chunk: Buffer | string) => {
+      size += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
+    });
+    stream.pipe(counter);
+
+    await this.storage.putStream(storageKey, counter, mimeType);
 
     const parts = normalizedPath.split('/').filter(Boolean);
     parts.pop();
