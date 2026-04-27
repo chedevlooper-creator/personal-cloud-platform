@@ -1,90 +1,83 @@
----
-focus: quality
-mapped_at: 2026-04-27
-last_mapped_commit: c55e9b3bb8f13d990887889dfeb3418507c7a360
----
-
 # Conventions
 
-## TypeScript
+*Last mapped: 2026-04-27*
 
-- Backend packages inherit `tsconfig.base.json`.
-- Strict options are enabled, including `noImplicitAny`, `strictNullChecks`, `noUncheckedIndexedAccess`, and `noUnusedLocals`.
-- Current source still contains many explicit `any` usages and casts such as `as any`.
-- Non-null assertions appear in places like `services/agent/src/routes/automation.ts`.
+## Code Style
+- **Prettier** (`.prettierrc`): single quotes, semicolons, print width 100, trailing commas.
+- **TypeScript strictness** is high (`tsconfig.base.json`):
+  - `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noUnusedLocals`, `noUnusedParameters`, `isolatedModules`.
+  - Index/array access yields `T | undefined` — narrow before use.
+- **ESLint** runs only in packages with a `lint` script — currently `apps/web` and `packages/db`. Other services have no lint config yet.
+
+## Naming
+- Functions, variables, object fields: **camelCase**.
+- Classes: **PascalCase** (`AuthService`, `RuntimeService`, `AgentOrchestrator`).
+- Zod schema constants: `<x>Schema` (`createTaskSchema`).
+- DTO types: PascalCase (`RegisterDto`).
+- Interfaces: PascalCase (`WorkspaceState`, `UseTerminalOptions`).
+- Frontend filenames: kebab-case `.tsx` (`app-shell.tsx`, `tool-approval-card.tsx`).
+- Service entry: `index.ts`. Service logic: `service.ts`. Routes: `routes.ts` or `routes/<feature>.ts`.
+- Tests: `*.test.ts` co-located, or `src/__tests__/*.test.ts`.
 
 ## Imports
+- Frontend uses `@/` for `apps/web/src` (per `tsconfig.json` paths).
+- Backend imports workspace packages via `@pcp/db` and `@pcp/shared`.
+- Services currently import DB internals from `@pcp/db/src/...` directly (acceptable because `@pcp/shared` and `@pcp/db` use source consumption — the latter via explicit subpaths).
+- `@pcp/shared` has **no `dist/`** — never add a `build` step expectation; consumers import from `src/`.
 
-- Workspace packages are imported with pnpm workspace names:
-  - `@pcp/db`
-  - `@pcp/shared`
-- Services often import directly from `@pcp/db/src/client` and `@pcp/db/src/schema`.
-- Web imports use `@/*` aliases for `apps/web/src/*`.
-
-## Backend Route Style
-
-- Routes generally use `fastify-type-provider-zod`.
-- Shared request/response DTOs usually come from `@pcp/shared`.
-- Inline route schemas use `z.object(...)` where no shared DTO exists.
-- Error responses are commonly sent as `{ error: string } as any`.
-- Response shapes are not consistently wrapped in `{ data, error, meta }` despite the backend rule.
-
-## Backend Service Style
-
-- Service classes hold business logic and database access.
-- There is no repository layer yet, despite the intended repository -> service -> route pattern.
-- Session validation is duplicated in multiple services.
-- Tenant scoping is usually done with Drizzle `and(eq(...userId...))`, but not consistently.
-- Some service methods update/delete by resource ID after an ownership pre-check; this is acceptable only if the pre-check and mutation remain adjacent and transactional risks are low.
-
-## Database Style
-
-- Drizzle table definitions use snake_case table and column names.
-- Most tables use UUID primary keys with `.defaultRandom()`, not UUID v7.
-- Timestamps use `createdAt`, `updatedAt`, and soft-delete columns like `deletedAt` in TypeScript mapped to snake_case SQL.
-- Several important indexes exist on user/workspace/status fields.
-- Raw SQL is used in memory vector search through `db.execute(sql\`...\`)`.
-
-## Frontend Style
-
-- Most protected UI components are client components.
-- TanStack Query hooks are used for auth state in `apps/web/src/lib/auth.ts`.
-- Zustand is used for workspace UI state.
-- API clients use axios instances with `withCredentials: true`.
-- UI is built from local primitives under `apps/web/src/components/ui`.
-- Workspace UI uses VS Code-like colors and resizable panels.
+## Validation
+- Routes use `fastify-type-provider-zod`; request/response Zod schemas are required for every route.
+- DTOs shared across service+frontend live in `packages/shared/src/`.
+- **Env validation:** `packages/db/src/client.ts` is the canonical pattern (Zod-at-startup). Several services still use raw `process.env` fallbacks — should be tightened (CONCERNS.md).
 
 ## Error Handling
-
-- Many services throw generic `Error`.
-- `WorkspaceService` has a custom `WorkspaceError` with HTTP status codes.
-- There is no shared app error hierarchy yet.
-- Internal errors may bubble to Fastify defaults unless route handlers catch them.
+- Service methods throw `Error` for failures; some routes still respond with ad-hoc `{ error: string }` shapes.
+- `services/workspace/src/...` defines `WorkspaceError` (HTTP-status-aware) — preferred pattern; replicate per service.
+- **Rules:**
+  - Use custom error classes; do not leak internal errors to clients.
+  - Log with `correlationId`, `userId`, `service` context.
+  - Return consistent JSON response shapes.
 
 ## Logging
+- **Pino** via Fastify (`fastify.log`), with `pino-pretty` in dev.
+- Required fields where available: `correlationId`, `userId`, `service`. **No PII**, no secrets.
+- Some provider/catch handlers use `console.error` — prefer the Fastify logger.
 
-- Fastify/pino logging is enabled.
-- Development uses `pino-pretty`.
-- Required structured fields from repo rules (`correlationId`, `userId`, `service`) are not consistently present.
-- Auth service logs email addresses in some paths, which conflicts with the no-PII logging rule.
+## Database Access
+- All Drizzle access goes through `@pcp/db/src/client`.
+- **Tenant rule:** every query filters by `userId` or `organizationId`.
+- Soft deletes use `deletedAt` / `deleted_at` where present.
+- Target layering: **repository (DB only) → service (logic) → route (HTTP + Zod)**. Today the repository is implicit (queries inline in service classes); split out as services grow.
 
-## Environment Configuration
+## Comments
+- Acceptable: explanations of *why* + risk for security-sensitive code, or context/ticket links for surviving TODOs.
+- Avoid: commented-out code, narration of obvious mechanics.
+- Honest markers: `Simulated` strings exist in agent tool stubs (`run_command`, `read_file`, `list_files`) — flagged in CONCERNS.md, *not* a style template.
 
-- `packages/db` validates `DATABASE_URL` with Zod.
-- Most services read env vars directly from `process.env`.
-- `services/agent/src/env.ts` manually loads local env files for the agent service.
-- Several secrets have local fallback values; these should be dev-only and blocked in production startup.
+## Module Design
+- Service classes are large — they currently own domain logic *and* provider/DB access.
+- Routes create service instances directly.
+- Several DTOs use `z.any()` or route-level `as any` casts to satisfy Fastify+Zod typing constraints. Avoid adding new `any` unless the boundary is genuinely opaque and immediately narrowed.
+- **Always preserve tenant checks** when touching DB ops.
 
-## Formatting And Naming
+## Frontend Conventions
+- Auth-protected pages wrap through `apps/web/src/app/(main)/layout.tsx`.
+- Shared UI primitives in `apps/web/src/components/ui/`.
+- Feature components under `apps/web/src/components/<feature>/`.
+- **TanStack Query** for API data; **Zustand** for current workspace/editor state.
+- Tailwind v4 theme tokens in `apps/web/src/app/globals.css`.
+- Next.js 16 + React 19 — confirm against `apps/web/node_modules/next/dist/docs/` before non-trivial routing or config work; older training data may mislead.
 
-- Prettier config is declared in repo instructions: single quotes, semicolons, width 100, trailing commas.
-- Files use a mix of kebab-case, snake-like names, and simple names.
-- Route submodules use `routes/<area>.ts`.
-- Test files are colocated as `*.test.ts` or under `src/__tests__`.
+## Security Conventions
+- **Argon2** for password hashing; never store plaintext.
+- **AES-256-GCM** with random IV per stored API key; `ENCRYPTION_KEY` is 32 bytes.
+- **`assertSafePath()`** central guard on all file ops (blocks `..`, null bytes, `~`).
+- **Rate limiting** via `@fastify/rate-limit` on every service (default 100/min; 5/min on login/register).
+- HTTP-only session cookies signed with `COOKIE_SECRET`.
+- **Admin gate** is currently `ADMIN_EMAIL` env (MVP); move to a role column for production (DECISIONS / CONCERNS).
 
-## GSD Planning Convention For This Reset
-
-- Old planning files are archived under `.planning/archive/legacy-20260427-reset/`.
-- New source-of-truth planning files live at `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, and `.planning/STATE.md`.
-- Future phase plans should use this new codebase map, not the archived legacy roadmap.
-
+## Repo Hygiene
+- The repo path may contain spaces — quote shell paths.
+- `.gitignore` excludes `infra/docker/.env` — never commit it.
+- `services/auth` and `services/workspace` pin **vitest@^4.1.5**; other services pin `^1.4.0`. APIs differ — do not unify casually.
+- Stale areas in `README.md` (e.g. `apps/api`, "API at :4000") — trust executable config and source.

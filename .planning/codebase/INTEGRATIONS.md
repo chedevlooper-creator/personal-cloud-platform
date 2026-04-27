@@ -1,90 +1,81 @@
----
-focus: tech
-mapped_at: 2026-04-27
-last_mapped_commit: c55e9b3bb8f13d990887889dfeb3418507c7a360
----
-
 # Integrations
 
-## Overview
+*Last mapped: 2026-04-27*
 
-The app integrates with local infrastructure through Docker Compose and with AI providers through service-level SDK clients. The frontend currently talks directly to service ports rather than through a single API gateway.
+External systems this codebase talks to and where the boundary lives.
 
-## Database
+## Database — PostgreSQL (+ pgvector)
+- **Client:** `packages/db/src/client.ts` (postgres driver + Drizzle).
+- **Schema:** `packages/db/src/schema/*` — users, sessions, workspaces, workspace_files, runtimes, runtime_logs, runtime_events, agent_tasks, agent_task_steps, memory_entries (pgvector), published_apps, settings, audit_logs, integrations, notifications, snapshots.
+- **Migrations:** `packages/db/src/migrations/` (drizzle-kit).
+- **pgvector** is required (memory service); image is `pgvector/pgvector:pg16` in `infra/docker/docker-compose.yml`.
+- **Tenant rule:** every query filters by `user_id` / `organization_id` (see AGENTS.md + `.cursor/rules/database.mdc`).
 
-- PostgreSQL is the source of truth through `packages/db/src/client.ts`.
-- `DATABASE_URL` is parsed with Zod in both `packages/db/src/client.ts` and `packages/db/drizzle.config.ts`.
-- Drizzle schema is centralized in `packages/db/src/schema/index.ts`.
-- Services import `@pcp/db/src/client` and `@pcp/db/src/schema` directly.
-- pgvector is required for `services/memory` through the custom vector type in `packages/db/src/schema/memory_entries.ts`.
+## Object Storage — MinIO / S3
+- **SDK:** `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`.
+- **Used by:** `services/workspace` (file contents, snapshots).
+- **Local:** MinIO containers (`pcp-minio`) on :9000 (API) / :9001 (console).
+- **Tenant rule:** S3 paths are tenant-prefixed.
 
-## Redis And Queues
+## Cache + Queue — Redis 7 / BullMQ
+- **Queue:** `services/agent/src/automation/queue.ts` (BullMQ + ioredis).
+- **Use cases:** automation scheduling (manual/hourly/daily/weekly/cron), run history.
+- **Local:** `pcp-redis` on :6379.
 
-- Redis URL defaults to `redis://localhost:6379`.
-- BullMQ queue is initialized in `services/agent/src/automation/queue.ts`.
-- Automation jobs create agent tasks and update `automation_runs`.
-- Scheduled repeat jobs are keyed as `automation-<id>`.
+## Reverse Proxy — Traefik 3
+- Local: `pcp-traefik` (:80, :443, dashboard :8080) — `infra/docker/docker-compose.yml`.
+- Used in production and by `services/publish` for routing hosted apps to subdomains.
+- Mounts `/var/run/docker.sock:ro` for Docker provider.
 
-## Object Storage
+## SMTP (dev) — Mailhog
+- Local container only; production SMTP not configured in repo.
 
-- Workspace file content uses S3-compatible storage in `services/workspace/src/service.ts`.
-- Default endpoint is `http://localhost:9000`, matching MinIO in `infra/docker/docker-compose.yml`.
-- Object keys are tenant/workspace prefixed as `${userId}/${workspaceId}${path}`.
-- Snapshot rows are created with `snapshots/<workspaceId>/<timestamp>.tar.gz`, but actual archive creation/restoration is currently simplified.
+## Auth Providers
+- **Email/password** — Argon2 hashing; `services/auth/src/service.ts`.
+- **Google OAuth** — env `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; routes under `services/auth/src/routes/`.
+- **Sessions** — HTTP-only cookies signed with `COOKIE_SECRET`.
 
-## Docker And Container Runtime
+## LLM Providers (BYOK — keys stored AES-256-GCM in DB)
+- **OpenAI** — chat + embeddings (`services/agent/src/llm/`, `services/memory/src/embeddings/`).
+- **Anthropic** — chat (`services/agent/src/llm/`).
+- **MiniMax** — Anthropic-compatible interface.
+- Provider abstraction: `services/agent/src/llm/types.ts` + `services/agent/src/llm/provider.ts`.
 
-- Runtime containers are created with Dockerode in `services/runtime/src/provider/docker.ts`.
-- Runtime containers mount `/tmp/workspaces/<workspaceId>` at `/workspace`.
-- Runtime networking is disabled with `NetworkMode: 'none'`.
-- Publish containers are created in `services/publish/src/service.ts` and attached to Traefik via labels.
-- Publish containers use the Docker network name `pcp_network`, while Compose declares `pcp-network`; this should be verified because Docker Compose often materializes project-prefixed names.
+## Container Runtime — Docker (Dockerode)
+- **Used by:**
+  - `services/runtime` — workspace exec / web terminal PTY (`services/runtime/src/provider/docker.ts`).
+  - `services/publish` — deploy hosted static sites / Vite apps / Node APIs.
+- **Runtime abstraction:** `services/runtime/src/provider/types.ts` (so Firecracker/microVM can replace Docker — see ADR-003).
 
-## Traefik
+## Webhooks / Inbound
+- None defined in this snapshot of the codebase.
 
-- `infra/docker/docker-compose.yml` runs Traefik v3 on ports 80, 443, and dashboard 8080.
-- Hosted app routing uses labels like `traefik.http.routers.<container>.rule`.
-- Published URLs are shaped as `http://<slug>.apps.localhost`.
+## Inter-service Communication
+- **No cross-service DB access** (architectural rule).
+- Services talk over HTTP, with Redis pub/sub + BullMQ for async work.
+- DTOs are imported from `@pcp/shared/src` directly (no build step).
 
-## Authentication Providers
+## Service Ports (local)
+| Service              | Port |
+|----------------------|------|
+| `apps/web`           | 3000 |
+| `services/auth`      | 3001 |
+| `services/workspace` | 3002 |
+| `services/runtime`   | 3003 |
+| `services/agent`     | 3004 |
+| `services/memory`    | 3005 |
+| `services/publish`   | 3006 |
 
-- Email/password registration and login are implemented in `services/auth/src/service.ts`.
-- Password hashing uses Argon2 through `argon2.hash` and `argon2.verify`.
-- Google OAuth is registered in `services/auth/src/routes.ts` via `@fastify/oauth2`.
-- OAuth account records are persisted in `packages/db/src/schema/oauth_accounts.ts`.
-
-## AI Providers
-
-- `services/agent/src/llm/provider.ts` selects provider from `LLM_PROVIDER`.
-- Providers:
-  - OpenAI through `services/agent/src/llm/openai.ts`.
-  - Anthropic through `services/agent/src/llm/anthropic.ts`.
-  - Minimax through the Anthropic-compatible class with bearer auth.
-- User BYOK provider credentials are stored in `provider_credentials` through profile routes in `services/auth/src/routes/profile.ts`.
-- Provider credentials are encrypted with AES-256-GCM in `services/auth/src/encryption.ts`.
-
-## Frontend API Endpoints
-
-The web client uses direct service URLs from `apps/web/src/lib/api.ts`:
-
-| Client | Default URL |
-|--------|-------------|
-| Auth | `http://localhost:3001/auth` |
-| Workspace | `http://localhost:3002/api` |
-| Runtime | `http://localhost:3003/api` |
-| Agent | `http://localhost:3004/api` |
-| Publish | `http://localhost:3006/publish` |
-
-## Mail And Notifications
-
-- Mailhog is included in Compose but no full email sending integration is visible yet.
-- Notifications and integrations tables exist in `packages/db/src/schema/notifications.ts`.
-- Automation notification mode supports `none`, `in-app`, `email-mock`, and `webhook` in shared schemas.
-
-## External Surface To Harden
-
-- CORS is currently `origin: true` in services, which reflects origins broadly.
-- Several services use default local secrets when env vars are absent.
-- Publish endpoints accept `userId` in request body/query instead of deriving user identity from session cookies.
-- There is no internal service authentication between services yet.
-
+## Required Env (from README)
+| Variable               | Required | Description                                |
+|------------------------|----------|--------------------------------------------|
+| `DATABASE_URL`         | yes      | PostgreSQL connection string               |
+| `REDIS_URL`            | yes      | Redis connection string                    |
+| `S3_ENDPOINT`          | yes      | MinIO/S3 endpoint                          |
+| `S3_ACCESS_KEY`        | yes      | S3 access key                              |
+| `S3_SECRET_KEY`        | yes      | S3 secret key                              |
+| `COOKIE_SECRET`        | yes      | Session cookie signing secret              |
+| `ENCRYPTION_KEY`       | yes      | 32-byte AES-256-GCM key (BYOK encryption)  |
+| `ADMIN_EMAIL`          | optional | Gates `/admin` routes                      |
+| `GOOGLE_CLIENT_ID`     | optional | Google OAuth                               |
+| `GOOGLE_CLIENT_SECRET` | optional | Google OAuth                               |

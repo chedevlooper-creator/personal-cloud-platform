@@ -1,74 +1,84 @@
----
-focus: quality
-mapped_at: 2026-04-27
-last_mapped_commit: c55e9b3bb8f13d990887889dfeb3418507c7a360
----
-
 # Testing
 
-## Test Stack
+*Last mapped: 2026-04-27*
 
-- Vitest is used for backend services.
-- `services/auth` and `services/workspace` use Vitest `^4.1.5`.
-- `services/agent`, `services/memory`, `services/runtime`, and `services/publish` use Vitest `^1.4.0`.
-- The web app has no test script.
-- `packages/shared` has no test script.
+## Framework
+- **Vitest** in every service: `auth`, `workspace`, `runtime`, `agent`, `memory`, `publish`.
+- Each service has its own `vitest.config.ts`.
+- `apps/web` and `packages/shared` have **no tests**.
+- Root smoke runner: `scripts/baseline-smoke.mjs` (+ `baseline-smoke.test.mjs`).
 
-## Existing Tests
+## Vitest Versions (do not unify casually)
+| Package                        | Vitest pinned at |
+|--------------------------------|------------------|
+| `services/auth`                | `^4.1.5`         |
+| `services/workspace`           | `^4.1.5`         |
+| `services/runtime`             | `^1.4.0`         |
+| `services/agent`               | `^1.4.0`         |
+| `services/memory`              | `^1.4.0`         |
+| `services/publish`             | `^1.4.0`         |
 
-| Area | Files |
-|------|-------|
-| Auth service | `services/auth/src/service.test.ts`, `services/auth/src/__tests__/encryption.test.ts`, `services/auth/src/__tests__/schemas.test.ts` |
-| Workspace service | `services/workspace/src/service.test.ts`, `services/workspace/src/__tests__/path-traversal.test.ts` |
-| Agent service | `services/agent/src/orchestrator.test.ts` |
-| Memory service | `services/memory/src/service.test.ts` |
+API surface differs between v1 and v4 — keep aligned only when intentional.
 
-## Test Commands
+## Layout
+- **Co-located unit tests:** `services/<svc>/src/service.test.ts` and `services/<svc>/src/orchestrator.test.ts` (agent).
+- **Route tests:** e.g. `services/publish/src/routes.test.ts`.
+- **Suite folders:** `services/auth/src/__tests__/*.test.ts`.
 
-- All service tests: `pnpm test`.
-- Single service: `pnpm --filter @pcp/auth-service test`.
-- Single file example: `pnpm --filter @pcp/workspace-service exec vitest run src/service.test.ts`.
-- Typecheck service: `pnpm --filter @pcp/auth-service exec tsc --noEmit`.
-- Web lint: `pnpm --filter web lint`.
+## Run Commands
+```bash
+# All services that define tests
+pnpm test
 
-## Important Command Gotcha
+# One service
+pnpm --filter @pcp/workspace-service test
 
-Root `pnpm typecheck` currently fans out to package `typecheck` scripts, but packages do not define a `typecheck` script. Use per-package `tsc --noEmit` commands instead.
+# One file
+pnpm --filter @pcp/workspace-service exec vitest run src/service.test.ts
 
-## Coverage Gaps
+# Watch mode
+pnpm --filter @pcp/agent-service exec vitest
+```
 
-- No frontend unit/component tests for `apps/web`.
-- No Playwright/E2E tests for core user journeys.
-- No publish service tests.
-- Runtime service has no visible tests for Docker provider behavior or command policy.
-- Memory service testing likely needs provider mocking and pgvector behavior coverage.
-- Cross-service integration tests are not present.
-- Tenant isolation tests are incomplete for publish and automation.
-- Security tests are narrow and focus mainly on encryption and workspace path traversal.
+`pnpm test` from the root runs `vitest run` only in services that define a `test` script.
 
-## Risk-Based Test Priorities
+## What's Covered
+- Auth: hashing, login flow happy paths, session basics, route surface.
+- Workspace: file CRUD service-level paths and basic route checks.
+- Runtime: provider interface paths (Docker provider tests).
+- Agent: orchestrator step machine; basic tool dispatch.
+- Memory: embedding/search service paths.
+- Publish: route surface and service paths.
 
-1. Auth/session and admin authorization tests.
-2. Tenant isolation tests for every service route.
-3. Workspace file CRUD and object key ownership tests.
-4. Runtime sandbox policy tests.
-5. Agent tool approval and task lifecycle tests.
-6. Automation CRUD/run ownership tests.
-7. Publish service user spoofing and container lifecycle tests.
-8. Frontend smoke tests for login, dashboard, workspace, chat, terminal, automations, hosting, settings.
+> Coverage instrumentation is **not** wired up at the workspace level (`docs/PROGRESS.md` shows "Test coverage: 0%" — meaning unmeasured, not unwritten).
 
-## CI State
+## Mocking
+- In-process Vitest mocks for external SDKs and DB clients in service tests.
+- Real Postgres / Redis / S3 are **not** assumed by the service test suites — use mocks or stubs.
+- Smoke run (`scripts/baseline-smoke.mjs`) does the actual end-to-end touch (`/health`) against running services.
 
-- No `.github/workflows` files were found in the scanned file list.
-- Build/test/lint gates appear to be local scripts only.
-- Generated `dist` and `tsbuildinfo` files exist in the tree; CI should clarify whether these are intended to be tracked.
+## Smoke Test (root)
+```bash
+pnpm smoke:local
+```
+And against full infra:
+```bash
+cp infra/docker/.env.example infra/docker/.env
+pnpm infra:up
+pnpm --filter @pcp/db migrate
+curl -fsS http://localhost:300{1..6}/health
+```
 
-## Manual Verification Needs
+## Gaps / Known Weak Spots
+- No frontend test framework (`apps/web`).
+- No shared-package tests (`packages/shared`).
+- No coverage thresholds enforced in CI (no CI config in repo at this snapshot).
+- Several agent tools (`run_command`, `read_file`, `list_files`) return **simulated** strings; tests around these should not rely on those values being real (CONCERNS.md).
+- Env-validation tests are missing — many services still read `process.env` raw.
 
-- Docker Compose stack startup with `pnpm infra:up`.
-- Database migration with `pnpm --filter @pcp/db migrate`.
-- Service startup on ports 3001-3006 and web on 3000.
-- Browser verification of auth flow and workspace shell.
-- Runtime command execution and terminal attachment.
-- Hosted service creation through Docker and Traefik route resolution.
-
+## Conventions for New Tests
+- Co-locate unit tests next to the unit (`<x>.ts` ↔ `<x>.test.ts`).
+- Use `__tests__/` only when grouping multiple integration scenarios.
+- Tests must respect tenant scoping — assert `userId` filter is applied.
+- Avoid hitting real Docker / Postgres in unit tests; isolate via the provider abstractions (`RuntimeProvider`, `LLMProvider`, embeddings).
+- For routes, prefer `fastify.inject()` to test handler+schema together.

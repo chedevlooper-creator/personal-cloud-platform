@@ -1,116 +1,119 @@
----
-focus: arch
-mapped_at: 2026-04-27
-last_mapped_commit: c55e9b3bb8f13d990887889dfeb3418507c7a360
----
-
 # Structure
 
-## Root
+*Last mapped: 2026-04-27*
 
-- `package.json`: root scripts and workspace metadata.
-- `pnpm-workspace.yaml`: includes `packages/*`, `services/*`, `apps/*`.
-- `tsconfig.base.json`: strict shared TypeScript config for backend packages.
-- `README.md`: product overview and startup instructions; some roadmap claims are stale relative to code.
-- `AGENTS.md`: repo-specific coding and GSD instructions.
-- `.cursor/rules/*.mdc`: architecture, backend, database, security, sandbox, testing, frontend, and agent invariants.
-- `infra/docker`: local infrastructure stack.
+## Top-Level Layout
 
-## Frontend
+```
+personal-cloud-platform/
+├── apps/
+│   └── web/                  # Next.js 16 + React 19 frontend (port 3000)
+├── services/
+│   ├── auth/                 # :3001 — auth, sessions, OAuth, admin gate
+│   ├── workspace/            # :3002 — file CRUD, S3 storage, snapshots
+│   ├── runtime/              # :3003 — terminal PTY, exec, Docker provider
+│   ├── agent/                # :3004 — chat, tools, automations (BullMQ)
+│   ├── memory/               # :3005 — pgvector semantic memory
+│   └── publish/              # :3006 — host static/Vite/Node apps
+├── packages/
+│   ├── db/                   # @pcp/db — Drizzle schema/migrations/client/seed
+│   └── shared/               # @pcp/shared — Zod DTOs (no build, src-only)
+├── infra/
+│   └── docker/               # docker-compose.yml + postgres/init.sql
+├── scripts/
+│   ├── baseline-smoke.mjs    # Root smoke runner
+│   ├── baseline-smoke.test.mjs
+│   └── setup.sh
+├── docs/                     # BUILD_PLAN, DECISIONS, PROGRESS, PRODUCTION
+├── .planning/                # GSD planning docs (this directory)
+├── package.json              # pnpm workspace root
+├── pnpm-workspace.yaml
+├── tsconfig.base.json        # strict TS settings (project-wide)
+├── AGENTS.md / CLAUDE.md     # Agent guidance (canonical)
+└── README.md                 # Some stale areas; trust executable config
+```
 
-- `apps/web/package.json`: Next.js 16 frontend dependencies and scripts.
-- `apps/web/AGENTS.md`: warns to consult local Next 16 docs before routing/config changes.
-- `apps/web/src/app`: App Router routes.
-- `apps/web/src/app/(auth)`: login and register pages.
-- `apps/web/src/app/(main)`: protected product modules.
-- `apps/web/src/components/app-shell`: shell, sidebar, command palette, chat home, identity bar.
-- `apps/web/src/components/workspace`: file tree, editor, terminal, chat, workspace shell.
-- `apps/web/src/components/ui`: local UI primitives.
-- `apps/web/src/lib`: API clients, auth hooks, formatting, utilities.
-- `apps/web/src/store`: Zustand workspace store.
-- `apps/web/src/proxy.ts`: auth-cookie redirect middleware.
+## Service Internal Layout (typical)
 
-## Services
+```
+services/<svc>/
+├── package.json
+├── tsconfig.json
+├── vitest.config.ts
+└── src/
+    ├── index.ts          # Fastify entry: plugins, /health, mount routes
+    ├── env.ts            # process.env reads (Zod adoption uneven)
+    ├── routes.ts         # OR routes/<feature>.ts for larger surfaces
+    ├── service.ts        # Service class — domain logic + DB/provider calls
+    ├── service.test.ts   # Vitest co-located test
+    └── <subdomains>/     # e.g. auth: routes/, agent: tools/, llm/, automation/
+```
 
-Each service is a separate package under `services/*`.
+### Service-specific subfolders
+- `services/auth/src/{routes/, __tests__/, encryption.ts}`
+- `services/agent/src/{routes/, llm/, tools/, automation/}`
+- `services/runtime/src/provider/{types.ts, docker.ts}`
+- `services/memory/src/embeddings/`
+- `services/publish/src/{routes.test.ts, service.test.ts}`
 
-### `services/auth`
+## Frontend Internal Layout
 
-- `src/index.ts`: Fastify app on port 3001, `/auth` prefix.
-- `src/routes.ts`: register, login, me, refresh, logout, Google OAuth.
-- `src/routes/profile.ts`: preferences and provider credentials.
-- `src/routes/admin.ts`: users, audit logs, health.
-- `src/service.ts`: auth logic, session lifecycle, audit logging.
-- `src/encryption.ts`: AES-256-GCM helper for provider keys.
-- Tests: `src/service.test.ts`, `src/__tests__/encryption.test.ts`, `src/__tests__/schemas.test.ts`.
+```
+apps/web/src/
+├── app/                  # Next.js App Router
+│   ├── layout.tsx        # Root layout
+│   └── (main)/
+│       ├── layout.tsx    # Authenticated app shell
+│       └── <feature>/    # dashboard, files, chat, terminal, automations,
+│                         # hosting, snapshots, settings, admin
+├── components/
+│   ├── ui/               # shadcn / Base UI primitives
+│   └── <feature>/        # feature components (kebab-case .tsx)
+├── hooks/                # TanStack Query hooks per service
+├── lib/                  # service URL config, fetch helpers
+├── store/
+│   └── workspace.ts      # Zustand state for workspace/editor
+└── proxy.ts              # Next proxy/middleware
+```
 
-### `services/workspace`
+## Database Package (`packages/db/`)
 
-- `src/index.ts`: Fastify app on port 3002, `/api` prefix, multipart enabled.
-- `src/routes.ts`: workspace CRUD, files, upload, move/delete.
-- `src/routes/snapshots.ts`: snapshot create/list/restore.
-- `src/service.ts`: S3 storage wrapper, workspace/file logic, snapshots.
-- Tests: `src/service.test.ts`, `src/__tests__/path-traversal.test.ts`.
+```
+packages/db/
+├── drizzle.config.ts
+├── package.json          # generate, migrate, push, studio, seed scripts
+└── src/
+    ├── client.ts         # Validated env + Drizzle client (canonical pattern)
+    ├── seed.ts
+    ├── schema/           # split per domain (users, workspaces, runtimes, ...)
+    └── migrations/       # drizzle-kit emitted SQL
+```
 
-### `services/runtime`
+## Shared Package (`packages/shared/`)
+- **No build step** — consumers import from `src/` directly.
+- Files: `agent.ts`, `auth.ts`, `automation.ts`, `hosting.ts`, `index.ts`, `memory.ts`, `runtime.ts`, `settings.ts`, `snapshot.ts`, `workspace.ts`.
 
-- `src/index.ts`: Fastify app on port 3003, `/api` prefix, websocket plugin.
-- `src/routes.ts`: create/start/stop/exec/delete/terminal.
-- `src/service.ts`: runtime lifecycle and command execution.
-- `src/provider/docker.ts`: Dockerode implementation.
-- `src/provider/types.ts`: runtime provider interfaces.
+## Naming Conventions
+| Kind                    | Convention                                           |
+|-------------------------|------------------------------------------------------|
+| Service entry file      | `index.ts`                                           |
+| Route file              | `routes.ts` or `routes/<feature>.ts`                 |
+| Service logic           | `service.ts`                                         |
+| Test files              | `*.test.ts` co-located OR `src/__tests__/*.test.ts`  |
+| Frontend components     | kebab-case `.tsx` (`app-shell.tsx`)                  |
+| Functions / variables   | camelCase                                            |
+| Classes                 | PascalCase (`AuthService`, `AgentOrchestrator`)      |
+| Zod schema constants    | `<thing>Schema` (`createTaskSchema`)                 |
+| DTO types               | PascalCase (`RegisterDto`)                           |
 
-### `services/agent`
+## Key Locations
+- Service contracts + tenant rules: `.cursor/rules/*.mdc` (architecture, backend-standards, database, security, sandbox, testing, frontend, agents).
+- Drizzle schema split per domain: `packages/db/src/schema/*`.
+- Migrations emitted to: `packages/db/src/migrations/`.
+- Provider abstractions: `services/runtime/src/provider/`, `services/agent/src/llm/`.
+- MCP-compatible tools: `services/agent/src/tools/`.
 
-- `src/index.ts`: Fastify app on port 3004, `/api` prefix, automation worker startup.
-- `src/routes.ts`: chat, tasks, steps, conversations, tool approvals.
-- `src/routes/automation.ts`: automation CRUD, manual runs, run history.
-- `src/orchestrator.ts`: LLM loop, task persistence, tool dispatch.
-- `src/llm`: OpenAI, Anthropic, Minimax-compatible provider code.
-- `src/tools`: tool definitions and registry.
-- `src/automation/queue.ts`: BullMQ queue and worker.
-- Test: `src/orchestrator.test.ts`.
-
-### `services/memory`
-
-- `src/index.ts`: Fastify app on port 3005, `/api` prefix.
-- `src/routes.ts`: add, search, update, delete memory.
-- `src/service.ts`: embeddings and pgvector search.
-- `src/embeddings`: OpenAI embedding provider abstraction.
-- Test: `src/service.test.ts`.
-
-### `services/publish`
-
-- `src/index.ts`: Fastify app on port 3006, `/publish` prefix.
-- `src/routes.ts`: hosted service CRUD and lifecycle actions.
-- `src/service.ts`: hosted service persistence and Docker/Traefik launch.
-
-## Packages
-
-### `packages/db`
-
-- `src/client.ts`: Drizzle database client and health check.
-- `src/schema/*.ts`: table definitions.
-- `src/migrations`: generated SQL and snapshots.
-- `src/seed.ts`: seed script.
-- `drizzle.config.ts`: migration config with Zod env validation.
-
-### `packages/shared`
-
-- `src/auth.ts`: register/login/auth response schemas.
-- `src/workspace.ts`: workspace/file schemas.
-- `src/runtime.ts`: runtime schemas.
-- `src/agent.ts`: task, step, conversation, tool approval schemas.
-- `src/memory.ts`: memory schemas.
-- `src/automation.ts`: automation schemas.
-- `src/hosting.ts`: hosted service schemas.
-- `src/snapshot.ts`: snapshot schemas.
-- `src/settings.ts`: preferences, provider credential, audit schemas.
-- `src/index.ts`: barrel exports.
-
-## Generated Or Build Artifacts Present
-
-- `services/*/dist` exists for several services.
-- `*.tsbuildinfo` files exist under services and packages.
-- These files should be reviewed for git tracking expectations before cleanup.
-
+## Workspace Rules (pnpm)
+- `pnpm-workspace.yaml` includes `apps/*`, `services/*`, `packages/*`.
+- Frontend package name is `web` (not `@pcp/web`); services use `@pcp/<svc>-service`; libs use `@pcp/<lib>`.
+- Use pnpm filters to operate per-package: `pnpm --filter @pcp/auth-service dev`.

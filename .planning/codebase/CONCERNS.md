@@ -1,105 +1,113 @@
----
-focus: concerns
-mapped_at: 2026-04-27
-last_mapped_commit: c55e9b3bb8f13d990887889dfeb3418507c7a360
----
-
 # Concerns
 
-## Executive Summary
+Production-readiness gaps, technical debt, and known risks across the CloudMind OS codebase. Severity reflects impact on the **Core Value** ("safely run and automate useful work without leaking tenant data, credentials, or host resources").
 
-The codebase has a strong skeleton, but it should be treated as MVP code rather than production-ready. The highest-priority risks are tenant isolation, auth/admin authorization, default secrets, simulated agent tools, partial sandboxing, and routes that trust client-supplied `userId`.
+## Security
 
-## Critical Or High Priority
+### CRITICAL — Sandbox host escape risk
+- `services/runtime` and `services/publish` use `dockerode` against the host Docker socket. Without strict resource limits, seccomp/apparmor profiles, and a non-root container user, a tenant container can compromise the host.
+- Mitigation hint: enforce `--read-only`, drop capabilities, set CPU/memory/pids limits, isolate per-tenant networks. See `.cursor/rules/sandbox.mdc`.
 
-### Publish routes trust caller-supplied user IDs
+### CRITICAL — Tenant scoping uneven
+- Repo rules require every query to filter by `user_id` / `organization_id` and tenant-prefix all storage paths.
+- Audit: services accept `userId` arg but coverage is inconsistent — some service methods rely on caller correctness rather than enforcing scope at the repo layer.
 
-- `services/publish/src/routes.ts` accepts `userId` in request bodies or query strings.
-- `services/publish/src/service.ts` correctly scopes by `userId` once given one, but the route does not derive it from the authenticated session.
-- This enables user spoofing unless another gateway enforces identity before the publish service.
+### HIGH — Auth/session implementation duplicated
+- Cookie-session validation is duplicated across services using direct DB reads. Drift between services can produce inconsistent authn.
+- Suggested move: extract a shared session validator (in `@pcp/shared` or a thin client) to centralize the contract.
 
-### Automation routes miss tenant filters on mutations and reads
+### HIGH — Fallback dummy secrets at startup
+- Several services use raw `process.env` with fallback default/dummy secret values instead of failing fast under Zod validation.
+- Risk: production boot with placeholder secrets. Pattern to follow: `packages/db/src/client.ts`.
 
-- `services/agent/src/routes/automation.ts` lists automations by user, but update/delete/run/history paths use only automation ID in key queries or mutations.
-- A user could potentially modify, delete, trigger, or read runs for another user's automation if they know the UUID.
-- Session lookup uses a non-null assertion on `session?.expiresAt.getTime()!`.
+### HIGH — `as any` and `z.any()` casts in routes
+- Multiple routes short-circuit responses via `as any` or accept `z.any()` payloads, defeating type-driven validation.
+- Risk: malformed input reaches services; refactors silently break contracts.
 
-### Admin access is permissive when `ADMIN_EMAIL` is unset
+### MEDIUM — PII / secret leakage in logs
+- Some code paths use `console.error` instead of pino with the prescribed `correlationId, userId, service` fields.
+- Repo rule: no PII or secrets in logs.
 
-- `services/auth/src/routes/admin.ts` only rejects non-admin users if `ADMIN_EMAIL` exists and does not match.
-- If `ADMIN_EMAIL` is unset, any authenticated user can pass admin checks.
+### MEDIUM — Error envelope inconsistency
+- Routes mix `{ error: string }` shapes and ad-hoc statuses. `WorkspaceError` exists in workspace service but isn't applied broadly.
+- Risk: clients can't reliably parse failures; internals leak through stack messages.
 
-### Development secret fallbacks are embedded in service startup
+## Reliability
 
-- Several services use `COOKIE_SECRET || 'super-secret-key-replace-in-prod'`.
-- `services/auth/src/encryption.ts` defaults to a static 32-byte encryption key.
-- OAuth credentials default to dummy values in `services/auth/src/routes.ts`.
-- Production startup should fail if required secrets are missing.
+### HIGH — Agent durability
+- `services/agent` orchestration uses BullMQ for automations but agent task progress and tool-call state durability is incomplete (comments mark simulated/MVP behavior).
+- Risk: process crash mid-task loses user-visible progress and may double-execute tools on resume.
 
-### Agent tools are simulated
+### MEDIUM — No consistent retry/backoff
+- LLM provider calls and Docker operations don't share a retry/backoff abstraction. Provider blips bubble as 5xx.
 
-- `services/agent/src/tools/read_file.ts`, `write_file.ts`, `list_files.ts`, and `run_command.ts` return simulated results.
-- The agent loop persists tasks and tool calls, but does not yet operate on real workspace files or runtime commands.
-- README claims around AI chat/tool-calling should be verified against this current behavior.
+### MEDIUM — No graceful shutdown discipline
+- Services don't uniformly drain in-flight requests, queue jobs, or active container streams on `SIGTERM`.
 
-## Medium Priority
+## Test Coverage
 
-### Runtime sandbox is incomplete
+### HIGH — Critical surfaces lack tests
+- `apps/web` and `packages/shared` have no tests.
+- Coverage on services is uneven; `services/auth` and `services/workspace` are best-covered (and pin `vitest@^4.1.5`); others on `^1.4.0` with thinner suites.
+- E2E / integration tests across services are absent.
 
-- `services/runtime/src/provider/docker.ts` disables networking, but does not enforce non-root users, read-only rootfs, dropped capabilities, pids limits, seccomp, AppArmor, or tmpfs-only `/tmp`.
-- `services/runtime/src/service.ts` has a small command blocklist, not a full risk policy.
-- Workspace host paths are hardcoded under `/tmp/workspaces/<workspaceId>`.
+### MEDIUM — Mixed Vitest versions
+- `services/auth` and `services/workspace` are on `vitest@^4.1.5`; rest on `^1.4.0`. APIs differ — don't unify casually without a coordinated upgrade.
 
-### Snapshot implementation is mocked
+## Architecture / Layering
 
-- `services/workspace/src/service.ts` creates snapshot rows and marks them ready.
-- Restore logs a message and does not actually restore a tar archive.
-- README describes tar.gz backup/restore behavior that is not implemented in full.
+### MEDIUM — Service layering not enforced
+- Repo rule: `repository → service → route`. Several services have large service classes that own both DB access and business logic, with routes constructing services directly.
+- Risk: hard to test, hard to swap providers, tenant checks scattered.
 
-### Service boundaries are weak
+### MEDIUM — Services import DB internals
+- Services import from `@pcp/db/src/...` (not a public barrel). Drizzle internals leak into business logic.
 
-- All services directly import and query `@pcp/db`.
-- There is no repository layer.
-- There is no internal service auth token flow.
-- Frontend calls individual services directly.
+### LOW — `packages/shared` has no build
+- Consumers import directly from `src/`. Don't add `"build"` expectations or `dist/` references — would break the workspace.
 
-### Logging may include PII
+## Documentation
 
-- `services/auth/src/service.ts` logs email addresses on registration/login attempts.
-- Repo rules require no PII in logs.
+### MEDIUM — README is stale
+- README references `apps/api` (does not exist) and "API at :4000". Backend is split across `services/*`; new contributors are misled.
+- Trust executable config and `.cursor/rules/*.mdc` over README prose.
 
-### Type quality is below strict-config intent
+### LOW — TODO/MVP comments survive without tickets
+- Comments mark simulated/incomplete behavior in agent and automation flows without owner or ticket reference.
 
-- `any` and `as any` are common in services and frontend.
-- `packages/shared` uses `z.any()` for several payloads.
-- This weakens strict TypeScript guarantees and makes tenant/security bugs easier to miss.
+## Operations / Deployment
 
-### API response shapes are inconsistent
+### HIGH — `.env` discipline
+- `infra/docker/.env` is gitignored (correct) but several services depend on it without explicit production guidance for managed equivalents.
+- Production target: managed Postgres (with pgvector), managed Redis, S3-compatible storage, explicit secret manager.
 
-- Some routes return raw arrays, others return objects like `{ workspaces, page, limit }`.
-- Errors are usually `{ error: string } as any`.
-- The backend rule expects consistent `{ data, error, meta }` shapes.
+### MEDIUM — No migration gating
+- DB migration steps documented but not automated in a deployment pipeline. Risk of running services against stale schema.
 
-## Product And UX Concerns
+### LOW — Path with spaces
+- Repo path contains spaces. Always quote paths in shell commands or scripts that touch the workspace root.
 
-- Many main app pages are module placeholders.
-- README says all 9 phases are implemented, but code contains placeholders, mocks, and simplified behavior.
-- The app shell is coherent, but feature completeness differs by module.
-- Web has no automated tests to protect UI behavior.
+## Frontend
 
-## Operational Concerns
+### MEDIUM — Next.js 16 + React 19 drift
+- Training data lags actual API. Always consult `apps/web/node_modules/next/dist/docs/` before routing/server-component/config changes.
 
-- No CI workflow files were found.
-- Dist artifacts and `tsbuildinfo` files are present in the repo.
-- Docker network name assumptions in publish service should be verified against Compose-created network names.
-- `infra/docker/.env.example` references `API_URL=http://localhost:4000`, but there is no single API gateway.
+### LOW — Tailwind v4 + shadcn theming
+- Theme tokens centralized in `apps/web/src/app/globals.css`. Don't fork tokens per-component.
 
-## First Fix Candidates
+---
 
-1. Make production startup fail on missing secrets.
-2. Derive user identity from session cookies in publish routes.
-3. Add `userId` filters to all automation mutations and run queries.
-4. Lock admin routes when `ADMIN_EMAIL` is unset.
-5. Replace simulated agent tools with real workspace/runtime service integration or explicitly mark them unavailable.
-6. Add tenant isolation tests for publish, automation, workspace, runtime, memory, and agent.
+## Severity Summary
 
+| Severity | Count | Examples |
+|----------|-------|----------|
+| CRITICAL | 2 | Sandbox host escape, tenant scoping audit |
+| HIGH | 6 | Session duplication, fallback secrets, type casts, agent durability, test gaps, env discipline |
+| MEDIUM | 9 | Logging fields, error envelopes, retries, shutdown, layering, DB internals, README, migration gating, Next.js drift |
+| LOW | 4 | `packages/shared` build, TODO discipline, path spaces, theme drift |
+
+## Cross-cutting Themes
+1. **Tenant safety** is the dominant axis — sandboxing, scoping, and secret handling cluster here.
+2. **Type-system bypasses** (`as any`, `z.any()`, fallback secrets) erode the strictness `tsconfig.base.json` is configured to enforce.
+3. **Observability + error contract** are uneven — pino fields and error envelopes need standardization before scale.
+4. **Test coverage** must precede production-readiness work to avoid regressions during hardening.
