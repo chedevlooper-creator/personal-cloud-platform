@@ -1,89 +1,121 @@
-# Integrations
+# External Integrations
 
-Last mapped: 2026-04-27
+**Analysis Date:** 2026-04-27
 
-## Databases
+## APIs & External Services
 
-### PostgreSQL (pgvector/pg16)
-- **Driver**: `postgres` (postgres.js)
-- **ORM**: Drizzle ORM
-- **Connection**: `DATABASE_URL` env, validated with Zod
-- **Pool**: configurable `DB_MAX_CONNECTIONS` (default 10)
-- **Client**: `packages/db/src/client.ts`
-- **Health check**: `SELECT 1` query
-- **Vector extension**: pgvector enabled for memory service embeddings
+**LLM Providers:**
+- OpenAI - Chat provider and embeddings.
+  - SDK/Client: `openai` in `services/agent` and `services/memory`.
+  - Auth: `OPENAI_API_KEY`.
+  - Usage: `services/agent/src/llm/openai.ts`, `services/memory/src/embeddings/openai.ts`.
+- Anthropic - Chat provider.
+  - SDK/Client: `@anthropic-ai/sdk`.
+  - Auth: `ANTHROPIC_API_KEY`.
+  - Usage: `services/agent/src/llm/anthropic.ts`.
+- MiniMax Anthropic-compatible endpoint - Default/provider option in the agent service.
+  - Auth: `MINIMAX_TOKEN_PLAN_API_KEY` or `MINIMAX_API_KEY`.
+  - Base URL: `MINIMAX_BASE_URL`.
+  - Usage: `services/agent/src/llm/provider.ts`.
 
-### Redis (7-alpine)
-- **Port**: 6379
-- **Usage**: planned for pub/sub, caching (not yet integrated in service code)
-- **Persistence**: AOF enabled (`appendonly yes`)
+**OAuth:**
+- Google OAuth - Login provider in auth service.
+  - SDK/Client: `@fastify/oauth2`.
+  - Auth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+  - Callback: `services/auth/src/routes.ts`.
 
-## Object Storage (MinIO/S3)
+**Email:**
+- Mailhog - Local SMTP capture.
+  - Infra: `infra/docker/docker-compose.yml`.
+  - Current app usage: env placeholder only; no production email implementation is evident.
 
-- **Service**: workspace service (`services/workspace/src/service.ts`)
-- **Client**: `@aws-sdk/client-s3`
-- **Bucket**: `pcp-workspace` (env: `S3_BUCKET`)
-- **Endpoint**: `http://localhost:9000` (env: `S3_ENDPOINT`)
-- **Credentials**: `S3_ACCESS_KEY` / `S3_SECRET_KEY` (falls back to `MINIO_ROOT_USER/PASSWORD`)
-- **Operations**: `putText`, `getText`, auto-creates bucket on first use
-- **Storage key format**: `{userId}/{workspaceId}/{filePath}`
+## Data Storage
 
-## AI/LLM Providers
+**Database:**
+- PostgreSQL 16 with pgvector - Main relational and vector store.
+  - Connection: `DATABASE_URL`.
+  - Client: Drizzle ORM via `packages/db/src/client.ts`.
+  - Migrations: `packages/db/src/migrations/`.
+  - Extensions: `uuid-ossp`, `pgcrypto`, `vector` in `infra/docker/postgres/init.sql`.
 
-### OpenAI
-- **SDK**: `openai` ^4.28
-- **Usage**: agent LLM provider, memory embeddings
-- **Config**: `OPENAI_API_KEY`, `OPENAI_MODEL` (default: `gpt-4-turbo-preview`)
-- **Embedding model**: `text-embedding-3-small` via `services/memory/src/embeddings/openai.ts`
+**Object Storage:**
+- MinIO / S3-compatible storage - Workspace file content and snapshots.
+  - SDK/Client: AWS SDK v3 in `services/workspace`.
+  - Auth: `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`.
+  - Tenant path convention: storage keys must be user/workspace-prefixed per repo rules.
 
-### Anthropic (Claude)
-- **SDK**: `@anthropic-ai/sdk` ^0.91
-- **Usage**: agent LLM provider
-- **Config**: `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default: `claude-3-opus-20240229`), `ANTHROPIC_BASE_URL`
+**Queue/Cache:**
+- Redis 7 - BullMQ automation queue backing.
+  - Connection: `REDIS_URL`.
+  - Usage: `services/agent/src/automation/queue.ts`.
 
-### MiniMax
-- **Protocol**: Anthropic-compatible API
-- **Config**: `MINIMAX_TOKEN_PLAN_API_KEY`, `MINIMAX_MODEL` (default: `MiniMax-M2.7`), `MINIMAX_BASE_URL`
-- **Auth**: Bearer token (`Authorization: Bearer <key>`)
-- **Selection**: `LLM_PROVIDER=minimax` env var
+## Authentication & Identity
 
-## Container Runtime
+**Session Auth:**
+- Custom email/password and OAuth-backed sessions.
+  - Storage: `sessions` table.
+  - Token transport: `sessionId` HTTP-only cookie.
+  - Password hashing: Argon2 in `services/auth/src/service.ts`.
 
-### Docker (via dockerode)
-- **Services**: runtime, publish
-- **Socket**: `/var/run/docker.sock`
-- **Runtime service** (`services/runtime/src/provider/docker.ts`):
-  - Container creation, start, stop, exec, attach (terminal), destroy
-  - Workspace volume mounting
-- **Publish service** (`services/publish/src/service.ts`):
-  - Deploys apps as `nginx:alpine` containers
-  - Traefik labels for dynamic routing
+**Credentials Storage:**
+- Provider credentials and integration secrets are modeled as AES-256-GCM encrypted rows.
+  - Schema: `packages/db/src/schema/provider_credentials.ts`, `packages/db/src/schema/integrations.ts`.
+  - Implementation: `services/auth/src/encryption.ts`.
 
-## Reverse Proxy (Traefik v3)
+## Runtime and Hosting
 
-- **Dashboard**: `:8080` (insecure mode for dev)
-- **Entrypoints**: web (80), websecure (443)
-- **Docker provider**: labels-based routing
-- **Publish routing**: `Host(\`{subdomain}.apps.platform.com\`)`
-- **Network**: `pcp-network` bridge
+**Docker Engine:**
+- Runtime service creates sandbox containers through Dockerode.
+  - Provider: `services/runtime/src/provider/docker.ts`.
+  - Default runtime network mode: `none`.
+- Publish service creates hosted service containers through Dockerode.
+  - Provider: `services/publish/src/service.ts`.
+  - Traefik labels route `*.apps.localhost`.
 
-## Email (Mailhog)
+**Traefik:**
+- Local reverse proxy and hosted app router.
+  - Config: `infra/docker/docker-compose.yml`.
+  - Publish labels are generated in `services/publish/src/service.ts`.
 
-- **SMTP**: port 1025
-- **Web UI**: port 8025
-- **Usage**: development email testing (not yet integrated in service code)
+## Frontend-to-Service APIs
 
-## OAuth Providers
+**Browser API Clients:**
+- Auth: `NEXT_PUBLIC_AUTH_API_URL` or `http://localhost:3001/auth`.
+- Workspace: `NEXT_PUBLIC_WORKSPACE_API_URL` or `http://localhost:3002/api`.
+- Runtime: `NEXT_PUBLIC_RUNTIME_API_URL` or `http://localhost:3003/api`.
+- Agent: `NEXT_PUBLIC_AGENT_API_URL` or `http://localhost:3004/api`.
+- Publish: `NEXT_PUBLIC_PUBLISH_API_URL` or `http://localhost:3006/publish`.
+- Client definitions: `apps/web/src/lib/api.ts`.
 
-- **Plugin**: `@fastify/oauth2` registered in auth service
-- **Schema**: `packages/db/src/schema/oauth_accounts.ts`
-- **Supported**: generic OAuth2 via provider ID / provider user ID
-- **Token storage**: `accessToken`, `refreshToken` in `oauth_accounts` table
+## Monitoring & Observability
 
-## Webhooks
+**Logs:**
+- Pino is configured in each Fastify service.
+- Production docs expect structured logs with service/user/correlation context, but current service code often logs minimal context.
 
-- No webhook integrations implemented yet
+**Health Checks:**
+- Each service exposes `GET /health` on its own port.
+- Infra services define Docker health checks in `infra/docker/docker-compose.yml`.
 
-## External APIs
+## Environment Configuration
 
-- No other external API integrations beyond LLM providers
+**Development:**
+- `infra/docker/.env.example` provides local infra defaults.
+- `infra/docker/.env` is ignored and must not be committed.
+- Some services currently include insecure fallback secrets for local dev; production must override them.
+
+**Production:**
+- `docs/PRODUCTION.md` recommends managed Postgres/Redis/S3, HTTPS through Traefik, strict CORS, secure cookies, image scanning, and backups.
+
+## Webhooks & Callbacks
+
+**Incoming:**
+- Google OAuth callback: `/auth/oauth/google/callback`.
+- No Stripe/payment webhook implementation is present.
+
+**Outgoing:**
+- Automation webhook notification mode exists in schema/DTOs, but implementation appears incomplete.
+
+---
+*Integration audit: 2026-04-27*
+*Update when adding/removing external services*

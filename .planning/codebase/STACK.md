@@ -1,106 +1,99 @@
 # Technology Stack
 
-Last mapped: 2026-04-27
+**Analysis Date:** 2026-04-27
 
-## Runtime & Languages
+## Languages
 
-- **Node.js** 20+ (required engine)
-- **TypeScript** ^5.4 — strict mode, `noUncheckedIndexedAccess`, `isolatedModules`
-- **Module system**: ESNext + Bundler module resolution (`tsconfig.base.json`)
+**Primary:**
+- TypeScript 5.x - Frontend, backend services, shared DTOs, Drizzle schema, and tooling.
 
-## Package Management
+**Secondary:**
+- SQL - Drizzle-generated PostgreSQL migrations in `packages/db/src/migrations/`.
+- Shell - Local setup and infrastructure scripts in `scripts/` and root package scripts.
 
-- **pnpm** 9+ (required engine)
-- **Workspace**: `pnpm-workspace.yaml` covers `packages/*`, `services/*`, `apps/*`
-- Root scripts: `pnpm -r` fan-outs (`dev`, `build`, `lint`, `test`, `format`)
+## Runtime
 
-## Backend Framework
+**Environment:**
+- Node.js 20+ - Required by root `package.json`.
+- Browser runtime - Next.js/React application in `apps/web`.
+- Docker runtime - Used by `services/runtime`, `services/publish`, and local infrastructure.
 
-- **Fastify** v4.26 — all 6 services
-- **fastify-type-provider-zod** v1.1 — Zod-based request/response validation
-- **tsx** v4.7 — dev mode (`tsx watch src/index.ts`)
-- **tsc** — production build
+**Package Manager:**
+- pnpm 9 - Declared in root `package.json` and `pnpm-workspace.yaml`.
+- Lockfile: `pnpm-lock.yaml` is present.
 
-### Service Ports
+## Frameworks
 
-| Service   | Package Name             | Port |
-|-----------|--------------------------|------|
-| auth      | `@pcp/auth-service`      | 3001 |
-| workspace | `@pcp/workspace-service` | 3002 |
-| runtime   | `@pcp/runtime-service`   | 3003 |
-| agent     | `@pcp/agent-service`     | 3004 |
-| memory    | `@pcp/memory-service`    | 3005 |
-| publish   | `@pcp/publish-service`   | 3006 |
+**Core:**
+- Next.js 16.2.4 - App Router frontend in `apps/web`.
+- React 19.2.4 - UI components and client state in `apps/web/src`.
+- Fastify 4.26.x - Independent HTTP services under `services/*`.
+- Drizzle ORM 0.45.x - Database schema and access in `packages/db`.
 
-## Frontend
+**UI:**
+- Tailwind CSS 4 - Global styling in `apps/web/src/app/globals.css`.
+- shadcn/Base UI primitives - UI components in `apps/web/src/components/ui`.
+- lucide-react - Iconography.
+- xterm.js - Browser terminal surface.
+- Monaco editor - Workspace file editing.
+- TanStack Query 5 - Server state in the frontend.
+- Zustand 5 - Workspace client state in `apps/web/src/store/workspace.ts`.
 
-- **Next.js** 16.2.4 + **React** 19.2
-- **Tailwind CSS** v4 + `@tailwindcss/postcss`
-- **shadcn** v4.5 — UI component library
-- **Zustand** v5 — client state
-- **TanStack React Query** v5 — server state
-- **Monaco Editor** v4.7 — code editing (`@monaco-editor/react`)
-- **xterm.js** v6 — terminal emulation (`@xterm/xterm`, `@xterm/addon-fit`)
-- **Lucide React** — icon library
-- **Axios** — HTTP client
-- **next-themes** — theme management
-- **sonner** — toast notifications
-- **react-resizable-panels** — panel layout
+**Backend Infrastructure:**
+- PostgreSQL 16 with pgvector - Source of truth and vector memory.
+- Redis 7 - Queue/cache substrate, currently used by BullMQ automations.
+- MinIO - S3-compatible workspace file/object storage.
+- Traefik 3 - Local reverse proxy and hosted app routing.
+- Mailhog - Local SMTP testing.
 
-## Database
+**AI and Jobs:**
+- OpenAI SDK - OpenAI chat and embeddings.
+- Anthropic SDK - Anthropic-compatible chat providers, including MiniMax.
+- BullMQ + ioredis - Automation queue in `services/agent/src/automation/queue.ts`.
 
-- **Drizzle ORM** ^0.45 — schema definition + query builder
-- **Drizzle Kit** ^0.31 — migrations (`generate`, `migrate`, `push`, `studio`)
-- **postgres.js** (postgres) ^3.4 — PostgreSQL driver
-- **pgvector** — vector similarity search (memory service)
-- Schema files: `packages/db/src/schema/*.ts`
-- Migrations: `packages/db/src/migrations/`
-- Config validation: Zod at startup (`packages/db/drizzle.config.ts`, `packages/db/src/client.ts`)
+**Testing:**
+- Vitest - Service tests.
+- ESLint - Present for `apps/web` and `packages/db`.
+- TypeScript compiler - Build and ad hoc type checks.
 
-## AI / LLM
+## Key Dependencies
 
-- **@anthropic-ai/sdk** ^0.91 — Anthropic Claude (agent service)
-- **openai** ^4.28 — OpenAI API (agent + memory services)
-- **MiniMax** — via Anthropic-compatible API (configurable)
-- Provider abstraction: `services/agent/src/llm/provider.ts`
-- Supported providers: `openai`, `anthropic`, `minimax`
+**Critical:**
+- `fastify-type-provider-zod` - Runtime validation and typed Fastify schemas.
+- `zod` - Shared DTOs and env validation.
+- `postgres` - PostgreSQL driver used by Drizzle.
+- `dockerode` - Runtime and publish service Docker control.
+- `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` - Workspace object storage.
+- `argon2` - Password hashing in auth service.
 
-## Infrastructure (Docker Compose)
-
-| Service  | Image                     | Port(s)       |
-|----------|---------------------------|---------------|
-| Postgres | `pgvector/pgvector:pg16`  | 5432          |
-| Redis    | `redis:7-alpine`          | 6379          |
-| MinIO    | `minio/minio:latest`      | 9000, 9001    |
-| Traefik  | `traefik:v3.0`            | 80, 443, 8080 |
-| Mailhog  | `mailhog/mailhog:latest`  | 1025, 8025    |
-
-## Authentication
-
-- **argon2** ^0.40 — password hashing
-- **@fastify/cookie** — session cookies
-- **@fastify/oauth2** — OAuth providers
-- **@fastify/rate-limit** — rate limiting
-
-## Object Storage
-
-- **@aws-sdk/client-s3** — S3/MinIO integration (workspace service)
-- Bucket: `pcp-workspace` (configurable)
-
-## Container Management
-
-- **dockerode** — Docker API client (runtime + publish services)
-
-## Dev Dependencies
-
-- **vitest** — test runner (^4.1.5 for auth/workspace, ^1.4.0 for others)
-- **pino** + **pino-pretty** — structured logging
-- **prettier** ^3.2 — code formatting
-- **eslint** ^9 — linting (web app)
+**Workspace Packages:**
+- `@pcp/db` - Drizzle client, schema, migrations, seed.
+- `@pcp/shared` - Zod DTOs imported directly from `src/`; no build artifact required.
 
 ## Configuration
 
-- Env files loaded via custom `env.ts` in agent service
-- Env validation via Zod schemas at startup
-- `.prettierrc`: single quotes, semis, width 100, trailing commas
-- `tsconfig.base.json`: strict mode with all safety checks enabled
+**Environment:**
+- Root and service env vars are read from process env; `services/agent/src/env.ts` additionally loads `.env.local`, `.env`, and `infra/docker/.env`.
+- Required local infra values are documented in `infra/docker/.env.example`.
+- Database config is validated in `packages/db/src/client.ts` and `packages/db/drizzle.config.ts`.
+
+**Build:**
+- Root `tsconfig.base.json` enables strict TypeScript, `noUncheckedIndexedAccess`, `isolatedModules`, and declaration output.
+- Services compile with `tsc`; web builds with `next build`.
+- Root `pnpm typecheck` is currently a no-op because packages do not define `typecheck` scripts.
+
+## Platform Requirements
+
+**Development:**
+- Node.js 20+.
+- pnpm 9+.
+- Docker and Docker Compose for Postgres, Redis, MinIO, Traefik, and Mailhog.
+- `DATABASE_URL` is required for DB build/migration/runtime paths.
+
+**Production:**
+- Production guide expects Traefik in front of independent services, managed PostgreSQL/Redis/S3-compatible storage, and explicit secrets.
+- Runtime/publish Docker control requires access to Docker socket or an equivalent container runtime boundary.
+
+---
+*Stack analysis: 2026-04-27*
+*Update after major dependency or platform changes*

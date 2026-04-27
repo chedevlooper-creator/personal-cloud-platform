@@ -1,152 +1,139 @@
-# Conventions
+# Coding Conventions
 
-Last mapped: 2026-04-27
-
-## Code Style
-
-### Formatting (Prettier)
-- **Single quotes**: yes
-- **Semicolons**: yes
-- **Print width**: 100
-- **Tab width**: 2 (spaces)
-- **Trailing commas**: all
-- **Arrow parens**: always
-- **End of line**: LF
-- Config: `.prettierrc`
-
-### TypeScript Strictness
-- `strict: true`
-- `noImplicitAny: true`
-- `strictNullChecks: true`
-- `noUncheckedIndexedAccess: true` — array/index access yields `T | undefined`
-- `noImplicitOverride: true`
-- `noFallthroughCasesInSwitch: true`
-- `noUnusedLocals: true`
-- `noUnusedParameters: true`
-- `isolatedModules: true`
+**Analysis Date:** 2026-04-27
 
 ## Naming Patterns
 
-### Files
-- **Components**: kebab-case (`sidebar-item.tsx`, `command-palette.tsx`)
-- **Schema files**: snake_case (`workspace_files.ts`, `audit_logs.ts`)
-- **Service code**: camelCase or descriptive (`service.ts`, `routes.ts`, `orchestrator.ts`)
+**Files:**
+- Service entry files use `index.ts`.
+- Service route files use `routes.ts`; larger surfaces use `routes/<feature>.ts`.
+- Service logic commonly uses `service.ts`.
+- Frontend component filenames are kebab-case, e.g. `app-shell.tsx`, `tool-approval-card.tsx`.
+- Test files use `*.test.ts` and some `src/__tests__/*.test.ts`.
 
-### Code
-- **Classes**: PascalCase (`AuthService`, `AgentOrchestrator`, `DockerProvider`)
-- **Functions**: camelCase (`createLLMProvider`, `validateUserFromCookie`)
-- **Types/Interfaces**: PascalCase (`LLMProvider`, `RuntimeProvider`, `WorkspaceObjectStorage`)
-- **DB tables**: snake_case via Drizzle (`pgTable('workspace_files', ...)`)
-- **DB columns**: snake_case in SQL, camelCase in TypeScript (`storageUsed` → `storage_used`)
-- **Env vars**: SCREAMING_SNAKE_CASE (`DATABASE_URL`, `LLM_PROVIDER`)
+**Functions and Variables:**
+- camelCase for functions, local variables, and object fields.
+- Classes use PascalCase, e.g. `AuthService`, `RuntimeService`, `AgentOrchestrator`.
+- Schema constants use camelCase with `Schema` suffix, e.g. `createTaskSchema`.
 
-## Service Bootstrap Pattern
+**Types:**
+- DTO types are exported from Zod with PascalCase names, e.g. `RegisterDto`.
+- Interfaces are PascalCase, e.g. `WorkspaceState`, `UseTerminalOptions`.
 
-Every backend service follows the same bootstrap pattern in `index.ts`:
+## Code Style
 
-```typescript
-import Fastify from 'fastify';
-import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+**Formatting:**
+- Prettier config: single quotes, semicolons, print width 100, trailing commas.
+- TypeScript strictness is high via `tsconfig.base.json`.
+- `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, and `isolatedModules` are enabled.
 
-const server = Fastify({ logger: { transport: ... } });
-server.setValidatorCompiler(validatorCompiler);
-server.setSerializerCompiler(serializerCompiler);
-server.register(cors, { origin: true, credentials: true });
-server.register(cookie, { secret: '...' });
-server.get('/health', async () => ({ status: 'ok', service: 'name' }));
-server.register(setupRoutes, { prefix: '/path' });
+**Linting:**
+- Root `pnpm lint` fans out to packages with a lint script.
+- Current lint scripts exist in `apps/web` and `packages/db`.
 
-const start = async () => {
-  const port = process.env.PORT ? parseInt(process.env.PORT) : XXXX;
-  await server.listen({ port, host: '0.0.0.0' });
-};
-start();
-```
+## Import Organization
 
-## Service Class Pattern
+**Observed Order:**
+1. External packages such as `fastify`, `zod`, `drizzle-orm`.
+2. Workspace packages such as `@pcp/db` and `@pcp/shared`.
+3. Relative modules such as `./routes`, `./service`.
 
-Business logic lives in a single service class per service:
+**Path Aliases:**
+- Frontend uses `@/` for `apps/web/src`.
+- Backend imports workspace packages through `@pcp/db` and `@pcp/shared`.
+- Services currently import DB internals directly from `@pcp/db/src/...`.
 
-```typescript
-export class ServiceName {
-  constructor(private logger: any) {}
+## Validation
 
-  async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    // Session validation — duplicated across services
-  }
+**HTTP Boundary:**
+- Fastify routes use `fastify-type-provider-zod`.
+- DTOs should live in `packages/shared/src/` when consumed across services/frontend.
 
-  async methodName(userId: string, ...args) {
-    // Business logic with direct Drizzle queries
-  }
-}
-```
-
-### Key observations:
-- **Logger injection**: `private logger: any` (untyped pino)
-- **Session validation**: duplicated `validateUserFromCookie` in every service class
-- **DB access**: direct Drizzle queries in service methods (no separate repository layer)
-- **Error handling**: throwing plain `Error` with message
-
-## Route Registration Pattern
-
-```typescript
-export async function setupRoutes(server: FastifyInstance) {
-  server.post('/endpoint', { schema: { body: ZodSchema } }, async (request, reply) => {
-    const service = new Service(server.log);
-    // Validate session, call service, return response
-  });
-}
-```
-
-## Database Schema Pattern
-
-Drizzle `pgTable` with UUID primary keys, timestamps:
-
-```typescript
-export const tableName = pgTable('table_name', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  // ... domain columns
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  deletedAt: timestamp('deleted_at'), // soft delete where applicable
-});
-```
+**Environment:**
+- Prefer Zod-validated env parsing at startup.
+- `packages/db/src/client.ts` shows the target pattern.
+- Several services still rely on raw `process.env` fallback values; this should be tightened.
 
 ## Error Handling
 
-- **Custom errors**: `WorkspaceError` extends `Error` with `statusCode` (workspace service)
-- **Other services**: throw plain `Error` with descriptive message
-- **Fastify**: default error serialization (no global error handler configured)
-- **Logging**: `this.logger.error({ err, context }, 'message')` — structured pino
+**Observed Patterns:**
+- Service methods throw `Error` for failures.
+- Routes often send ad hoc `{ error: string }` responses.
+- Workspace has a `WorkspaceError` class for status-aware errors.
 
-## Import Patterns
+**Repo Standard:**
+- Use custom error classes.
+- Do not leak internal errors to clients.
+- Log with correlation/user/service context.
+- Return consistent response shapes.
 
-### Internal packages (workspace references)
-```typescript
-import { db } from '@pcp/db/src/client';
-import { users, sessions } from '@pcp/db/src/schema';
-```
+## Logging
 
-### Shared DTOs
-```typescript
-import { SomeType } from '@pcp/shared';
-```
-Note: `@pcp/shared` has no build step — imports from `src/` directly.
+**Framework:**
+- Pino via Fastify logger.
 
-## Frontend Patterns
+**Observed Patterns:**
+- Development can use `pino-pretty`.
+- Some services log operational events, e.g. auth attempts, automation run processing.
+- Some code paths use `console.error`, especially provider/service catch handlers.
 
-### Component Pattern
-- `'use client'` directive for interactive components
-- Props destructured in function signature
-- Lucide icons for UI
-- `cn()` utility for conditional classnames (clsx + tailwind-merge)
+**Preferred Pattern:**
+- Use `fastify.log` or injected service logger.
+- Avoid PII and secrets in log payloads.
+- Include `correlationId`, `userId`, and `service` where available.
 
-### State Management
-- **Server state**: TanStack React Query via axios API calls
-- **Client state**: Zustand stores (`store/workspace.ts`)
-- **URL state**: Next.js routing (App Router with route groups)
+## Database Access
 
-### Route Groups
-- `(auth)` — login, register (unauthenticated)
-- `(main)` — dashboard, workspace, etc. (authenticated shell)
+**Current Pattern:**
+- Services import Drizzle client and schema directly from `@pcp/db/src`.
+- Queries should be scoped by `userId` or `organizationId`.
+- Soft-delete tables use `deletedAt`/`deleted_at` where relevant.
+
+**Target Pattern from Rules:**
+- Repository layer owns DB access.
+- Service layer owns business logic.
+- Route layer owns HTTP and Zod validation.
+
+## Comments
+
+**Observed:**
+- Comments are common around security, temporary implementations, and TODO-like MVP shortcuts.
+- Some comments identify simulated or incomplete behavior in agent and automation flows.
+
+**Preferred:**
+- Explain why and risk, not obvious mechanics.
+- Avoid commented-out code.
+- Add ticket/context for TODOs when they survive beyond local work.
+
+## Function and Module Design
+
+**Observed:**
+- Service classes are large and own both domain logic and provider/database access.
+- Routes create service instances directly.
+- Several DTOs use `z.any()` or route casts to `as any` to work around Fastify/Zod typing.
+
+**Preferred for New Work:**
+- Keep route handlers thin.
+- Add focused repositories/helpers when logic grows.
+- Avoid adding new `any` unless the boundary truly is unknown and immediately narrowed.
+- Preserve tenant checks in every DB operation.
+
+## Frontend Conventions
+
+**Structure:**
+- App shell wraps authenticated pages through `apps/web/src/app/(main)/layout.tsx`.
+- Shared UI primitives live in `apps/web/src/components/ui`.
+- Feature components live under `apps/web/src/components/<feature>`.
+
+**State:**
+- TanStack Query for API data.
+- Zustand for current workspace/editor state.
+- Client components are used for interactive app surfaces.
+
+**Styling:**
+- Tailwind v4 theme tokens in `apps/web/src/app/globals.css`.
+- shadcn-compatible UI primitives.
+
+---
+*Convention analysis: 2026-04-27*
+*Update when patterns change*
