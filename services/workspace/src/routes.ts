@@ -1,8 +1,17 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { createWorkspaceSchema, listWorkspacesSchema, listFilesSchema, moveFileSchema, workspaceResponseSchema, fileMetadataSchema } from '@pcp/shared';
-import { WorkspaceService } from './service';
+import {
+  createWorkspaceSchema,
+  fileContentResponseSchema,
+  fileMetadataSchema,
+  listFilesSchema,
+  listWorkspacesSchema,
+  moveFileSchema,
+  workspaceResponseSchema,
+} from '@pcp/shared';
+import { WorkspaceError, WorkspaceService } from './service';
 import { z } from 'zod';
+import { setupSnapshotRoutes } from './routes/snapshots';
 
 export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -12,6 +21,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     if (!sessionId) return null;
     return workspaceService.validateUserFromCookie(sessionId);
   }
+
+  // Register sub-routes
+  await setupSnapshotRoutes(fastify, workspaceService);
 
   // Create workspace
   server.post(
@@ -150,6 +162,37 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
 
   // Get single file metadata
   server.get(
+    '/workspaces/:id/files/content',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        querystring: z.object({ path: z.string().min(1) }),
+        response: {
+          200: fileContentResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const sessionId = request.cookies.sessionId;
+      const userId = await getAuthenticatedUserId(sessionId);
+
+      if (!userId) {
+        return reply.code(401).send({ error: 'Unauthorized' } as any);
+      }
+
+      try {
+        return await workspaceService.getFileContent(request.params.id, userId, request.query.path);
+      } catch (error) {
+        if (error instanceof WorkspaceError) {
+          return reply.code(error.statusCode).send({ error: error.message } as any);
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Get single file metadata
+  server.get(
     '/workspaces/:id/files/*path',
     {
       schema: {
@@ -255,6 +298,54 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         isDirectory: true,
         size: 0,
       });
+    }
+  );
+
+  // Upload file
+  server.post(
+    '/workspaces/:id/upload',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const sessionId = request.cookies.sessionId;
+      const userId = await getAuthenticatedUserId(sessionId);
+      
+      if (!userId) {
+        return reply.code(401).send({ error: 'Unauthorized' } as any);
+      }
+
+      const data = await request.file();
+      if (!data) {
+        return reply.code(400).send({ error: 'No file uploaded' } as any);
+      }
+
+      const targetPath = (data.fields.path as any)?.value || `/${data.filename}`;
+      const name = targetPath.split('/').filter(Boolean).pop() || data.filename;
+      
+      try {
+        const file = await workspaceService.uploadFile(
+          request.params.id,
+          userId,
+          targetPath,
+          name,
+          data.mimetype,
+          data.file
+        );
+        
+        return reply.code(201).send({
+          ...file,
+          isDirectory: false,
+          size: parseInt(file.size || '0', 10),
+        });
+      } catch (error) {
+        if (error instanceof WorkspaceError) {
+          return reply.code(error.statusCode).send({ error: error.message } as any);
+        }
+        throw error;
+      }
     }
   );
 

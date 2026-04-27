@@ -1,0 +1,3 @@
+# disabled old GSD config
+[features]
+codex_hooks = false

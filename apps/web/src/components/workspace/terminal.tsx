@@ -1,91 +1,141 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import { useState } from 'react';
+import { Plus, TerminalSquare, AlertTriangle, Loader2 } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { runtimeApi, getApiErrorMessage } from '@/lib/api';
+import { toast } from 'sonner';
+import { useTerminal } from '@/hooks/use-terminal';
 
-export default function WorkspaceTerminal({ workspaceId }: { workspaceId: string }) {
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    if (!terminalRef.current) return;
-
-    // Initialize xterm.js
-    const xterm = new XTerm({
-      cursorBlink: true,
-      fontFamily: 'monospace',
-      fontSize: 14,
-      theme: {
-        background: '#1e1e1e',
-        foreground: '#cccccc',
-        cursor: '#ffffff',
-      },
-    });
-
-    const fitAddon = new FitAddon();
-    xterm.loadAddon(fitAddon);
-    
-    xterm.open(terminalRef.current);
-    fitAddon.fit();
-    xtermRef.current = xterm;
-
-    // A fake welcome message for the MVP
-    xterm.writeln('\x1b[1;32mPersonal Cloud Platform\x1b[0m Terminal');
-    xterm.writeln(`Connecting to runtime for workspace: ${workspaceId}...`);
-    
-    // Connect to WebSocket (Mocking the real URL logic)
-    // In reality, it would connect to WS /runtimes/:id/terminal
-    // const ws = new WebSocket(`ws://localhost:3003/api/runtimes/${workspaceId}/terminal`);
-    // wsRef.current = ws;
-    
-    // ws.onopen = () => xterm.writeln('\r\n\x1b[32mConnected.\x1b[0m');
-    // ws.onmessage = (e) => xterm.write(e.data);
-    
-    // xterm.onData((data) => {
-    //   if (ws.readyState === WebSocket.OPEN) {
-    //     ws.send(data);
-    //   }
-    // });
-
-    // Dummy logic for demonstration
-    setTimeout(() => {
-      xterm.write('\r\n$ ');
-    }, 1000);
-
-    xterm.onKey(({ key, domEvent }) => {
-      const printable = !domEvent.altKey && !domEvent.ctrlKey && !domEvent.metaKey;
-
-      if (domEvent.keyCode === 13) {
-        xterm.write('\r\n$ ');
-      } else if (domEvent.keyCode === 8) {
-        // Do not delete the prompt
-        if (xterm.buffer.active.cursorX > 2) {
-          xterm.write('\b \b');
-        }
-      } else if (printable) {
-        xterm.write(key);
-      }
-    });
-
-    const handleResize = () => fitAddon.fit();
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      xterm.dispose();
-      wsRef.current?.close();
-    };
-  }, [workspaceId]);
+function TerminalTab({ runtimeId, isActive, onBlocked }: { runtimeId: string; isActive: boolean; onBlocked: (cmd: string) => void }) {
+  const { terminalRef, isConnected } = useTerminal({ runtimeId, onCommandBlocked: onBlocked });
 
   return (
-    <div className="flex h-full w-full flex-col">
-      <div className="flex h-8 items-center bg-[#2d2d2d] px-4 text-xs font-semibold text-zinc-300">
-        TERMINAL
+    <div className={`flex-1 p-2 bg-[#1e1e1e] ${isActive ? 'block' : 'hidden'}`}>
+      {!isConnected && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e1e] bg-opacity-80 z-10">
+          <Loader2 className="animate-spin text-zinc-400 mr-2" /> 
+          <span className="text-zinc-400">Connecting...</span>
+        </div>
+      )}
+      <div className="h-full w-full" ref={terminalRef} />
+    </div>
+  );
+}
+
+export default function WorkspaceTerminal({ workspaceId }: { workspaceId: string }) {
+  const [tabs, setTabs] = useState<{ id: string; name: string }[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [blockedCommand, setBlockedCommand] = useState<string | null>(null);
+
+  const createRuntimeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await runtimeApi.post('/runtimes', {
+        workspaceId,
+        image: 'ubuntu:latest', // Default image
+        options: {},
+      });
+      const runtime = res.data;
+      // Start it automatically
+      await runtimeApi.post(`/runtimes/${runtime.id}/start`);
+      return runtime.id;
+    },
+    onSuccess: (runtimeId) => {
+      const newTab = { id: runtimeId, name: `bash-${tabs.length + 1}` };
+      setTabs((prev) => [...prev, newTab]);
+      setActiveTabId(runtimeId);
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to start terminal'));
+    },
+  });
+
+  const handleBlocked = (cmd: string) => {
+    setBlockedCommand(cmd);
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col relative">
+      <div className="flex h-10 items-center bg-[#252526] border-b border-[#333333]">
+        <div className="flex-1 flex overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTabId(tab.id)}
+              className={`flex items-center px-4 h-full border-r border-[#333333] text-xs transition-colors ${
+                activeTabId === tab.id ? 'bg-[#1e1e1e] text-blue-400 border-t-2 border-t-blue-500' : 'text-zinc-400 hover:bg-[#2d2d2d]'
+              }`}
+            >
+              <TerminalSquare className="mr-2 h-3 w-3" />
+              {tab.name}
+            </button>
+          ))}
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-zinc-400 hover:text-white mr-2"
+          onClick={() => createRuntimeMutation.mutate()}
+          disabled={createRuntimeMutation.isPending}
+        >
+          {createRuntimeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        </Button>
       </div>
-      <div className="flex-1 bg-[#1e1e1e] p-2" ref={terminalRef} />
+
+      {tabs.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center bg-[#1e1e1e] text-zinc-500">
+          <TerminalSquare className="h-12 w-12 mb-4 opacity-50" />
+          <p>No active terminal sessions.</p>
+          <Button 
+            className="mt-4 bg-blue-600 hover:bg-blue-500"
+            onClick={() => createRuntimeMutation.mutate()}
+            disabled={createRuntimeMutation.isPending}
+          >
+            {createRuntimeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Start Terminal Session
+          </Button>
+        </div>
+      ) : (
+        tabs.map((tab) => (
+          <TerminalTab 
+            key={tab.id} 
+            runtimeId={tab.id} 
+            isActive={activeTabId === tab.id} 
+            onBlocked={handleBlocked}
+          />
+        ))
+      )}
+
+      <AlertDialog open={!!blockedCommand} onOpenChange={() => setBlockedCommand(null)}>
+        <AlertDialogContent className="bg-[#2d2d2d] border-[#444] text-zinc-200">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center text-red-400">
+              <AlertTriangle className="mr-2 h-5 w-5" />
+              Command Blocked
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              The command you attempted to run violates our security policy and has been blocked.
+              <div className="mt-2 p-2 bg-black rounded font-mono text-sm text-red-300">
+                {blockedCommand}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction className="bg-blue-600 hover:bg-blue-500 text-white">I Understand</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

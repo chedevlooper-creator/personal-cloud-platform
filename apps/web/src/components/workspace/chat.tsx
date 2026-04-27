@@ -1,45 +1,113 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type React from 'react';
-import { Send, Bot } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Send, Bot, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { agentApi, getApiErrorMessage } from '@/lib/api';
 
+type ToolCall = {
+  name: string;
+  args: any;
+};
+
+type Message = {
+  id: string;
+  taskId: string;
+  taskStatus: string;
+  conversationId: string;
+  role: string;
+  content: string;
+  toolCalls?: ToolCall[];
+  createdAt: string;
+};
+
+type Conversation = {
+  id: string;
+  title: string | null;
+};
+
 export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) {
-  const [messages, setMessages] = useState([
-    { id: 1, role: 'agent', content: `Hello! I am your AI Agent for workspace ${workspaceId}. How can I help you today?` },
-  ]);
   const [input, setInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  // Fetch conversations
+  const { data: convosData } = useQuery({
+    queryKey: ['agent-conversations'],
+    queryFn: async () => {
+      const res = await agentApi.get('/agent/conversations');
+      return res.data.conversations as Conversation[];
+    },
+  });
+
+  const activeConversationId = convosData?.[0]?.id;
+
+  // Fetch messages
+  const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['agent-messages', activeConversationId],
+    queryFn: async () => {
+      if (!activeConversationId) return { messages: [] };
+      const res = await agentApi.get(`/agent/conversations/${activeConversationId}/messages`);
+      return res.data as { messages: Message[] };
+    },
+    enabled: !!activeConversationId,
+    refetchInterval: (query) => {
+      // Poll if any task is executing or waiting approval
+      const isPending = query.state?.data?.messages.some((m: Message) => ['pending', 'executing'].includes(m.taskStatus));
+      return isPending ? 2000 : false;
+    },
+  });
+
+  const messages = messagesData?.messages || [];
+
+  // Scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const sendMutation = useMutation({
+    mutationFn: async (content: string) => {
+      await agentApi.post('/agent/tasks', {
+        workspaceId,
+        input: content,
+        conversationId: activeConversationId,
+      });
+    },
+    onSuccess: () => {
+      // Invalidate queries so we fetch the new task and poll
+      if (!activeConversationId) {
+        queryClient.invalidateQueries({ queryKey: ['agent-conversations'] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['agent-messages', activeConversationId] });
+      }
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to send message'));
+    },
+  });
+
+  const approvalMutation = useMutation({
+    mutationFn: async ({ taskId, decision, reason }: { taskId: string; decision: 'approve' | 'reject', reason?: string }) => {
+      await agentApi.post(`/agent/tasks/${taskId}/tool-approval`, { decision, reason });
+    },
+    onSuccess: (_, variables) => {
+      toast.success(`Tool call ${variables.decision}d.`);
+      queryClient.invalidateQueries({ queryKey: ['agent-messages', activeConversationId] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to submit approval'));
+    },
+  });
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-
-    const userMsg = { id: Date.now(), role: 'user', content: input };
-    setMessages((prev) => [...prev, userMsg]);
+    if (!input.trim() || sendMutation.isPending) return;
+    sendMutation.mutate(input);
     setInput('');
-
-    agentApi
-      .post('/agent/tasks', { workspaceId, input: userMsg.content })
-      .then((res) => {
-        const task = res.data as { id: string; status: string };
-        const agentMsg = {
-          id: Date.now() + 1,
-          role: 'agent',
-          content: `Task ${task.id} is ${task.status}. I will update this chat when task streaming is available.`,
-        };
-        setMessages((prev) => [...prev, agentMsg]);
-      })
-      .catch((error) => {
-        const agentMsg = {
-          id: Date.now() + 1,
-          role: 'agent',
-          content: getApiErrorMessage(error, 'The agent service is not available.'),
-        };
-        setMessages((prev) => [...prev, agentMsg]);
-      });
   };
 
   return (
@@ -50,6 +118,15 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {isLoadingMessages && !messages.length ? (
+          <div className="flex justify-center text-zinc-500 py-4"><Loader2 className="animate-spin h-5 w-5" /></div>
+        ) : messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-zinc-500">
+            <Bot className="mb-2 h-10 w-10 text-zinc-600" />
+            <p>How can I help you today?</p>
+          </div>
+        ) : null}
+
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -58,19 +135,59 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
             }`}
           >
             <div
-              className={`rounded-lg px-3 py-2 text-sm ${
+              className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
                 msg.role === 'user'
                   ? 'bg-blue-600 text-white'
                   : 'bg-[#37373d] text-zinc-200'
               }`}
             >
-              {msg.content}
+              {msg.content || (msg.toolCalls?.length ? '' : <span className="italic text-zinc-400">Processing...</span>)}
+              
+              {/* Tool Calls Rendering */}
+              {msg.toolCalls && msg.toolCalls.length > 0 && (
+                <div className="mt-2 space-y-2 border-t border-[#4c4c4c] pt-2">
+                  <p className="text-xs font-semibold uppercase text-zinc-400">Tool Calls</p>
+                  {msg.toolCalls.map((tc, idx) => (
+                    <div key={idx} className="rounded bg-[#2d2d2d] p-2 text-xs font-mono text-blue-300">
+                      <div>{tc.name}</div>
+                      <div className="text-zinc-400">{JSON.stringify(tc.args, null, 2)}</div>
+                    </div>
+                  ))}
+                  
+                  {/* Approval UI */}
+                  {msg.taskStatus === 'waiting_approval' && (
+                    <div className="mt-2 flex space-x-2">
+                      <Button 
+                        size="sm" 
+                        variant="default" 
+                        className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500"
+                        onClick={() => approvalMutation.mutate({ taskId: msg.taskId, decision: 'approve' })}
+                        disabled={approvalMutation.isPending}
+                      >
+                        <CheckCircle2 className="mr-1 h-3 w-3" /> Approve
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="destructive" 
+                        className="h-7 text-xs"
+                        onClick={() => approvalMutation.mutate({ taskId: msg.taskId, decision: 'reject', reason: 'User rejected manually' })}
+                        disabled={approvalMutation.isPending}
+                      >
+                        <XCircle className="mr-1 h-3 w-3" /> Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <span className="mt-1 text-[10px] text-zinc-500">
-              {msg.role === 'user' ? 'You' : 'Agent'}
-            </span>
+            <div className="mt-1 flex items-center space-x-1 text-[10px] text-zinc-500">
+              <span>{msg.role === 'user' ? 'You' : 'Agent'}</span>
+              {msg.taskStatus === 'executing' && <Loader2 className="ml-1 h-3 w-3 animate-spin text-blue-400" />}
+              {msg.taskStatus === 'failed' && <span className="text-red-400">Failed</span>}
+            </div>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="border-t border-[#333333] p-3">
@@ -79,15 +196,16 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask agent to do something..."
+            disabled={sendMutation.isPending}
             className="h-9 flex-1 bg-[#3c3c3c] border-none text-zinc-200 placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-blue-500"
           />
           <Button
             type="submit"
             size="icon"
             className="h-9 w-9 bg-blue-600 hover:bg-blue-500"
-            disabled={!input.trim()}
+            disabled={!input.trim() || sendMutation.isPending}
           >
-            <Send className="h-4 w-4" />
+            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
       </div>

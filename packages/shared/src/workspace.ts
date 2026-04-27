@@ -35,7 +35,7 @@ export const fileMetadataSchema = z.object({
   path: z.string(),
   name: z.string(),
   mimeType: z.string().nullable(),
-  size: z.string(),
+  size: z.number(),
   isDirectory: z.boolean(),
   parentPath: z.string().nullable(),
   createdAt: z.date(),
@@ -43,6 +43,17 @@ export const fileMetadataSchema = z.object({
 });
 
 export type FileMetadataDto = z.infer<typeof fileMetadataSchema>;
+
+export const fileContentResponseSchema = z.object({
+  path: z.string(),
+  name: z.string(),
+  mimeType: z.string().nullable(),
+  size: z.number(),
+  content: z.string(),
+  updatedAt: z.date(),
+});
+
+export type FileContentResponseDto = z.infer<typeof fileContentResponseSchema>;
 
 export const moveFileSchema = z.object({
   sourcePath: z.string().min(1),

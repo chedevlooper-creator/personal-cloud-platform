@@ -22,6 +22,11 @@ export const agentApi = axios.create({
   withCredentials: true,
 });
 
+export const runtimeApi = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_RUNTIME_API_URL || 'http://localhost:3003/api',
+  withCredentials: true,
+});
+
 export const publishApi = axios.create({
   baseURL: apiEndpoints.publish,
   withCredentials: true,

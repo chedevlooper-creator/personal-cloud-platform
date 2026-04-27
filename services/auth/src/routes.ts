@@ -3,10 +3,16 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import oauthPlugin from '@fastify/oauth2';
 import { registerSchema, loginSchema, authResponseSchema } from '@pcp/shared';
 import { AuthService } from './service';
+import { setupProfileRoutes } from './routes/profile';
+import { setupAdminRoutes } from './routes/admin';
 
 export async function setupAuthRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const authService = new AuthService(fastify.log);
+
+  // Register Profile and Admin Routes
+  await setupProfileRoutes(fastify);
+  await setupAdminRoutes(fastify);
 
   // Register Google OAuth2
   server.register(oauthPlugin, {

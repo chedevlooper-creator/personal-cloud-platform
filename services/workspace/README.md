@@ -19,6 +19,7 @@ File management and storage microservice for the platform.
 
 ### Files
 - `GET /api/workspaces/:id/files` - List files in workspace
+- `GET /api/workspaces/:id/files/content?path=/README.md` - Preview text file content
 - `GET /api/workspaces/:id/files/*path` - Get file metadata
 - `POST /api/workspaces/:id/files` - Create file/directory
 - `POST /api/workspaces/:id/directories` - Create directory

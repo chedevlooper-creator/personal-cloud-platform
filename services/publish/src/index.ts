@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { publishRoutes } from './routes';
@@ -25,6 +26,7 @@ const app = Fastify({
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
 
+app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 app.register(cors, {
   origin: true,
   credentials: true,
@@ -39,7 +41,7 @@ app.get('/health', async () => {
 
 const start = async () => {
   try {
-    const port = parseInt(process.env.PORT || '3005', 10);
+    const port = parseInt(process.env.PORT || '3006', 10);
     await app.listen({ port, host: '0.0.0.0' });
     app.log.info(`Publish service listening on port ${port}`);
   } catch (err) {

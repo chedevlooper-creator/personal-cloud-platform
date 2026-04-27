@@ -3,3 +3,7 @@ export * from './workspace';
 export * from './runtime';
 export * from './agent';
 export * from './memory';
+export * from './automation';
+export * from './hosting';
+export * from './snapshot';
+export * from './settings';

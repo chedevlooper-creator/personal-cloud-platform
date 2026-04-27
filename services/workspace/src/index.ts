@@ -2,6 +2,8 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
+import multipart from '@fastify/multipart';
 import { setupWorkspaceRoutes } from './routes';
 
 const server = Fastify({
@@ -24,9 +26,17 @@ server.register(cors, {
   credentials: true,
 });
 
+server.register(rateLimit, { max: 100, timeWindow: '1 minute' });
+
 server.register(cookie, {
   secret: process.env.COOKIE_SECRET || 'super-secret-key-replace-in-prod',
   hook: 'onRequest',
+});
+
+server.register(multipart, {
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB
+  },
 });
 
 server.get('/health', async () => {

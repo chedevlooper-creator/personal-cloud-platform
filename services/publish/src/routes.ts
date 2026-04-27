@@ -1,107 +1,117 @@
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { PublishService } from './service';
+import { createHostedServiceSchema, updateHostedServiceSchema, hostedServiceResponseSchema } from '@pcp/shared';
 
 export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
   const publishService = new PublishService();
 
   app.post(
-    '/apps',
+    '/hosted-services',
     {
       schema: {
-        body: z.object({
-          userId: z.string().uuid(),
-          workspaceId: z.string().uuid(),
-          name: z.string().min(1).max(255),
-          subdomain: z.string().min(1).max(255),
-          config: z.record(z.any()).optional(),
-        }),
+        body: createHostedServiceSchema.extend({ userId: z.string().uuid() }),
         response: {
-          201: z.object({
-            id: z.string().uuid(),
-            status: z.string(),
-            subdomain: z.string(),
-          }),
+          201: hostedServiceResponseSchema,
         },
       },
     },
     async (request, reply) => {
-      const result = await publishService.createApp(request.body);
-      return reply.code(201).send(result);
-    }
-  );
-
-  app.post(
-    '/apps/:id/deploy',
-    {
-      schema: {
-        params: z.object({
-          id: z.string().uuid(),
-        }),
-        body: z.object({
-          version: z.string().min(1),
-        }),
-        response: {
-          200: z.object({
-            deploymentId: z.string().uuid(),
-            status: z.string(),
-          }),
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params;
-      const { version } = request.body;
-      const result = await publishService.deployApp(id, version);
-      return reply.code(200).send(result);
+      const service = await publishService.createService(request.body);
+      return reply.code(201).send(service as any);
     }
   );
 
   app.get(
-    '/apps/:id/deployments',
+    '/hosted-services',
     {
       schema: {
-        params: z.object({
-          id: z.string().uuid(),
+        querystring: z.object({
+          workspaceId: z.string().uuid(),
+          userId: z.string().uuid(),
         }),
         response: {
-          200: z.array(
-            z.object({
-              id: z.string().uuid(),
-              version: z.string(),
-              status: z.string(),
-              createdAt: z.string(),
-            })
-          ),
+          200: z.array(hostedServiceResponseSchema),
         },
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
-      const result = await publishService.getDeployments(id);
-      return reply.code(200).send(result.map(d => ({
-        ...d,
-        createdAt: d.createdAt.toISOString()
-      })));
+      const services = await publishService.listServices(request.query.workspaceId, request.query.userId);
+      return reply.code(200).send(services as any);
+    }
+  );
+
+  app.patch(
+    '/hosted-services/:id',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: updateHostedServiceSchema.extend({ userId: z.string().uuid() }),
+        response: {
+          200: hostedServiceResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const service = await publishService.updateService(request.params.id, request.body.userId as string, request.body);
+      return reply.code(200).send(service as any);
     }
   );
 
   app.delete(
-    '/apps/:id',
+    '/hosted-services/:id',
     {
       schema: {
-        params: z.object({
-          id: z.string().uuid(),
-        }),
-        response: {
-          204: z.null(),
-        },
+        params: z.object({ id: z.string().uuid() }),
+        querystring: z.object({ userId: z.string().uuid() }),
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
-      await publishService.deleteApp(id);
+      await publishService.deleteService(request.params.id, request.query.userId);
       return reply.code(204).send();
+    }
+  );
+
+  app.post(
+    '/hosted-services/:id/start',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({ userId: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const result = await publishService.startService(request.params.id, request.body.userId);
+      return reply.code(200).send(result);
+    }
+  );
+
+  app.post(
+    '/hosted-services/:id/stop',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({ userId: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const result = await publishService.stopService(request.params.id, request.body.userId);
+      return reply.code(200).send(result);
+    }
+  );
+
+  app.post(
+    '/hosted-services/:id/restart',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({ userId: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      await publishService.stopService(request.params.id, request.body.userId);
+      const result = await publishService.startService(request.params.id, request.body.userId);
+      return reply.code(200).send(result);
     }
   );
 };

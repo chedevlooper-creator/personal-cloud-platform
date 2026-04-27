@@ -95,7 +95,18 @@ export class RuntimeService {
       throw new Error('Runtime not running or container not found');
     }
 
-    const result = await this.provider.exec(runtime.containerId, command);
+    const commandStr = command.join(' ');
+    const blockedPatterns = [/rm\s+-rf\s+\//, /^sudo\b/, /:\(\)\{\s*:\|:&\s*\};:/];
+    if (blockedPatterns.some(pattern => pattern.test(commandStr))) {
+      throw new Error('Command blocked by security policy');
+    }
+
+    const execPromise = this.provider.exec(runtime.containerId, command);
+    const timeoutPromise = new Promise<{ stdout: string; stderr: string; exitCode: number }>((_, reject) => {
+      setTimeout(() => reject(new Error('Command execution timed out after 60 seconds')), 60000);
+    });
+
+    const result = await Promise.race([execPromise, timeoutPromise]);
 
     await db.insert(runtimeLogs).values({
       runtimeId,

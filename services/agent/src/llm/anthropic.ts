@@ -1,24 +1,33 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { LLMProvider, Message, ToolDefinition, LLMResponse, ToolCall } from './types';
 
+type AnthropicAuthMode = 'api-key' | 'bearer';
+
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
   private model: string;
 
-  constructor(apiKey: string, model: string = 'claude-3-opus-20240229') {
-    this.client = new Anthropic({ apiKey });
+  constructor(
+    apiKey: string,
+    model: string = 'claude-3-opus-20240229',
+    baseURL?: string,
+    authMode: AnthropicAuthMode = 'api-key'
+  ) {
+    this.client = new Anthropic({
+      apiKey: authMode === 'api-key' ? apiKey : null,
+      authToken: authMode === 'bearer' ? apiKey : null,
+      baseURL,
+    });
     this.model = model;
   }
 
   async generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
-    const formattedMessages = messages.map(m => ({
-      role: m.role === 'system' ? 'user' : m.role as any, // Claude puts system prompts elsewhere, but keeping simple here
+    const formattedMessages = messages.filter(m => m.role !== 'system').map(m => ({
+      role: m.role as any,
       content: m.content,
     }));
 
     const systemMessage = messages.find(m => m.role === 'system')?.content;
-
-    const filteredMessages = formattedMessages.filter(m => m.role !== 'system');
 
     const formattedTools = tools?.map(t => ({
       name: t.name,
@@ -30,7 +39,7 @@ export class AnthropicProvider implements LLMProvider {
       model: this.model,
       max_tokens: 4096,
       system: systemMessage,
-      messages: filteredMessages,
+      messages: formattedMessages,
       tools: formattedTools,
     } as any);
 
