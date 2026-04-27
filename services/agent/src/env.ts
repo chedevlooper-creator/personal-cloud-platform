@@ -22,6 +22,15 @@ const envSchema = z.object({
   MINIMAX_API_KEY: z.string().optional(),
   MINIMAX_BASE_URL: z.string().url().default('https://api.minimax.io/anthropic'),
   MINIMAX_MODEL: z.string().default('MiniMax-M2.7'),
+  INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+  RUNTIME_SERVICE_URL: z.string().url().default('http://localhost:3003'),
+  MEMORY_SERVICE_URL: z.string().url().default('http://localhost:3005'),
+  BROWSER_SERVICE_URL: z.string().url().default('http://localhost:3007'),
+  RUNTIME_DEFAULT_IMAGE: z.string().default('node:20-bookworm-slim'),
+  WEB_SEARCH_PROVIDER: z.enum(['none', 'brave', 'tavily', 'serpapi']).default('none'),
+  WEB_SEARCH_API_KEY: z.string().optional(),
+  WEB_FETCH_MAX_BYTES: z.coerce.number().int().positive().default(200_000),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -42,6 +51,15 @@ export const env = {
   MINIMAX_API_KEY: parsed.MINIMAX_API_KEY,
   MINIMAX_BASE_URL: parsed.MINIMAX_BASE_URL,
   MINIMAX_MODEL: parsed.MINIMAX_MODEL,
+  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
+  RUNTIME_SERVICE_URL: parsed.RUNTIME_SERVICE_URL,
+  MEMORY_SERVICE_URL: parsed.MEMORY_SERVICE_URL,
+  BROWSER_SERVICE_URL: parsed.BROWSER_SERVICE_URL,
+  RUNTIME_DEFAULT_IMAGE: parsed.RUNTIME_DEFAULT_IMAGE,
+  WEB_SEARCH_PROVIDER: parsed.WEB_SEARCH_PROVIDER,
+  WEB_SEARCH_API_KEY: parsed.WEB_SEARCH_API_KEY,
+  WEB_FETCH_MAX_BYTES: parsed.WEB_FETCH_MAX_BYTES,
 };
 
 function loadLocalEnv(): void {

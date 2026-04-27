@@ -7,3 +7,8 @@ export * from './automation';
 export * from './hosting';
 export * from './snapshot';
 export * from './settings';
+export * from './personas';
+export * from './skills';
+export * from './channels';
+export * from './datasets';
+export * from './browser';

@@ -1,10 +1,11 @@
 'use client';
 
 import type React from 'react';
-import { Bell, Menu, Plus, Search, Sparkles } from 'lucide-react';
+import { Menu, Plus, Search, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { AuthUser } from '@/lib/auth';
 
 const titles: Record<string, string> = {
@@ -103,17 +104,7 @@ export function MainCanvas({
           </Button>
 
           {/* Notifications */}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            title="Notifications"
-            aria-label="Notifications"
-            className="relative text-muted-foreground hover:text-foreground"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-500" />
-          </Button>
+          <NotificationBell />
 
           {/* Theme Toggle (desktop) */}
           <div className="hidden md:block">

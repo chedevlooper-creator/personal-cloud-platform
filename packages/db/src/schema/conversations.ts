@@ -19,6 +19,8 @@ export const conversations = pgTable(
     model: varchar('model', { length: 120 }),
     personaId: uuid('persona_id'),
     systemInstructions: text('system_instructions'),
+    channel: varchar('channel', { length: 32 }).default('web').notNull(), // web | telegram | email | discord
+    channelThreadId: varchar('channel_thread_id', { length: 256 }),
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

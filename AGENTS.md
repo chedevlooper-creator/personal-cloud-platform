@@ -7,7 +7,7 @@ Repo-specific notes for OpenCode. Keep edits surgical; trust executable config o
 pnpm workspace (`pnpm@9`, Node 20+). Packages live in `apps/*`, `services/*`, `packages/*`.
 
 - `apps/web` — Next.js 16 + React 19 frontend. **No `apps/api` exists** (the README is stale). The backend is split across `services/*`, not a single gateway.
-- `services/{auth,workspace,runtime,agent,memory,publish}` — independent Fastify (v4) services using `fastify-type-provider-zod`, `tsx watch` for dev, `tsc` for build, `vitest` for tests.
+- `services/{auth,workspace,runtime,agent,memory,publish,browser}` — independent Fastify (v4) services using `fastify-type-provider-zod`, `tsx watch` for dev, `tsc` for build, `vitest` for tests.
 - `packages/db` (`@pcp/db`) — Drizzle ORM schema, migrations, seed. Owns the only DB access.
 - `packages/shared` (`@pcp/shared`) — pure TS, **no build step**; consumers import directly from `src/`.
 
@@ -17,7 +17,7 @@ Service contracts and tenant rules live in `.cursor/rules/*.mdc` (architecture, 
 
 Root scripts are `pnpm -r` fan-outs. Many are partial because not every package defines every script:
 
-- `pnpm typecheck` — **no-op**: no package defines a `typecheck` script. To typecheck, run `pnpm --filter <pkg> exec tsc --noEmit`.
+- `pnpm typecheck` — runs `tsc --noEmit` across every package (web, db, shared, and all 7 services). All packages now define a `typecheck` script.
 - `pnpm lint` — only runs in packages with a `lint` script (currently `apps/web` and `packages/db`).
 - `pnpm test` — runs `vitest run` in services that define it. `apps/web` and `packages/shared` have no tests.
 - `pnpm build` — `tsc` per service/package; `next build` for web.

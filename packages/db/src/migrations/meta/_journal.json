@@ -57,6 +57,20 @@
       "when": 1777235765626,
       "tag": "0007_red_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777305469886,
+      "tag": "0008_glorious_dazzler",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777306491111,
+      "tag": "0009_grey_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

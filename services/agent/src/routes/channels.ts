@@ -1,0 +1,221 @@
+import { FastifyInstance } from 'fastify';
+import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+import { db } from '@pcp/db/src/client';
+import { channelLinks, auditLogs } from '@pcp/db/src/schema';
+import { and, eq } from 'drizzle-orm';
+import {
+  channelLinkResponseSchema,
+  createChannelLinkSchema,
+  updateChannelLinkSchema,
+} from '@pcp/shared';
+import { AgentOrchestrator } from '../orchestrator';
+import { TelegramAdapter } from '../channels/telegram';
+import { handleIncoming } from '../channels/router';
+
+/**
+ * Channel routes: CRUD for channel_links + Telegram webhook receiver.
+ */
+export async function setupChannelsRoutes(fastify: FastifyInstance) {
+  const server = fastify.withTypeProvider<ZodTypeProvider>();
+  const orchestrator = new AgentOrchestrator(fastify.log);
+  const telegram = TelegramAdapter.fromEnv();
+
+  async function getUserId(sessionId: string | undefined): Promise<string | null> {
+    if (process.env.AUTH_BYPASS === '1') return 'local-dev-user';
+    if (!sessionId) return null;
+    return orchestrator.validateUserFromCookie(sessionId);
+  }
+
+  // List my channel links
+  server.get(
+    '/channels/links',
+    {
+      schema: {
+        response: { 200: z.object({ links: z.array(channelLinkResponseSchema) }) },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      const rows = await db.query.channelLinks.findMany({
+        where: eq(channelLinks.userId, userId),
+        orderBy: (l, { desc: d }) => [d(l.createdAt)],
+      });
+      return { links: rows };
+    },
+  );
+
+  server.post(
+    '/channels/links',
+    { schema: { body: createChannelLinkSchema, response: { 201: channelLinkResponseSchema } } },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+
+      const existing = await db.query.channelLinks.findFirst({
+        where: and(
+          eq(channelLinks.channel, request.body.channel),
+          eq(channelLinks.externalId, request.body.externalId),
+        ),
+      });
+      if (existing) {
+        return reply
+          .code(409)
+          .send({ error: 'This external account is already linked.' } as any);
+      }
+
+      const [row] = await db
+        .insert(channelLinks)
+        .values({
+          userId,
+          channel: request.body.channel,
+          externalId: request.body.externalId,
+          label: request.body.label ?? null,
+          workspaceId: request.body.workspaceId ?? null,
+        })
+        .returning();
+      if (!row) return reply.code(500).send({ error: 'Failed to create link' } as any);
+      try {
+        await db.insert(auditLogs).values({
+          userId,
+          action: 'CHANNEL_LINK_CREATE',
+          details: { channel: row.channel, externalId: row.externalId, linkId: row.id },
+        });
+      } catch {
+        /* audit best-effort */
+      }
+      return reply.code(201).send(row);
+    },
+  );
+
+  server.patch(
+    '/channels/links/:id',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        body: updateChannelLinkSchema,
+        response: { 200: channelLinkResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+      if (request.body.label !== undefined) patch.label = request.body.label;
+      if (request.body.workspaceId !== undefined) patch.workspaceId = request.body.workspaceId;
+      if (request.body.enabled !== undefined) patch.enabled = request.body.enabled;
+      const [row] = await db
+        .update(channelLinks)
+        .set(patch)
+        .where(and(eq(channelLinks.id, request.params.id), eq(channelLinks.userId, userId)))
+        .returning();
+      if (!row) return reply.code(404).send({ error: 'Link not found' } as any);
+      return row;
+    },
+  );
+
+  server.delete(
+    '/channels/links/:id',
+    { schema: { params: z.object({ id: z.string().uuid() }) } },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      const result = await db
+        .delete(channelLinks)
+        .where(and(eq(channelLinks.id, request.params.id), eq(channelLinks.userId, userId)))
+        .returning();
+      if (result.length === 0) return reply.code(404).send({ error: 'Link not found' } as any);
+      try {
+        await db.insert(auditLogs).values({
+          userId,
+          action: 'CHANNEL_LINK_DELETE',
+          details: { linkId: request.params.id },
+        });
+      } catch {
+        /* audit best-effort */
+      }
+      return { success: true };
+    },
+  );
+
+  // Status: which adapters are configured (helps the UI render setup hints)
+  server.get(
+    '/channels/status',
+    {
+      schema: {
+        response: {
+          200: z.object({
+            telegram: z.object({
+              enabled: z.boolean(),
+              webhookUrl: z.string().nullable(),
+            }),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      return {
+        telegram: {
+          enabled: telegram !== null,
+          webhookUrl: TelegramAdapter.getWebhookUrl(),
+        },
+      };
+    },
+  );
+
+  // Public Telegram webhook. Optional shared-secret header per Telegram Bot API
+  // setWebhook `secret_token` parameter (env: TELEGRAM_WEBHOOK_SECRET).
+  server.post(
+    '/channels/telegram/webhook',
+    {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      schema: {
+        body: z.any(),
+      },
+    },
+    async (request, reply) => {
+      if (!telegram) return reply.code(503).send({ error: 'Telegram not configured' } as any);
+
+      const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+      if (expectedSecret) {
+        const got = request.headers['x-telegram-bot-api-secret-token'];
+        if (got !== expectedSecret) {
+          return reply.code(401).send({ error: 'Bad secret' } as any);
+        }
+      }
+
+      const update = request.body as any;
+      const m = update?.message;
+      if (!m || !m.text || !m.chat?.id) {
+        return reply.send({ ok: true, ignored: true });
+      }
+
+      const chatId = String(m.chat.id);
+      const fromId = m.from?.id ? String(m.from.id) : chatId;
+      const display =
+        m.from?.username ||
+        [m.from?.first_name, m.from?.last_name].filter(Boolean).join(' ') ||
+        undefined;
+
+      // ACK immediately; do the work async so Telegram doesn't retry on slow loops.
+      void handleIncoming(
+        {
+          channel: 'telegram',
+          externalUserId: fromId,
+          externalThreadId: chatId,
+          body: m.text,
+          externalDisplayName: display,
+          receivedAt: new Date(),
+        },
+        orchestrator,
+        telegram,
+        fastify.log,
+      ).catch((err) => fastify.log.error({ err }, 'Telegram handleIncoming failed'));
+
+      return reply.send({ ok: true });
+    },
+  );
+}

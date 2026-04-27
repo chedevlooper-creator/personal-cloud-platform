@@ -3,6 +3,21 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { createSnapshotSchema, snapshotResponseSchema } from '@pcp/shared';
 import { WorkspaceService } from '../service';
+import { db } from '@pcp/db/src/client';
+import { auditLogs } from '@pcp/db/src/schema';
+
+async function emitAudit(
+  userId: string | null,
+  action: string,
+  details: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await db.insert(auditLogs).values({ userId, action, details });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('audit_log emit failed', { action, error: (e as Error).message });
+  }
+}
 
 export async function setupSnapshotRoutes(fastify: FastifyInstance, workspaceService: WorkspaceService) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -65,7 +80,25 @@ export async function setupSnapshotRoutes(fastify: FastifyInstance, workspaceSer
       const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      await workspaceService.restoreSnapshot(request.params.id, userId);
+      const result = await workspaceService.restoreSnapshot(request.params.id, userId);
+      await emitAudit(userId, 'SNAPSHOT_RESTORE', { snapshotId: request.params.id });
+      return { success: true, ...result };
+    }
+  );
+
+  server.delete(
+    '/snapshots/:id',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+
+      await workspaceService.deleteSnapshot(request.params.id, userId);
+      await emitAudit(userId, 'SNAPSHOT_DELETE', { snapshotId: request.params.id });
       return { success: true };
     }
   );

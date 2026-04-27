@@ -10,6 +10,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3003),
   DATABASE_URL: z.string().url().optional(),
   COOKIE_SECRET: z.string().optional(),
+  INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  WORKSPACE_HOST_ROOT: z.string().default('/var/lib/pcp/workspaces'),
+  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -20,6 +23,9 @@ export const env = {
   PORT: parsed.PORT,
   DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
   COOKIE_SECRET: resolveSecret('COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
+  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  WORKSPACE_HOST_ROOT: parsed.WORKSPACE_HOST_ROOT,
+  WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
 };
 
 function resolveSecret(name: string, value: string | undefined, minLength: number): string {

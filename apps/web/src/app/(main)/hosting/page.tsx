@@ -42,6 +42,10 @@ type HostedService = {
   kind: string;
   updatedAt: string;
   publicUrl?: string | null;
+  autoRestart?: boolean;
+  crashCount?: number;
+  lastHealthAt?: string | null;
+  lastHealthOk?: boolean | null;
 };
 
 export default function HostingPage() {
@@ -70,6 +74,7 @@ export default function HostingPage() {
     queryKey: ['hosted-services', defaultWorkspaceId],
     enabled: Boolean(user?.id && defaultWorkspaceId),
     retry: false,
+    refetchInterval: 20_000,
     queryFn: async () => {
       const res = await publishApi.get('/hosted-services', {
         params: { workspaceId: defaultWorkspaceId },
@@ -128,6 +133,27 @@ export default function HostingPage() {
       toast.success('Service stopped.');
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Could not stop service.')),
+  });
+
+  const restartService = useMutation({
+    mutationFn: async (id: string) => {
+      await publishApi.post(`/hosted-services/${id}/restart`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
+      toast.success('Service restarting...');
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not restart service.')),
+  });
+
+  const updateAutoRestart = useMutation({
+    mutationFn: async ({ id, autoRestart }: { id: string; autoRestart: boolean }) => {
+      await publishApi.patch(`/hosted-services/${id}`, { autoRestart });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not update service.')),
   });
 
   const deleteService = useMutation({
@@ -273,18 +299,63 @@ export default function HostingPage() {
                         {workspaceNameById.get(svc.workspaceId) || 'Workspace'} ·{' '}
                         {formatDate(svc.updatedAt)}
                       </p>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                        <span
+                          className={
+                            svc.lastHealthOk === false
+                              ? 'text-destructive'
+                              : svc.lastHealthOk
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : ''
+                          }
+                          title={svc.lastHealthAt ?? undefined}
+                        >
+                          Health:{' '}
+                          {svc.lastHealthOk === null || svc.lastHealthOk === undefined
+                            ? '—'
+                            : svc.lastHealthOk
+                              ? 'OK'
+                              : 'failing'}
+                        </span>
+                        <span>Crashes: {svc.crashCount ?? 0}</span>
+                        <label className="flex cursor-pointer items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={svc.autoRestart ?? true}
+                            onChange={(e) =>
+                              updateAutoRestart.mutate({
+                                id: svc.id,
+                                autoRestart: e.target.checked,
+                              })
+                            }
+                            className="h-3 w-3"
+                          />
+                          Auto-restart
+                        </label>
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     {isRunning ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => stopService.mutate(svc.id)}
-                        disabled={stopService.isPending}
-                      >
-                        <Square className="mr-1 h-3.5 w-3.5" /> Stop
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => restartService.mutate(svc.id)}
+                          disabled={restartService.isPending}
+                          title="Restart"
+                        >
+                          <RefreshCw className="mr-1 h-3.5 w-3.5" /> Restart
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => stopService.mutate(svc.id)}
+                          disabled={stopService.isPending}
+                        >
+                          <Square className="mr-1 h-3.5 w-3.5" /> Stop
+                        </Button>
+                      </>
                     ) : (
                       <Button
                         size="sm"

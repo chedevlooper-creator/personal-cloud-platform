@@ -123,14 +123,26 @@ export default function SettingsPage() {
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
 
   const addProviderMutation = useMutation({
-    mutationFn: async ({ provider, key }: { provider: string; key: string }) => {
+    mutationFn: async ({
+      provider,
+      key,
+      replaceId,
+    }: {
+      provider: string;
+      key: string;
+      replaceId?: string;
+    }) => {
       await authApi.post('/user/providers', { provider, key, label: provider });
+      if (replaceId) {
+        // Rotate: revoke the previous credential after the new one is saved.
+        await authApi.delete(`/user/providers/${replaceId}`);
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_d, vars) => {
       queryClient.invalidateQueries({ queryKey: ['user-providers'] });
       setAddingProvider(null);
       setNewApiKey('');
-      toast.success('API key saved and encrypted');
+      toast.success(vars.replaceId ? 'API key rotated' : 'API key saved and encrypted');
     },
     onError: () => toast.error('Failed to save API key'),
   });
@@ -243,22 +255,7 @@ export default function SettingsPage() {
                             )}
                           </div>
 
-                          {existing ? (
-                            <div className="flex items-center gap-2">
-                              <code className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground font-mono">
-                                {existing.maskedKey}
-                              </code>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => revokeProviderMutation.mutate(existing.id)}
-                                disabled={revokeProviderMutation.isPending}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          ) : isAdding ? (
+                          {isAdding ? (
                             <div className="relative">
                               <Input
                                 type={apiKeyVisible ? 'text' : 'password'}
@@ -279,15 +276,45 @@ export default function SettingsPage() {
                                 )}
                               </button>
                             </div>
+                          ) : existing ? (
+                            <div className="flex items-center gap-2">
+                              <code className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground font-mono">
+                                {existing.maskedKey}
+                              </code>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setAddingProvider(opt.value);
+                                  setNewApiKey('');
+                                }}
+                                title="Rotate (saves new key, revokes old one)"
+                              >
+                                Rotate
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => revokeProviderMutation.mutate(existing.id)}
+                                disabled={revokeProviderMutation.isPending}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           ) : null}
                         </div>
 
-                        {existing ? null : isAdding ? (
+                        {isAdding ? (
                           <div className="flex gap-1">
                             <Button
                               size="sm"
                               onClick={() =>
-                                addProviderMutation.mutate({ provider: opt.value, key: newApiKey })
+                                addProviderMutation.mutate({
+                                  provider: opt.value,
+                                  key: newApiKey,
+                                  replaceId: existing?.id,
+                                })
                               }
                               disabled={!newApiKey || addProviderMutation.isPending}
                             >
@@ -309,7 +336,7 @@ export default function SettingsPage() {
                               Cancel
                             </Button>
                           </div>
-                        ) : (
+                        ) : existing ? null : (
                           <Button
                             size="sm"
                             variant="outline"

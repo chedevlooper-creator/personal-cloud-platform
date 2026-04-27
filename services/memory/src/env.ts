@@ -11,6 +11,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   COOKIE_SECRET: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  INTERNAL_SERVICE_TOKEN: z.string().optional(),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -22,6 +23,7 @@ export const env = {
   DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
   COOKIE_SECRET: resolveSecret('COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
   OPENAI_API_KEY: resolveProviderKey('OPENAI_API_KEY', parsed.OPENAI_API_KEY),
+  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
 };
 
 function resolveSecret(name: string, value: string | undefined, minLength: number): string {

@@ -1,12 +1,33 @@
 import { z } from 'zod';
 
+const hostedSlugSchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/);
+
+const hostedRootPathSchema = z
+  .string()
+  .min(1)
+  .max(1024)
+  .refine((path) => {
+    const normalized = path.replace(/\\/g, '/');
+    return !normalized.includes('..') && !normalized.includes('\0') && !normalized.startsWith('~');
+  }, 'Invalid root path');
+
+const hostedStartCommandSchema = z
+  .string()
+  .max(500)
+  .refine((command) => !/[\r\n\0]/.test(command), 'Invalid start command')
+  .optional();
+
 export const createHostedServiceSchema = z.object({
   workspaceId: z.string().uuid(),
   name: z.string().min(1).max(80),
-  slug: z.string().min(1).max(120),
+  slug: hostedSlugSchema,
   kind: z.enum(['static', 'vite', 'node']),
-  rootPath: z.string().min(1).max(1024),
-  startCommand: z.string().max(500).optional(),
+  rootPath: hostedRootPathSchema,
+  startCommand: hostedStartCommandSchema,
   envVars: z.record(z.string()).default({}),
   isPublic: z.boolean().default(false),
   autoRestart: z.boolean().default(true),

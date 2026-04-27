@@ -7,16 +7,20 @@ import {
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { db } from '@pcp/db/src/client';
-import { sessions, users, workspaceFiles, workspaces } from '@pcp/db/src/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { sessions, snapshots, users, workspaceFiles, workspaces } from '@pcp/db/src/schema';
+import { and, desc, eq, isNull } from 'drizzle-orm';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { env } from './env';
 
 const MAX_TEXT_PREVIEW_BYTES = 256 * 1024;
+const SNAPSHOT_FORMAT_VERSION = 1;
 
 export interface WorkspaceObjectStorage {
   putText(key: string, content: string, contentType: string): Promise<void>;
   putStream(key: string, stream: NodeJS.ReadableStream, contentType: string): Promise<void>;
+  putBuffer(key: string, buffer: Buffer, contentType: string): Promise<void>;
   getText(key: string): Promise<string>;
+  getBuffer(key: string): Promise<Buffer>;
 }
 
 export class WorkspaceError extends Error {
@@ -83,6 +87,41 @@ class S3WorkspaceObjectStorage implements WorkspaceObjectStorage {
     );
 
     return this.bodyToString(response.Body);
+  }
+
+  async putBuffer(key: string, buffer: Buffer, contentType: string): Promise<void> {
+    await this.ensureBucket();
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+  }
+
+  async getBuffer(key: string): Promise<Buffer> {
+    await this.ensureBucket();
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    return this.bodyToBuffer(response.Body);
+  }
+
+  private async bodyToBuffer(body: unknown): Promise<Buffer> {
+    if (!body) return Buffer.alloc(0);
+    if (body instanceof Uint8Array) return Buffer.from(body);
+    const transformToByteArray = (body as { transformToByteArray?: () => Promise<Uint8Array> })
+      .transformToByteArray;
+    if (transformToByteArray) {
+      return Buffer.from(await transformToByteArray.call(body));
+    }
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of body as AsyncIterable<Uint8Array | string>) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    return Buffer.concat(chunks);
   }
 
   private async ensureBucket(): Promise<void> {
@@ -312,11 +351,14 @@ export class WorkspaceService {
       name: string;
       mimeType?: string;
       size: number;
-      storageKey: string;
+      storageKey?: string;
       isDirectory: boolean;
       parentPath?: string | null;
     },
   ): Promise<any> {
+    this.assertSafePath(data.path);
+    if (data.parentPath) this.assertSafePath(data.parentPath);
+
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
 
@@ -324,17 +366,22 @@ export class WorkspaceService {
       throw new WorkspaceError('Storage quota exceeded', 413);
     }
 
+    const normalizedPath = this.normalizeFilePath(data.path);
+    const storageKey = data.isDirectory
+      ? ''
+      : this.getStorageKey(userId, workspaceId, normalizedPath);
+
     const [file] = await db
       .insert(workspaceFiles)
       .values({
         workspaceId,
-        path: this.normalizeFilePath(data.path),
+        path: normalizedPath,
         name: data.name,
         mimeType: data.mimeType || null,
         size: data.size.toString(),
-        storageKey: data.storageKey,
+        storageKey,
         isDirectory: data.isDirectory ? '1' : '0',
-        parentPath: data.parentPath || null,
+        parentPath: data.parentPath ? this.normalizeFilePath(data.parentPath) : null,
       })
       .returning();
 
@@ -359,6 +406,7 @@ export class WorkspaceService {
     mimeType: string,
     stream: NodeJS.ReadableStream,
   ): Promise<any> {
+    this.assertSafePath(path);
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
 
@@ -447,6 +495,139 @@ export class WorkspaceService {
       isDirectory: true,
       parentPath,
     });
+  }
+
+  /**
+   * Atomically write a text file. Creates or updates the metadata row and writes content to S3.
+   * Used by the agent's `write_file` tool.
+   */
+  async writeTextFile(
+    workspaceId: string,
+    userId: string,
+    filePath: string,
+    content: string,
+    mimeType: string = 'text/plain',
+  ): Promise<{ bytesWritten: number; path: string }> {
+    this.assertSafePath(filePath);
+    const workspace = await this.getWorkspace(workspaceId, userId);
+    if (!workspace) throw new WorkspaceError('Workspace not found', 404);
+
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const size = Buffer.byteLength(content, 'utf8');
+    const storageKey = this.getStorageKey(userId, workspaceId, normalizedPath);
+
+    const existing = await db.query.workspaceFiles.findFirst({
+      where: and(
+        eq(workspaceFiles.workspaceId, workspaceId),
+        eq(workspaceFiles.path, normalizedPath),
+        isNull(workspaceFiles.deletedAt),
+      ),
+    });
+
+    const previousSize = existing ? Number(existing.size || 0) : 0;
+    const projectedUsage = workspace.storageUsed - previousSize + size;
+    if (projectedUsage > workspace.storageLimit) {
+      throw new WorkspaceError('Storage quota exceeded', 413);
+    }
+
+    await this.storage.putText(storageKey, content, mimeType);
+
+    const parts = normalizedPath.split('/').filter(Boolean);
+    const fileName = parts.pop() ?? '';
+    const parentPath = parts.length > 0 ? '/' + parts.join('/') : null;
+
+    if (existing) {
+      await db
+        .update(workspaceFiles)
+        .set({
+          mimeType,
+          size: size.toString(),
+          storageKey,
+          updatedAt: new Date(),
+        })
+        .where(eq(workspaceFiles.id, existing.id));
+    } else {
+      await db.insert(workspaceFiles).values({
+        workspaceId,
+        path: normalizedPath,
+        name: fileName,
+        mimeType,
+        size: size.toString(),
+        storageKey,
+        isDirectory: '0',
+        parentPath,
+      });
+    }
+
+    await db
+      .update(workspaces)
+      .set({
+        storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaces.id, workspaceId));
+
+    return { bytesWritten: size, path: normalizedPath };
+  }
+
+  /**
+   * Build a sync manifest of all non-deleted files in a workspace, with inline content
+   * for non-directory files under `maxInlineBytes`. Used by the runtime service to
+   * materialize the workspace tree onto a Docker host directory before exec.
+   */
+  async buildSyncManifest(
+    workspaceId: string,
+    userId: string,
+    opts: { maxInlineBytes?: number } = {},
+  ): Promise<{
+    files: Array<{
+      path: string;
+      isDirectory: boolean;
+      size: number;
+      mimeType: string | null;
+      contentBase64: string | null;
+    }>;
+  }> {
+    const maxInlineBytes = opts.maxInlineBytes ?? 1_048_576; // 1 MiB
+    const workspace = await this.getWorkspace(workspaceId, userId);
+    if (!workspace) throw new WorkspaceError('Workspace not found', 404);
+
+    const rows = await db.query.workspaceFiles.findMany({
+      where: and(eq(workspaceFiles.workspaceId, workspaceId), isNull(workspaceFiles.deletedAt)),
+    });
+
+    const files: Array<{
+      path: string;
+      isDirectory: boolean;
+      size: number;
+      mimeType: string | null;
+      contentBase64: string | null;
+    }> = [];
+
+    for (const row of rows) {
+      const isDirectory = row.isDirectory === '1';
+      const size = Number(row.size || 0);
+      let contentBase64: string | null = null;
+
+      if (!isDirectory && row.storageKey && size <= maxInlineBytes) {
+        try {
+          const text = await this.storage.getText(row.storageKey);
+          contentBase64 = Buffer.from(text, 'utf8').toString('base64');
+        } catch {
+          contentBase64 = null;
+        }
+      }
+
+      files.push({
+        path: row.path,
+        isDirectory,
+        size,
+        mimeType: row.mimeType ?? null,
+        contentBase64,
+      });
+    }
+
+    return { files };
   }
 
   async deleteFile(workspaceId: string, userId: string, filePath: string): Promise<void> {
@@ -580,11 +761,13 @@ export class WorkspaceService {
     userId: string,
     name: string,
     description?: string,
+    kind: 'manual' | 'auto-pre-restore' = 'manual',
   ): Promise<any> {
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
 
-    const { snapshots } = await import('@pcp/db/src/schema');
+    const storageKey = `snapshots/${workspaceId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.json.gz`;
+
     const [snapshot] = await db
       .insert(snapshots)
       .values({
@@ -592,17 +775,42 @@ export class WorkspaceService {
         workspaceId,
         name,
         description,
-        storageKey: `snapshots/${workspaceId}/${Date.now()}.tar.gz`,
-        status: 'ready', // Simplification: we mark it ready immediately without actual tar logic for MVP
+        storageKey,
+        kind,
+        status: 'creating',
       })
       .returning();
 
-    return snapshot;
+    if (!snapshot) throw new WorkspaceError('Failed to create snapshot record', 500);
+
+    try {
+      const archive = await this.buildSnapshotArchive(workspaceId);
+      const buffer = gzipSync(Buffer.from(JSON.stringify(archive), 'utf8'));
+      await this.storage.putBuffer(storageKey, buffer, 'application/gzip');
+
+      const [updated] = await db
+        .update(snapshots)
+        .set({
+          status: 'ready',
+          sizeBytes: buffer.byteLength.toString(),
+          fileCount: archive.files.length,
+        })
+        .where(eq(snapshots.id, snapshot.id))
+        .returning();
+
+      return updated ?? snapshot;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Snapshot creation failed';
+      this.logger.error({ err, snapshotId: snapshot.id }, 'Failed to build snapshot archive');
+      await db
+        .update(snapshots)
+        .set({ status: 'failed', error: message })
+        .where(eq(snapshots.id, snapshot.id));
+      throw new WorkspaceError(`Snapshot failed: ${message}`, 500);
+    }
   }
 
   async getSnapshots(workspaceId: string, userId: string): Promise<any[]> {
-    const { snapshots } = await import('@pcp/db/src/schema');
-    const { desc } = await import('drizzle-orm');
     return db.query.snapshots.findMany({
       where: and(
         eq(snapshots.workspaceId, workspaceId),
@@ -613,14 +821,178 @@ export class WorkspaceService {
     });
   }
 
-  async restoreSnapshot(snapshotId: string, userId: string): Promise<void> {
-    const { snapshots } = await import('@pcp/db/src/schema');
+  async deleteSnapshot(snapshotId: string, userId: string): Promise<void> {
     const snapshot = await db.query.snapshots.findFirst({
       where: and(eq(snapshots.id, snapshotId), eq(snapshots.userId, userId)),
     });
     if (!snapshot) throw new WorkspaceError('Snapshot not found', 404);
 
-    // Simplification for MVP: We just log the restore since full tar.gz restore requires streams.
-    this.logger.info({ snapshotId }, 'Snapshot restore triggered (Mocked for MVP)');
+    await db
+      .update(snapshots)
+      .set({ deletedAt: new Date(), status: 'deleted' })
+      .where(eq(snapshots.id, snapshotId));
   }
+
+  async restoreSnapshot(snapshotId: string, userId: string): Promise<{ restoredFiles: number }> {
+    const snapshot = await db.query.snapshots.findFirst({
+      where: and(eq(snapshots.id, snapshotId), eq(snapshots.userId, userId)),
+    });
+    if (!snapshot) throw new WorkspaceError('Snapshot not found', 404);
+    if (snapshot.status !== 'ready') {
+      throw new WorkspaceError(`Snapshot not restorable (status=${snapshot.status})`, 400);
+    }
+
+    // Auto pre-restore snapshot so the user can roll back the rollback.
+    try {
+      await this.createSnapshot(
+        snapshot.workspaceId,
+        userId,
+        `pre-restore ${new Date().toISOString()}`,
+        `Automatic snapshot taken before restoring ${snapshot.name}`,
+        'auto-pre-restore',
+      );
+    } catch (err) {
+      this.logger.warn({ err, snapshotId }, 'Auto pre-restore snapshot failed; aborting restore');
+      throw new WorkspaceError('Failed to create pre-restore snapshot', 500);
+    }
+
+    await db
+      .update(snapshots)
+      .set({ status: 'restoring' })
+      .where(eq(snapshots.id, snapshotId));
+
+    try {
+      const buffer = await this.storage.getBuffer(snapshot.storageKey);
+      const json = gunzipSync(buffer).toString('utf8');
+      const archive = JSON.parse(json) as SnapshotArchive;
+
+      if (archive.version !== SNAPSHOT_FORMAT_VERSION) {
+        throw new Error(`Unsupported snapshot format version ${archive.version}`);
+      }
+
+      const restoredCount = await this.applySnapshotArchive(
+        snapshot.workspaceId,
+        userId,
+        archive,
+      );
+
+      await db
+        .update(snapshots)
+        .set({ status: 'ready' })
+        .where(eq(snapshots.id, snapshotId));
+
+      return { restoredFiles: restoredCount };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Restore failed';
+      this.logger.error({ err, snapshotId }, 'Failed to restore snapshot');
+      await db
+        .update(snapshots)
+        .set({ status: 'failed', error: message })
+        .where(eq(snapshots.id, snapshotId));
+      throw new WorkspaceError(`Restore failed: ${message}`, 500);
+    }
+  }
+
+  private async buildSnapshotArchive(workspaceId: string): Promise<SnapshotArchive> {
+    const rows = await db.query.workspaceFiles.findMany({
+      where: and(eq(workspaceFiles.workspaceId, workspaceId), isNull(workspaceFiles.deletedAt)),
+    });
+
+    const files: SnapshotArchive['files'] = [];
+    for (const row of rows) {
+      const isDirectory = row.isDirectory === '1';
+      let contentBase64: string | null = null;
+
+      if (!isDirectory && row.storageKey) {
+        try {
+          const text = await this.storage.getText(row.storageKey);
+          contentBase64 = Buffer.from(text, 'utf8').toString('base64');
+        } catch (err) {
+          this.logger.warn({ err, path: row.path }, 'Failed to read file during snapshot');
+          contentBase64 = '';
+        }
+      }
+
+      files.push({
+        path: row.path,
+        name: row.name,
+        parentPath: row.parentPath,
+        isDirectory,
+        mimeType: row.mimeType,
+        size: Number(row.size || 0),
+        contentBase64,
+      });
+    }
+
+    return {
+      version: SNAPSHOT_FORMAT_VERSION,
+      workspaceId,
+      createdAt: new Date().toISOString(),
+      files,
+    };
+  }
+
+  private async applySnapshotArchive(
+    workspaceId: string,
+    userId: string,
+    archive: SnapshotArchive,
+  ): Promise<number> {
+    // Soft-delete current files so existing storageKeys remain readable for any
+    // in-flight requests; the new snapshot uses fresh keys.
+    await db
+      .update(workspaceFiles)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(workspaceFiles.workspaceId, workspaceId), isNull(workspaceFiles.deletedAt)));
+
+    let totalSize = 0;
+    let restored = 0;
+
+    for (const entry of archive.files) {
+      const normalizedPath = this.normalizeFilePath(entry.path);
+      let storageKey = '';
+
+      if (!entry.isDirectory) {
+        storageKey = this.getStorageKey(userId, workspaceId, normalizedPath);
+        const text = entry.contentBase64
+          ? Buffer.from(entry.contentBase64, 'base64').toString('utf8')
+          : '';
+        await this.storage.putText(storageKey, text, entry.mimeType ?? 'text/plain');
+        totalSize += entry.size;
+      }
+
+      await db.insert(workspaceFiles).values({
+        workspaceId,
+        path: normalizedPath,
+        name: entry.name,
+        mimeType: entry.mimeType,
+        size: entry.size.toString(),
+        storageKey,
+        isDirectory: entry.isDirectory ? '1' : '0',
+        parentPath: entry.parentPath,
+      });
+      restored += 1;
+    }
+
+    await db
+      .update(workspaces)
+      .set({ storageUsed: totalSize, updatedAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
+
+    return restored;
+  }
+}
+
+interface SnapshotArchive {
+  version: number;
+  workspaceId: string;
+  createdAt: string;
+  files: Array<{
+    path: string;
+    name: string;
+    parentPath: string | null;
+    isDirectory: boolean;
+    mimeType: string | null;
+    size: number;
+    contentBase64: string | null;
+  }>;
 }

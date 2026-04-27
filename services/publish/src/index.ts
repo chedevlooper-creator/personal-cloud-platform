@@ -5,6 +5,8 @@ import cookie from '@fastify/cookie';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { publishRoutes } from './routes';
 import { env } from './env';
+import { startHealthDaemon } from './health';
+import { PublishService } from './service';
 
 const envToLogger = {
   development: {
@@ -44,6 +46,11 @@ const start = async () => {
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
     app.log.info(`Publish service listening on port ${env.PORT}`);
+
+    if (process.env.HOSTED_SERVICE_HEALTH_DISABLED !== '1') {
+      const publishService = new PublishService();
+      startHealthDaemon({ publishService, logger: app.log });
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);

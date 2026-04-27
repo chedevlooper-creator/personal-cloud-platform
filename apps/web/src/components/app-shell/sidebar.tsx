@@ -3,19 +3,27 @@
 import { useState } from 'react';
 import type React from 'react';
 import {
-  Bell,
+  Bot,
+  Boxes,
   Camera,
   ChevronDown,
   Clock3,
+  Database,
   Folder,
+  Globe,
   Globe2,
+  History,
   Home,
+  Layers3,
   MessageCircle,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
+  ScrollText,
   Search,
   Settings,
+  Sparkles,
   SquareTerminal,
   TerminalSquare,
   X,
@@ -23,6 +31,7 @@ import {
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { AuthUser } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { SidebarItem } from '@/components/app-shell/sidebar-item';
@@ -36,9 +45,18 @@ const primaryItems = [
 ];
 
 const moreItems = [
+  { label: 'Computer', href: '/computer', icon: Layers3 },
+  { label: 'Space', href: '/space', icon: Boxes },
   { label: 'Hosting', href: '/hosting', icon: Globe2 },
   { label: 'Terminal', href: '/terminal', icon: TerminalSquare },
   { label: 'Snapshots', href: '/snapshots', icon: Camera },
+  { label: 'Personas', href: '/personas', icon: Bot },
+  { label: 'Skills', href: '/skills', icon: Sparkles },
+  { label: 'Rules', href: '/rules', icon: ScrollText },
+  { label: 'Channels', href: '/channels', icon: Plug },
+  { label: 'Datasets', href: '/datasets', icon: Database },
+  { label: 'Browser', href: '/browser', icon: Globe },
+  { label: 'Audit Log', href: '/audit-log', icon: History },
 ];
 
 const secondaryItems = [
@@ -191,16 +209,7 @@ export function Sidebar({
         {!collapsed && (
           <div className="mb-2 flex items-center justify-between px-1">
             <ThemeToggle />
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              title="Notifications"
-              aria-label="Notifications"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Bell className="h-4 w-4" />
-            </Button>
+            <NotificationBell />
           </div>
         )}
         <WorkspaceAccountCard user={user} collapsed={collapsed} />

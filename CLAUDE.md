@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-CloudMind OS — a multi-tenant, browser-based personal AI cloud computer. Next.js frontend backed by 6 independent Fastify microservices (auth, workspace, runtime, agent, memory, publish) with PostgreSQL, Redis, MinIO, and Docker-based sandboxing.
+CloudMind OS — a multi-tenant, browser-based personal AI cloud computer. Next.js frontend backed by 7 independent Fastify microservices (auth, workspace, runtime, agent, memory, publish, browser) with PostgreSQL, Redis, MinIO, and Docker-based sandboxing.
 
 ## Monorepo Layout
 
 pnpm workspace (`pnpm@9`, Node 20+). Three roots: `apps/*`, `services/*`, `packages/*`.
 
 - `apps/web` — Next.js 16 (App Router) + React 19 frontend
-- `services/{auth,workspace,runtime,agent,memory,publish}` — independent Fastify v4 services, each on its own port (3001–3006)
-- `packages/db` (`@pcp/db`) — Drizzle ORM schema (22 tables), migrations, seed. **Sole DB owner.**
+- `services/{auth,workspace,runtime,agent,memory,publish,browser}` — independent Fastify v4 services, each on its own port (3001–3007)
+- `packages/db` (`@pcp/db`) — Drizzle ORM schema, migrations, seed. **Sole DB owner.**
 - `packages/shared` (`@pcp/shared`) — Zod DTOs and types. **No build step** — imported directly from `src/`.
 
 ## Commands
@@ -41,7 +41,7 @@ pnpm infra:down
 pnpm infra:logs
 ```
 
-`pnpm typecheck` is a **no-op** — no package defines it. Run per-package: `pnpm --filter <pkg> exec tsc --noEmit`.
+`pnpm typecheck` runs `tsc --noEmit` across every package (web, db, shared, and all 7 services). `pnpm test` runs vitest across the 7 services.
 
 ## Architecture
 
@@ -68,6 +68,7 @@ Each service entry (`services/*/src/index.ts`) creates a Fastify server, registe
 - **Vitest versions diverge:** `auth` and `workspace` use `vitest@^4.1.5`; others use `^1.4.0`. Don't unify casually.
 - **Next.js 16 + React 19 have breaking changes** vs older conventions. Check `apps/web/node_modules/next/dist/docs/` before routing/config work.
 - **`pnpm lint` only runs in `apps/web` and `packages/db`.**
+- **`hosted_services.env_vars` are encrypted at rest** (AES-256-GCM, `enc:<iv>.<tag>.<ciphertext>` per value). The publish service refuses to start in production without a 32-byte `ENCRYPTION_KEY`. Backfill plaintext rows with `scripts/encrypt-envvars.mjs`.
 - **Several services use `process.env` fallbacks** with dummy defaults instead of Zod-validated env parsing. Prefer the pattern in `packages/db/src/client.ts`.
 - **Some routes cast `as any`** to work around Fastify/Zod typing issues. Avoid adding new `any` unless the boundary is truly unknown.
 - **`infra/docker/.env`** is gitignored. Copy from `.env.example` and never commit it.

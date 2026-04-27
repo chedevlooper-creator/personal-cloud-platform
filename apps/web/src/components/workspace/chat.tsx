@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { agentApi, getApiErrorMessage } from '@/lib/api';
+import { usePersonaStore } from '@/store/persona';
 
 type ToolCall = {
   name: string;
@@ -73,10 +74,12 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
 
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
+      const personaId = usePersonaStore.getState().activePersonaId;
       await agentApi.post('/agent/tasks', {
         workspaceId,
         input: content,
         conversationId: activeConversationId,
+        personaId: personaId ?? undefined,
       });
     },
     onSuccess: () => {

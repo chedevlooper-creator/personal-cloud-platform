@@ -1,152 +1,283 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import type React from 'react';
-import { Bot, Search, Sparkles, Wrench } from 'lucide-react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bot, Plus, Pencil, Sparkles, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { agentApi, getApiErrorMessage } from '@/lib/api';
 
 type Skill = {
   id: string;
+  slug: string;
   name: string;
-  description: string;
-  installed: boolean;
-  tags: string[];
+  description: string | null;
+  bodyMarkdown: string | null;
+  triggers: string[];
+  enabled: boolean;
 };
 
-const skills: Skill[] = [
-  {
-    id: 'research-topic',
-    name: 'research-topic',
-    description: 'Research a topic comprehensively and write a structured report.',
-    installed: true,
-    tags: ['Research', 'Automation', 'Workspace'],
-  },
-  {
-    id: 'code-review',
-    name: 'code-review',
-    description: 'Inspect workspace changes and summarize risks, regressions, and missing tests.',
-    installed: true,
-    tags: ['Code', 'Quality', 'Agent'],
-  },
-  {
-    id: 'site-publisher',
-    name: 'site-publisher',
-    description: 'Prepare a workspace app for publishing and deployment checks.',
-    installed: false,
-    tags: ['Hosting', 'Deploy', 'Automation'],
-  },
-  {
-    id: 'dataset-cleaner',
-    name: 'dataset-cleaner',
-    description: 'Normalize CSV or JSON datasets and produce a concise data quality report.',
-    installed: false,
-    tags: ['Data', 'Files', 'Automation'],
-  },
-];
+type FormState = {
+  id?: string;
+  slug: string;
+  name: string;
+  description: string;
+  bodyMarkdown: string;
+  triggers: string;
+  enabled: boolean;
+};
+
+const empty: FormState = {
+  slug: '',
+  name: '',
+  description: '',
+  bodyMarkdown: '',
+  triggers: '',
+  enabled: true,
+};
 
 export default function SkillsPage() {
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'installed' | 'recommended'>('all');
+  const qc = useQueryClient();
+  const [editor, setEditor] = useState<FormState | null>(null);
 
-  const filteredSkills = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return skills.filter((skill) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        skill.name.toLowerCase().includes(normalizedQuery) ||
-        skill.description.toLowerCase().includes(normalizedQuery) ||
-        skill.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery));
-      const matchesFilter =
-        filter === 'all' || (filter === 'installed' && skill.installed) || (filter === 'recommended' && !skill.installed);
-      return matchesQuery && matchesFilter;
-    });
-  }, [filter, query]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['skills'],
+    queryFn: async () => {
+      const res = await agentApi.get('/skills');
+      return (res.data?.skills ?? []) as Skill[];
+    },
+    retry: false,
+  });
+  const skills = data ?? [];
+
+  const save = useMutation({
+    mutationFn: async (form: FormState) => {
+      const triggers = form.triggers
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (form.id) {
+        await agentApi.patch(`/skills/${form.id}`, {
+          name: form.name,
+          description: form.description || null,
+          bodyMarkdown: form.bodyMarkdown || null,
+          triggers,
+          enabled: form.enabled,
+        });
+      } else {
+        await agentApi.post('/skills', {
+          slug: form.slug,
+          name: form.name,
+          description: form.description || null,
+          bodyMarkdown: form.bodyMarkdown || null,
+          triggers,
+          enabled: form.enabled,
+        });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skills'] });
+      toast.success(editor?.id ? 'Skill updated.' : 'Skill created.');
+      setEditor(null);
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not save skill.')),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      await agentApi.delete(`/skills/${id}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skills'] });
+      toast.success('Skill deleted.');
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not delete skill.')),
+  });
+
+  const enabledCount = skills.filter((s) => s.enabled).length;
 
   return (
     <div className="flex-1 overflow-auto p-6 lg:p-8">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Skills</h1>
-          <p className="mt-2 max-w-2xl text-base text-zinc-600 dark:text-zinc-400">
-            Installed and recommended capabilities for workspace automation.
-          </p>
+      <header className="mb-6 flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">Skills</h1>
+              {!isLoading && (
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  {enabledCount}/{skills.length} enabled
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Reusable SKILL.md instructions the agent loads when triggered keywords match.
+            </p>
+          </div>
         </div>
-        <Button variant="outline" disabled>
-          <Wrench className="mr-1 h-4 w-4" />
-          Open folder
+        <Button size="sm" onClick={() => setEditor({ ...empty })}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> New skill
         </Button>
       </header>
+      <div className="mx-auto max-w-4xl">
 
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="relative md:w-96">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search skills..." className="pl-9" />
-        </div>
-        <div className="flex rounded-lg border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
-          <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>
-            All
-          </FilterButton>
-          <FilterButton active={filter === 'installed'} onClick={() => setFilter('installed')}>
-            Installed
-          </FilterButton>
-          <FilterButton active={filter === 'recommended'} onClick={() => setFilter('recommended')}>
-            Hub
-          </FilterButton>
-        </div>
-      </div>
+      {editor && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!editor.name.trim() || !editor.slug.trim()) return;
+            save.mutate(editor);
+          }}
+          className="mt-4 space-y-3 rounded-xl border border-border bg-card p-4"
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="sk-slug">Slug</Label>
+              <Input
+                id="sk-slug"
+                value={editor.slug}
+                disabled={Boolean(editor.id)}
+                onChange={(e) => setEditor({ ...editor, slug: e.target.value })}
+                placeholder="research-topic"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sk-name">Name</Label>
+              <Input
+                id="sk-name"
+                value={editor.name}
+                onChange={(e) => setEditor({ ...editor, name: e.target.value })}
+                placeholder="Research Topic"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sk-desc">Description</Label>
+            <Input
+              id="sk-desc"
+              value={editor.description}
+              onChange={(e) => setEditor({ ...editor, description: e.target.value })}
+              placeholder="One-line summary"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sk-trig">
+              Triggers (comma-separated keywords; substring match on user input)
+            </Label>
+            <Input
+              id="sk-trig"
+              value={editor.triggers}
+              onChange={(e) => setEditor({ ...editor, triggers: e.target.value })}
+              placeholder="research, summarize, report"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sk-body">SKILL.md body</Label>
+            <textarea
+              id="sk-body"
+              value={editor.bodyMarkdown}
+              onChange={(e) => setEditor({ ...editor, bodyMarkdown: e.target.value })}
+              rows={10}
+              className="w-full rounded-lg border border-border bg-card p-3 text-sm font-mono"
+              placeholder="# Skill instructions...\n\nWhen invoked, the agent should..."
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={editor.enabled}
+              onChange={(e) => setEditor({ ...editor, enabled: e.target.checked })}
+            />
+            Enabled
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" type="button" onClick={() => setEditor(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" type="submit" disabled={save.isPending}>
+              {save.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </form>
+      )}
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {filteredSkills.map((skill) => (
-          <article key={skill.id} className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex min-w-0 gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                  {skill.installed ? <Bot className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+      <div className="mt-6 space-y-3">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : skills.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No skills yet. Create one to give the agent reusable instructions.
+          </div>
+        ) : (
+          skills.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-start justify-between rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex min-w-0 gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <Bot className="h-5 w-5 text-primary" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="truncate font-semibold">{skill.name}</h2>
-                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{skill.description}</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-foreground">{s.name}</h3>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+                      {s.slug}
+                    </span>
+                    {!s.enabled && (
+                      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+                  {s.description && (
+                    <p className="mt-1 text-xs text-muted-foreground">{s.description}</p>
+                  )}
+                  {s.triggers.length > 0 && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Triggers: {s.triggers.join(', ')}
+                    </p>
+                  )}
                 </div>
               </div>
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                {skill.installed ? 'Installed' : 'Hub'}
-              </span>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setEditor({
+                      id: s.id,
+                      slug: s.slug,
+                      name: s.name,
+                      description: s.description ?? '',
+                      bodyMarkdown: s.bodyMarkdown ?? '',
+                      triggers: s.triggers.join(', '),
+                      enabled: s.enabled,
+                    })
+                  }
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => {
+                    if (confirm(`Delete skill "${s.name}"?`)) remove.mutate(s.id);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {skill.tags.map((tag) => (
-                <span key={tag} className="rounded-md bg-zinc-100 px-2 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </article>
-        ))}
-      </section>
+          ))
+        )}
+      </div>
+      </div>
     </div>
-  );
-}
-
-function FilterButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`h-7 rounded-md px-3 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-          : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
-      }`}
-    >
-      {children}
-    </button>
   );
 }

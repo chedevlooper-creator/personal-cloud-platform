@@ -19,3 +19,5 @@ export * from './snapshots';
 export * from './notifications';
 export * from './terminal';
 export * from './skills';
+export * from './channel_links';
+export * from './datasets';

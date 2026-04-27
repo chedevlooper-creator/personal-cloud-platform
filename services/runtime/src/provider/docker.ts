@@ -1,6 +1,12 @@
 import Docker from 'dockerode';
 import { RuntimeProvider, RuntimeOptions, ExecResult } from './types';
 
+const DEFAULT_CPU = 1;
+const MAX_CPU = 4;
+const DEFAULT_MEMORY_MB = 512;
+const MAX_MEMORY_MB = 4096;
+const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 export class DockerProvider implements RuntimeProvider {
   private docker: Docker;
 
@@ -9,15 +15,29 @@ export class DockerProvider implements RuntimeProvider {
   }
 
   async create(image: string, options: RuntimeOptions): Promise<string> {
+    const memoryMb = clampLimit(options.memory, DEFAULT_MEMORY_MB, MAX_MEMORY_MB);
+    const cpu = clampLimit(options.cpu, DEFAULT_CPU, MAX_CPU);
+
     const container = await this.docker.createContainer({
       Image: image,
+      User: '1000:1000',
       HostConfig: {
         Binds: [`${options.workspacePath}:/workspace`],
-        Memory: options.memory ? options.memory * 1024 * 1024 : undefined,
-        NanoCpus: options.cpu ? options.cpu * 1e9 : undefined,
+        Memory: memoryMb * 1024 * 1024,
+        // Docker expects NanoCpus as an integer; round to preserve the requested
+        // CPU allocation despite floating-point imprecision in `cpu * 1e9`.
+        NanoCpus: Math.round(cpu * 1e9),
         NetworkMode: 'none', // Default security: no network
+        ReadonlyRootfs: true,
+        CapDrop: ['ALL'],
+        PidsLimit: 100,
+        SecurityOpt: ['no-new-privileges:true'],
+        Tmpfs: {
+          '/tmp': 'rw,noexec,nosuid,size=100m',
+        },
+        Ulimits: [{ Name: 'nofile', Soft: 1024, Hard: 1024 }],
       },
-      Env: Object.entries(options.env || {}).map(([k, v]) => `${k}=${v}`),
+      Env: toSafeEnv(options.env),
       WorkingDir: '/workspace',
       Tty: true,
       Cmd: ['/bin/sh'],
@@ -53,16 +73,24 @@ export class DockerProvider implements RuntimeProvider {
     });
 
     const stream = await exec.start({});
-    
+
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
 
-      container.modem.demuxStream(stream, {
-        write: (chunk: Buffer) => { stdout += chunk.toString(); },
-      } as any, {
-        write: (chunk: Buffer) => { stderr += chunk.toString(); },
-      } as any);
+      container.modem.demuxStream(
+        stream,
+        {
+          write: (chunk: Buffer) => {
+            stdout += chunk.toString();
+          },
+        } as any,
+        {
+          write: (chunk: Buffer) => {
+            stderr += chunk.toString();
+          },
+        } as any,
+      );
 
       stream.on('end', async () => {
         const status = await exec.inspect();
@@ -93,4 +121,18 @@ export class DockerProvider implements RuntimeProvider {
     const data = await container.inspect();
     return data.State.Status;
   }
+}
+
+function clampLimit(value: number | undefined, defaultValue: number, max: number): number {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    return defaultValue;
+  }
+
+  return Math.min(value, max);
+}
+
+function toSafeEnv(env: Record<string, string> | undefined): string[] {
+  return Object.entries(env || {})
+    .filter(([key]) => ENV_NAME_PATTERN.test(key))
+    .map(([key, value]) => `${key}=${value}`);
 }

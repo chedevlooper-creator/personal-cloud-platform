@@ -4,10 +4,10 @@ import { ToolDefinition } from '../llm/types';
 
 export class ListFilesTool implements Tool<{ path: string }, string> {
   name = 'list_files';
-  description = 'Lists files in a directory within the workspace';
+  description = 'List immediate children (files and directories) of a directory in the workspace.';
   requiresApproval = false;
   schema = z.object({
-    path: z.string().describe('The path to the directory relative to the workspace root'),
+    path: z.string().describe('Directory path relative to workspace root, e.g. / or /src'),
   });
 
   getDefinition(): ToolDefinition {
@@ -17,15 +17,32 @@ export class ListFilesTool implements Tool<{ path: string }, string> {
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'The path to the directory relative to the workspace root' },
+          path: { type: 'string', description: 'Directory path relative to workspace root' },
         },
-        required: ['path']
-      }
+        required: ['path'],
+      },
     };
   }
 
-  async execute(input: { path: string }, _context: ToolContext): Promise<string> {
-    // In a real implementation, this would call Workspace Service API
-    return `Simulated file listing for ${input.path}:\n- README.md\n- src/`;
+  async execute(input: { path: string }, context: ToolContext): Promise<string> {
+    try {
+      const files = await context.clients.workspace.listFiles(
+        context.userId,
+        context.workspaceId,
+        input.path,
+      );
+      if (files.length === 0) {
+        return `(empty directory: ${input.path})`;
+      }
+      const lines = files.map((f) => {
+        const marker = f.isDirectory ? 'd' : 'f';
+        const size = f.isDirectory ? '-' : `${f.size}b`;
+        return `${marker} ${size}\t${f.path}`;
+      });
+      return `Listing of ${input.path}:\n${lines.join('\n')}`;
+    } catch (err: any) {
+      const status = err?.status ?? 'unknown';
+      return `Error listing ${input.path} (status=${status}): ${err?.message ?? String(err)}`;
+    }
   }
 }

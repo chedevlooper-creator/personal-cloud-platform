@@ -5,6 +5,7 @@ export const apiEndpoints = {
   workspace: process.env.NEXT_PUBLIC_WORKSPACE_API_URL || 'http://localhost:3002/api',
   agent: process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://localhost:3004/api',
   publish: process.env.NEXT_PUBLIC_PUBLISH_API_URL || 'http://localhost:3006/publish',
+  browser: process.env.NEXT_PUBLIC_BROWSER_API_URL || 'http://localhost:3007/api',
 };
 
 export const authApi = axios.create({
@@ -29,6 +30,11 @@ export const runtimeApi = axios.create({
 
 export const publishApi = axios.create({
   baseURL: apiEndpoints.publish,
+  withCredentials: true,
+});
+
+export const browserApi = axios.create({
+  baseURL: apiEndpoints.browser,
   withCredentials: true,
 });
 

@@ -4,6 +4,8 @@ export const createTaskSchema = z.object({
   workspaceId: z.string().uuid(),
   conversationId: z.string().uuid().optional(),
   input: z.string().min(1),
+  personaId: z.string().uuid().nullable().optional(),
+  skillIds: z.array(z.string().uuid()).max(5).optional(),
 });
 
 export const taskResponseSchema = z.object({

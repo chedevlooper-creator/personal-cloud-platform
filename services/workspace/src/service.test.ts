@@ -29,7 +29,9 @@ const { mockDb, insertedValues } = vi.hoisted(() => {
       values: vi.fn((value: any) => {
         insertedValues.push(value);
         return {
-          returning: vi.fn(async () => ('workspaceId' in value ? [makeFile(value)] : [makeWorkspace(value)])),
+          returning: vi.fn(async () =>
+            'workspaceId' in value ? [makeFile(value)] : [makeWorkspace(value)],
+          ),
         };
       }),
     })),
@@ -56,6 +58,10 @@ const { mockDb, insertedValues } = vi.hoisted(() => {
       users: {
         findFirst: vi.fn(),
       },
+      snapshots: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+      },
     },
   };
 
@@ -73,7 +79,11 @@ class MemoryStorage implements WorkspaceObjectStorage {
     this.objects.set(key, content);
   }
 
-  async putStream(key: string, stream: NodeJS.ReadableStream, _contentType = 'text/plain'): Promise<void> {
+  async putStream(
+    key: string,
+    stream: NodeJS.ReadableStream,
+    _contentType = 'text/plain',
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
@@ -89,6 +99,16 @@ class MemoryStorage implements WorkspaceObjectStorage {
     const content = this.objects.get(key);
     if (content === undefined) throw new Error(`Missing object: ${key}`);
     return content;
+  }
+
+  async putBuffer(key: string, buffer: Buffer, _contentType = 'application/octet-stream'): Promise<void> {
+    this.objects.set(key, buffer.toString('binary'));
+  }
+
+  async getBuffer(key: string): Promise<Buffer> {
+    const content = this.objects.get(key);
+    if (content === undefined) throw new Error(`Missing object: ${key}`);
+    return Buffer.from(content, 'binary');
   }
 }
 
@@ -123,10 +143,17 @@ describe('WorkspaceService', () => {
       expect.arrayContaining([
         expect.objectContaining({ name: 'README.md', path: '/README.md', isDirectory: '0' }),
         expect.objectContaining({ name: 'src', path: '/src', isDirectory: '1' }),
-        expect.objectContaining({ name: 'app.ts', path: '/src/app.ts', parentPath: '/src', isDirectory: '0' }),
-      ])
+        expect.objectContaining({
+          name: 'app.ts',
+          path: '/src/app.ts',
+          parentPath: '/src',
+          isDirectory: '0',
+        }),
+      ]),
     );
-    await expect(storage.getText('user-1/workspace-1/README.md')).resolves.toContain('New Workspace');
+    await expect(storage.getText('user-1/workspace-1/README.md')).resolves.toContain(
+      'New Workspace',
+    );
   });
 
   it('lists files with numeric sizes', async () => {
@@ -155,6 +182,29 @@ describe('WorkspaceService', () => {
     expect(files[0].isDirectory).toBe(false);
   });
 
+  it('derives object storage keys from the authenticated tenant and workspace', async () => {
+    const workspaceService = new WorkspaceService(logger, new MemoryStorage());
+
+    await workspaceService.createFile('workspace-1', 'user-1', {
+      path: '/notes.txt',
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      size: 0,
+      storageKey: 'user-2/workspace-9/secret.txt',
+      isDirectory: false,
+    });
+
+    expect(insertedValues).toContainEqual(
+      expect.objectContaining({
+        path: '/notes.txt',
+        storageKey: 'user-1/workspace-1/notes.txt',
+      }),
+    );
+    expect(insertedValues).not.toContainEqual(
+      expect.objectContaining({ storageKey: 'user-2/workspace-9/secret.txt' }),
+    );
+  });
+
   it('previews text files and rejects directories or binary files', async () => {
     const storage = new MemoryStorage();
     await storage.putText('user-1/workspace-1/README.md', '# Preview');
@@ -175,7 +225,9 @@ describe('WorkspaceService', () => {
       deletedAt: null,
     });
 
-    await expect(workspaceService.getFileContent('workspace-1', 'user-1', '/README.md')).resolves.toMatchObject({
+    await expect(
+      workspaceService.getFileContent('workspace-1', 'user-1', '/README.md'),
+    ).resolves.toMatchObject({
       content: '# Preview',
       size: 9,
     });
@@ -195,7 +247,9 @@ describe('WorkspaceService', () => {
       deletedAt: null,
     });
 
-    await expect(workspaceService.getFileContent('workspace-1', 'user-1', '/src')).rejects.toMatchObject({
+    await expect(
+      workspaceService.getFileContent('workspace-1', 'user-1', '/src'),
+    ).rejects.toMatchObject({
       statusCode: 400,
     });
 
@@ -214,8 +268,69 @@ describe('WorkspaceService', () => {
       deletedAt: null,
     });
 
-    await expect(workspaceService.getFileContent('workspace-1', 'user-1', '/image.png')).rejects.toMatchObject({
+    await expect(
+      workspaceService.getFileContent('workspace-1', 'user-1', '/image.png'),
+    ).rejects.toMatchObject({
       statusCode: 415,
     });
+  });
+
+  it('round-trips a snapshot: create writes a gzipped archive, restore re-inserts files', async () => {
+    const storage = new MemoryStorage();
+    const workspaceService = new WorkspaceService(logger, storage);
+
+    // Source workspace: one text file with known content.
+    await storage.putText('user-1/workspace-1/README.md', '# original', 'text/markdown');
+    mockDb.query.workspaceFiles.findMany.mockResolvedValue([
+      {
+        id: 'file-1',
+        workspaceId: 'workspace-1',
+        path: '/README.md',
+        name: 'README.md',
+        parentPath: null,
+        mimeType: 'text/markdown',
+        size: '10',
+        storageKey: 'user-1/workspace-1/README.md',
+        isDirectory: '0',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      },
+    ]);
+
+    const snapshot = await workspaceService.createSnapshot(
+      'workspace-1',
+      'user-1',
+      'baseline',
+    );
+
+    expect(snapshot.storageKey).toMatch(/^snapshots\/workspace-1\//);
+    expect(storage.objects.has(snapshot.storageKey)).toBe(true);
+
+    // Mutate the workspace and pretend the file changed.
+    await storage.putText('user-1/workspace-1/README.md', '# mutated', 'text/markdown');
+
+    // Restore: findFirst should return the snapshot we created.
+    mockDb.query.snapshots.findFirst.mockResolvedValue({
+      ...snapshot,
+      status: 'ready',
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+    });
+
+    insertedValues.length = 0;
+    const result = await workspaceService.restoreSnapshot(snapshot.id, 'user-1');
+
+    expect(result.restoredFiles).toBe(1);
+    // Auto pre-restore snapshot + restored file row both inserted.
+    expect(insertedValues).toContainEqual(
+      expect.objectContaining({ kind: 'auto-pre-restore', workspaceId: 'workspace-1' }),
+    );
+    expect(insertedValues).toContainEqual(
+      expect.objectContaining({ path: '/README.md', isDirectory: '0' }),
+    );
+    await expect(
+      storage.getText('user-1/workspace-1/README.md'),
+    ).resolves.toBe('# original');
   });
 });

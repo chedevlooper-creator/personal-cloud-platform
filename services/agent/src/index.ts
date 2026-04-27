@@ -41,6 +41,10 @@ server.get('/health', async () => {
 });
 
 import { setupAutomationRoutes } from './routes/automation';
+import { setupNotificationRoutes } from './routes/notifications';
+import { setupPersonasRoutes } from './routes/personas';
+import { setupSkillsRoutes } from './routes/skills';
+import { setupChannelsRoutes } from './routes/channels';
 import { setupAutomationWorker } from './automation/queue';
 import { AgentOrchestrator } from './orchestrator';
 
@@ -48,6 +52,10 @@ const start = async () => {
   try {
     server.register(setupAgentRoutes, { prefix: '/api' });
     server.register(setupAutomationRoutes, { prefix: '/api' });
+    server.register(setupNotificationRoutes, { prefix: '/api' });
+    server.register(setupPersonasRoutes, { prefix: '/api' });
+    server.register(setupSkillsRoutes, { prefix: '/api' });
+    server.register(setupChannelsRoutes, { prefix: '/api' });
 
     await server.listen({ port: env.PORT, host: '0.0.0.0' });
     server.log.info(`Agent service running on port ${env.PORT}`);

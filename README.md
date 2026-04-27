@@ -14,13 +14,17 @@ A multi-tenant, browser-based "AI cloud computer" platform. Users get persistent
 | **Automations** | BullMQ-scheduled AI tasks (manual/hourly/daily/weekly/cron), run history |
 | **Hosting**     | Deploy static sites, Vite apps, or Node APIs via Docker + Traefik        |
 | **Snapshots**   | Workspace tar.gz backup to S3, one-click restore with safety backup      |
+| **Datasets**    | DuckDB-backed CSV/JSON/Parquet import, read-only SQL playground          |
+| **Browser**     | Cloud Playwright sessions per user, agent tools for navigate/extract     |
+| **Channels**    | Telegram bot adapter (webhook in, agent out), per-user link mapping      |
 | **Settings**    | AES-256-GCM encrypted API keys, theme, terminal policy, danger zone      |
+| **Audit Log**   | Per-user history of privileged actions, action filter, retention pruner  |
 | **Admin**       | User list, audit logs, system health dashboard                           |
 
 ## Tech Stack
 
 - **Frontend:** Next.js 16, React 19, Tailwind v4, shadcn/ui
-- **Backend:** 6 independent Fastify v4 microservices (TypeScript)
+- **Backend:** 7 independent Fastify v4 microservices (TypeScript)
 - **Database:** PostgreSQL 16 (pgvector) via Drizzle ORM
 - **Queue:** BullMQ + Redis 7
 - **Storage:** MinIO (S3-compatible)
@@ -58,7 +62,9 @@ pnpm infra:up
 
 ```bash
 pnpm --filter @pcp/db migrate
-pnpm --filter @pcp/db seed    # optional: creates demo user
+pnpm --filter @pcp/db seed    # idempotent: creates Sandbox workspace, skills, datasets, hosted services, automations
+# Optional: create real DuckDB tables for sample datasets
+# pnpm --filter @pcp/workspace-service add @duckdb/node-api && pnpm --filter @pcp/db seed
 ```
 
 ### 4. Start Services
@@ -71,7 +77,11 @@ pnpm --filter @pcp/runtime-service dev     # :3003
 pnpm --filter @pcp/agent-service dev       # :3004
 pnpm --filter @pcp/memory-service dev      # :3005
 pnpm --filter @pcp/publish-service dev     # :3006
+pnpm --filter @pcp/browser-service dev     # :3007
 pnpm --filter web dev                      # :3000
+
+# Or fan out everything in parallel:
+pnpm dev
 ```
 
 ### 5. Open
@@ -104,23 +114,70 @@ curl -fsS http://localhost:3006/health
 
 ## Project Structure
 
+## Architecture
+
+```mermaid
+graph TD
+    Browser["🌐 Browser\n(Next.js :3000)"]
+
+    subgraph Services
+        Auth["Auth\n:3001"]
+        Workspace["Workspace\n:3002"]
+        Runtime["Runtime\n:3003"]
+        Agent["Agent\n:3004"]
+        Memory["Memory\n:3005"]
+        Publish["Publish\n:3006"]
+        BrowserSvc["Browser\n:3007"]
+    end
+
+    subgraph Storage
+        Postgres[("PostgreSQL\n+ pgvector")]
+        Redis[("Redis\n+ BullMQ")]
+        Minio[("MinIO / S3")]
+        Docker["Docker\nsandbox"]
+    end
+
+    Browser -->|cookie session| Auth
+    Browser -->|files / workspaces| Workspace
+    Browser -->|terminal PTY WebSocket| Runtime
+    Browser -->|chat / tools| Agent
+    Browser -->|hosted-app deploy| Publish
+    Browser -->|cloud browser| BrowserSvc
+
+    Auth --> Postgres
+    Workspace --> Postgres
+    Workspace --> Minio
+    Runtime --> Docker
+    Agent --> Postgres
+    Agent --> Redis
+    Agent --> Memory
+    Memory --> Postgres
+    Publish --> Postgres
+    Publish --> Docker
+    BrowserSvc --> Postgres
+```
+
+## Repo Layout
+
 ```
 .
 ├── apps/
-│   └── web/              # Next.js 16 frontend
+│   └── web/              # Next.js 16 frontend (App Router)
 ├── services/
-│   ├── auth/             # Authentication, OAuth, providers, admin
-│   ├── workspace/        # File CRUD, S3 storage, snapshots
-│   ├── runtime/          # Terminal PTY, WebSocket, code execution
-│   ├── agent/            # AI chat, tool orchestration, automations
-│   ├── publish/          # Hosted services (Docker containers)
-│   └── memory/           # Vector memory (pgvector)
+│   ├── auth/             # Auth, OAuth, session, admin        :3001
+│   ├── workspace/        # Files, S3, snapshots, DuckDB       :3002
+│   ├── runtime/          # Terminal PTY, WebSocket            :3003
+│   ├── agent/            # AI chat, tools, skills, automations :3004
+│   ├── memory/           # Vector memory (pgvector)           :3005
+│   ├── publish/          # Docker-hosted services             :3006
+│   └── browser/          # Cloud Playwright sessions          :3007
 ├── packages/
 │   ├── db/               # Drizzle schema, migrations, seed
-│   └── shared/           # Zod DTOs, shared types (no build step)
+│   └── shared/           # Zod DTOs (no build step)
 ├── infra/
 │   └── docker/           # docker-compose.yml, postgres init
-└── .planning/            # Planning docs, phases, decisions
+├── scripts/              # backup.sh, restore.sh, seed-* utilities
+└── docs/                 # BUILD_PLAN.md, PRODUCTION.md, PROGRESS.md
 ```
 
 ## Environment Variables
@@ -164,7 +221,7 @@ pnpm --filter @pcp/workspace-service exec vitest run src/service.test.ts
 
 ## Roadmap
 
-See [`.planning/ROADMAP.md`](.planning/ROADMAP.md) for the reset roadmap. The active GSD cycle starts with baseline health/runtime config, then moves through auth, workspace files, agent/runtime integrations, publishing, and hardening.
+See [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) and [docs/PROGRESS.md](docs/PROGRESS.md) for the current build plan and progress.
 
 ## License
 

@@ -17,6 +17,8 @@ const envSchema = z.object({
   S3_SECRET_KEY: z.string().optional(),
   S3_BUCKET: z.string().default('pcp-workspace'),
   S3_REGION: z.string().default('us-east-1'),
+  INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  DATASETS_DATA_DIR: z.string().default('./data/datasets'),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -40,6 +42,8 @@ export const env = {
   ),
   S3_BUCKET: parsed.S3_BUCKET,
   S3_REGION: parsed.S3_REGION,
+  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  DATASETS_DATA_DIR: parsed.DATASETS_DATA_DIR,
 };
 
 function resolveSecret(name: string, value: string | undefined, minLength: number): string {

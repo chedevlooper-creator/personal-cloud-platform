@@ -1,0 +1,147 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
+const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440002';
+const SERVICE_ID = '550e8400-e29b-41d4-a716-446655440003';
+
+const { mockDb, createContainer } = vi.hoisted(() => {
+  const createContainer = vi.fn(async () => ({
+    id: 'container-1',
+    start: vi.fn(async () => undefined),
+  }));
+
+  const mockDb = {
+    query: {
+      workspaces: { findFirst: vi.fn() },
+      hostedServices: { findFirst: vi.fn() },
+    },
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({
+        returning: vi.fn(async () => [hostedService()]),
+      })),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(async () => [hostedService()]),
+        })),
+      })),
+    })),
+    delete: vi.fn(() => ({
+      where: vi.fn(),
+    })),
+  };
+
+  function hostedService() {
+    return {
+      id: SERVICE_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      name: 'Site',
+      slug: 'site',
+      kind: 'node',
+      rootPath: '/',
+      startCommand: 'npm start',
+      port: null,
+      envVars: { SAFE_NAME: 'ok', 'BAD=NAME': 'no' },
+      isPublic: false,
+      autoRestart: true,
+      customDomain: null,
+      status: 'stopped',
+      runnerProcessId: null,
+      publicUrl: null,
+      lastHealthAt: null,
+      lastHealthOk: null,
+      crashCount: 0,
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    };
+  }
+
+  return { mockDb, createContainer };
+});
+
+vi.mock('@pcp/db/src/client', () => ({
+  db: mockDb,
+}));
+
+vi.mock('dockerode', () => ({
+  default: vi.fn(() => ({
+    createContainer,
+    getContainer: vi.fn(() => ({
+      stop: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    })),
+  })),
+}));
+
+describe('PublishService security boundaries', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
+    mockDb.query.hostedServices.findFirst.mockResolvedValue({
+      id: SERVICE_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      name: 'Site',
+      slug: 'site',
+      kind: 'node',
+      rootPath: '/',
+      startCommand: 'npm start',
+      port: null,
+      envVars: { SAFE_NAME: 'ok', 'BAD=NAME': 'no' },
+      isPublic: false,
+      autoRestart: true,
+      customDomain: null,
+      status: 'stopped',
+      runnerProcessId: null,
+      publicUrl: null,
+      lastHealthAt: null,
+      lastHealthOk: null,
+      crashCount: 0,
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    });
+  });
+
+  it('rejects hosted services for a workspace the user does not own', async () => {
+    const { PublishService } = await import('./service');
+    mockDb.query.workspaces.findFirst.mockResolvedValueOnce(null);
+    const service = new PublishService();
+
+    await expect(
+      service.createService({
+        userId: USER_ID,
+        workspaceId: WORKSPACE_ID,
+        name: 'Site',
+        slug: 'site',
+        kind: 'node',
+        rootPath: '/',
+      }),
+    ).rejects.toThrow('Workspace not found');
+  });
+
+  it('starts hosted containers with a restricted host config', async () => {
+    const { PublishService } = await import('./service');
+    const service = new PublishService();
+
+    await service.startService(SERVICE_ID, USER_ID);
+
+    expect(createContainer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        User: '1000:1000',
+        Env: ['SAFE_NAME=ok'],
+        WorkingDir: '/workspace',
+        HostConfig: expect.objectContaining({
+          NetworkMode: 'pcp_network',
+          Binds: [`/tmp/workspaces/${WORKSPACE_ID}:/workspace:ro`],
+          ReadonlyRootfs: true,
+          CapDrop: ['ALL'],
+          PidsLimit: 100,
+          SecurityOpt: expect.arrayContaining(['no-new-privileges:true']),
+          Tmpfs: expect.objectContaining({ '/tmp': 'rw,noexec,nosuid,size=100m' }),
+        }),
+      }),
+    );
+  });
+});

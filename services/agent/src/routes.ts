@@ -61,8 +61,11 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      const { workspaceId, conversationId, input } = request.body;
-      const task = await orchestrator.createTask(userId, workspaceId, input, conversationId);
+      const { workspaceId, conversationId, input, personaId, skillIds } = request.body;
+      const task = await orchestrator.createTask(userId, workspaceId, input, conversationId, {
+        personaId: personaId ?? null,
+        skillIds: skillIds ?? [],
+      });
       return reply.code(201).send(task);
     }
   );

@@ -3,12 +3,13 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { db } from '@pcp/db/src/client';
 import { userPreferences, providerCredentials, auditLogs } from '@pcp/db/src/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, desc } from 'drizzle-orm';
 import {
   userPreferencesSchema,
   updateUserPreferencesSchema,
   providerCredentialResponseSchema,
   createProviderCredentialSchema,
+  auditLogSchema,
 } from '@pcp/shared';
 import { encrypt } from '../encryption';
 import { AuthService } from '../service';
@@ -231,6 +232,45 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
       });
 
       return reply.code(204).send();
+    },
+  );
+
+  // List the current user's own audit log entries (most recent first).
+  server.get(
+    '/user/audit-logs',
+    {
+      schema: {
+        querystring: z.object({
+          limit: z.coerce.number().int().min(1).max(500).optional(),
+          action: z.string().optional(),
+        }),
+        response: {
+          200: z.array(auditLogSchema),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request, reply);
+      if (!userId) return;
+
+      const { limit, action } = request.query;
+      const logs = await db.query.auditLogs.findMany({
+        where: action
+          ? and(eq(auditLogs.userId, userId), eq(auditLogs.action, action))
+          : eq(auditLogs.userId, userId),
+        orderBy: [desc(auditLogs.createdAt)],
+        limit: limit ?? 100,
+      });
+
+      return reply.code(200).send(
+        logs.map((log) => ({
+          ...log,
+          details:
+            log.details && typeof log.details === 'object' && !Array.isArray(log.details)
+              ? (log.details as Record<string, unknown>)
+              : null,
+        })),
+      );
     },
   );
 }

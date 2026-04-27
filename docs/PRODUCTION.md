@@ -142,6 +142,43 @@ Access via Admin panel or direct DB query.
 | MinIO / S3 | Bucket versioning + cross-region replication | Continuous |
 | Redis | AOF persistence + snapshots | Hourly |
 
+For self-hosted single-user installs the repo ships:
+
+- `scripts/backup.sh <BACKUP_ROOT>` — `pg_dump -F c` + `mc mirror` of the MinIO bucket. Honors `BACKUP_RETENTION_DAYS` (default 14) and optional `BACKUP_REMOTE_S3_TARGET` for offsite mirroring. Read its env requirements at the top of the file before scheduling.
+- `scripts/restore.sh <BACKUP_ROOT>/<TIMESTAMP>` — `pg_restore` + bucket re-mirror. Requires `RESTORE_CONFIRM=yes` because it drops the database first.
+
+Suggested cron entry (nightly at 03:30 UTC, persisted to `/var/backups/pcp`):
+
+```cron
+30 3 * * * /opt/pcp/scripts/backup.sh /var/backups/pcp >> /var/log/pcp-backup.log 2>&1
+```
+
+## Audit Log
+
+Every privileged action emits an `audit_logs` row (`user_id`, `action`, `details` JSON). Coverage today: auth login/logout/preference updates, BYOK credential add/revoke, tool execution (auto + approved), snapshot restore/delete, channel link create/delete, hosted-service create/update/start/stop/delete. Browse via `GET /admin/audit-logs` (auth-service admin route) or query directly:
+
+```sql
+SELECT created_at, action, details
+FROM audit_logs
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT 100;
+```
+
+### Retention
+
+Audit rows accumulate forever by default. Use `scripts/prune-audit-logs.mjs` to drop entries older than `AUDIT_RETENTION_DAYS` (default 90):
+
+```cron
+0 4 * * * cd /opt/pcp && DATABASE_URL=... AUDIT_RETENTION_DAYS=90 node scripts/prune-audit-logs.mjs >> /var/log/pcp-audit-prune.log 2>&1
+```
+
+Pass `--dry` to preview the count without deleting.
+
+## Hosted-service envVars at rest
+
+`hosted_services.env_vars` values are encrypted with AES-256-GCM (`enc:<iv>.<tag>.<ciphertext>`) before they reach Postgres. The publish service decrypts only when launching a container. Client-facing API responses replace each value with `***`. Set `ENCRYPTION_KEY` (32 bytes) in the publish service environment to enable; in production this is required and the service refuses to start without it.
+
 ## Security Hardening
 
 - [ ] Set `secure: true` on session cookies (requires HTTPS)
