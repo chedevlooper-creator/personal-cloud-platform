@@ -7,7 +7,11 @@ import {
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { db } from '@pcp/db/src/client';
-import { sessions, snapshots, users, workspaceFiles, workspaces } from '@pcp/db/src/schema';
+import { snapshots, workspaceFiles, workspaces } from '@pcp/db/src/schema';
+import {
+  validateSessionUserId,
+  verifyUserExists as verifySharedUserExists,
+} from '@pcp/db/src/session';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { env } from './env';
@@ -222,20 +226,17 @@ export class WorkspaceService {
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    this.logger.info({ sessionId: sessionId?.substring(0, 8) + '...' }, 'Validating session');
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
+    this.logger.info('Validating session');
+    return validateSessionUserId(sessionId);
+  }
 
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
-    });
-
-    return user?.id || null;
+  /**
+   * Confirm that a user id received via internal Bearer + x-user-id header maps
+   * to a real account. Returns the userId on success, null otherwise.
+   */
+  async verifyUserExists(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    return verifySharedUserExists(userId);
   }
 
   async createWorkspace(userId: string, name: string): Promise<any> {

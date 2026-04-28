@@ -2,37 +2,19 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { db } from '@pcp/db/src/client';
 import { automations, automationRuns } from '@pcp/db/src/schema';
+import { validateSessionUserId } from '@pcp/db/src/session';
 import { and, eq, desc } from 'drizzle-orm';
 import { createAutomationSchema, updateAutomationSchema } from '@pcp/shared';
 import { automationQueue } from '../automation/queue';
-import {
-  automationRepeatKey,
-  computeNextRunAt,
-  resolveSchedule,
-} from '../automation/schedule';
-import {
-  automationTriggerToken,
-  verifyAutomationTriggerToken,
-} from '../automation/notify';
+import { automationRepeatKey, computeNextRunAt, resolveSchedule } from '../automation/schedule';
+import { automationTriggerToken, verifyAutomationTriggerToken } from '../automation/notify';
 import { z } from 'zod';
 
 export async function setupAutomationRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
 
   async function getAuthenticatedUserId(sessionId: string | undefined): Promise<string | null> {
-    // We would use the AgentOrchestrator to validate user from cookie.
-    // For now we assume a simple placeholder since we don't have access to orchestrator instance easily here without passing it.
-    // However, in a real implementation we would fetch the session exactly like orchestrator.validateUserFromCookie
-    // To be consistent, let's just do it directly.
-    if (!sessionId) return null;
-    const session = await db.query.sessions.findFirst({
-      where: (s) => eq(s.id, sessionId),
-    });
-    if (!session || session.expiresAt.getTime() <= Date.now()) {
-      return null;
-    }
-
-    return session.userId;
+    return validateSessionUserId(sessionId);
   }
 
   server.get(

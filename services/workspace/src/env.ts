@@ -42,7 +42,11 @@ export const env = {
   ),
   S3_BUCKET: parsed.S3_BUCKET,
   S3_REGION: parsed.S3_REGION,
-  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  INTERNAL_SERVICE_TOKEN: resolveSecret(
+    'INTERNAL_SERVICE_TOKEN',
+    parsed.INTERNAL_SERVICE_TOKEN,
+    32,
+  ),
   DATASETS_DATA_DIR: parsed.DATASETS_DATA_DIR,
 };
 
@@ -71,7 +75,12 @@ function resolveProductionValue(
 
 function isUnsafeValue(value: string): boolean {
   const lower = value.toLowerCase();
-  return lower.includes('change_me') || lower.includes('replace') || lower.startsWith('dev-');
+  return (
+    lower.includes('change_me') ||
+    lower.includes('replace') ||
+    lower.includes('dummy') ||
+    lower.startsWith('dev-')
+  );
 }
 
 function makeDevelopmentSecret(length: number, name: string): string {

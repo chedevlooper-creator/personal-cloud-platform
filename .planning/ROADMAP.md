@@ -15,8 +15,10 @@ polish.
 - Integer phases (1, 2, 3): Planned milestone work.
 - Decimal phases (2.1, 2.2): Urgent insertions, marked with INSERTED.
 
-- [ ] **Phase 1: Contracts, Config, And Auth Foundation** - Make service startup,
+- [x] **Phase 1: Contracts, Config, And Auth Foundation** - Make service startup,
   auth/session validation, API errors, DTOs, and logging safer and consistent.
+  Completed as a foundation slice; API/OBS rollout follow-ups remain tracked in
+  requirements.
 - [ ] **Phase 2: Tenant Isolation And Audit Hardening** - Verify and enforce
   tenant scoping across data, storage, audit, and tests.
 - [ ] **Phase 3: Runtime And Publish Sandbox Hardening** - Reduce host escape
@@ -42,11 +44,11 @@ error, DTO, logging, health, and shutdown behavior.
 
 Plans:
 **Wave 1**
-- [ ] 01-01: Centralize session/env validation patterns.
+- [x] 01-01: Centralize session/env validation patterns.
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 01-02: Standardize API errors and shared DTO contracts.
-- [ ] 01-03: Normalize logging, health checks, and shutdown behavior.
+- [x] 01-02: Standardize API errors and shared DTO contracts.
+- [x] 01-03: Normalize logging, health checks, and shutdown behavior.
 
 Cross-cutting constraints:
 - Preserve HTTP-only cookie sessions; no JWT auth rewrite in this phase.
@@ -132,7 +134,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contracts, Config, And Auth Foundation | 0/3 | Ready to execute | - |
+| 1. Contracts, Config, And Auth Foundation | 3/3 | Complete | 2026-04-28 |
 | 2. Tenant Isolation And Audit Hardening | 0/3 | Not started | - |
 | 3. Runtime And Publish Sandbox Hardening | 0/3 | Not started | - |
 | 4. Agent Durability, Approval, And Memory | 0/3 | Not started | - |

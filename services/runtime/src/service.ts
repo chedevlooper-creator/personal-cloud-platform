@@ -1,12 +1,9 @@
 import { db } from '@pcp/db/src/client';
+import { runtimes, runtimeLogs, runtimeEvents, workspaces } from '@pcp/db/src/schema';
 import {
-  runtimes,
-  runtimeLogs,
-  runtimeEvents,
-  sessions,
-  users,
-  workspaces,
-} from '@pcp/db/src/schema';
+  validateSessionUserId,
+  verifyUserExists as verifySharedUserExists,
+} from '@pcp/db/src/session';
 import { eq, and, isNull, desc, ne } from 'drizzle-orm';
 import { mkdir, writeFile, readFile, readdir, stat } from 'node:fs/promises';
 import { join, relative, resolve, dirname, sep } from 'node:path';
@@ -29,19 +26,12 @@ export class RuntimeService {
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
+    return validateSessionUserId(sessionId);
+  }
 
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
-    });
-
-    return user?.id || null;
+  async verifyUserExists(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    return verifySharedUserExists(userId);
   }
 
   private async resolveWorkspaceHostPath(workspaceId: string): Promise<string> {
@@ -241,7 +231,10 @@ export class RuntimeService {
         try {
           await this.startRuntime(existing.id, userId);
         } catch (err) {
-          this.logger.warn({ err, runtimeId: existing.id }, 'Failed to restart existing runtime; creating new one');
+          this.logger.warn(
+            { err, runtimeId: existing.id },
+            'Failed to restart existing runtime; creating new one',
+          );
           // Fall through to create new
         }
       }
@@ -263,11 +256,7 @@ export class RuntimeService {
    * but do not prevent the exec from running (the container will simply see
    * stale or missing files).
    */
-  async materializeWorkspace(
-    userId: string,
-    workspaceId: string,
-    hostPath: string,
-  ): Promise<void> {
+  async materializeWorkspace(userId: string, workspaceId: string, hostPath: string): Promise<void> {
     let manifest: Awaited<ReturnType<WorkspaceClient['getSyncManifest']>>;
     try {
       manifest = await this.workspaceClient.getSyncManifest(userId, workspaceId);
@@ -311,11 +300,7 @@ export class RuntimeService {
    * canonical workspace storage. Skips heavyweight directories such as
    * `node_modules` and `.git` to avoid unbounded uploads. Best-effort.
    */
-  async syncBackWorkspace(
-    userId: string,
-    workspaceId: string,
-    hostPath: string,
-  ): Promise<void> {
+  async syncBackWorkspace(userId: string, workspaceId: string, hostPath: string): Promise<void> {
     let manifest: Awaited<ReturnType<WorkspaceClient['getSyncManifest']>>;
     try {
       manifest = await this.workspaceClient.getSyncManifest(userId, workspaceId);
@@ -368,12 +353,7 @@ export class RuntimeService {
       if (previous && previous.contentBase64 === base64) continue;
 
       try {
-        await this.workspaceClient.writeFile(
-          userId,
-          workspaceId,
-          rel,
-          buf.toString('utf8'),
-        );
+        await this.workspaceClient.writeFile(userId, workspaceId, rel, buf.toString('utf8'));
       } catch (err) {
         this.logger.warn({ err, path: rel }, 'Failed to sync file back to workspace');
       }

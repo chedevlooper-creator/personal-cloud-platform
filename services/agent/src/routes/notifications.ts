@@ -1,23 +1,18 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { db } from '@pcp/db/src/client';
-import { notifications, sessions } from '@pcp/db/src/schema';
+import { notifications } from '@pcp/db/src/schema';
+import { validateSessionUserId } from '@pcp/db/src/session';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { env } from '../env';
 
 export async function setupNotificationRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
 
   async function getAuthenticatedUserId(sessionId: string | undefined): Promise<string | null> {
-    if (process.env.AUTH_BYPASS === '1') return 'local-dev-user';
-    if (!sessionId) return null;
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
-    if (!session || session.expiresAt.getTime() <= Date.now()) {
-      return null;
-    }
-    return session.userId;
+    if (env.AUTH_BYPASS) return 'local-dev-user';
+    return validateSessionUserId(sessionId);
   }
 
   server.get(
@@ -50,20 +45,17 @@ export async function setupNotificationRoutes(fastify: FastifyInstance) {
     },
   );
 
-  server.get(
-    '/notifications/unread-count',
-    async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+  server.get('/notifications/unread-count', async (request, reply) => {
+    const userId = await getAuthenticatedUserId(request.cookies.sessionId);
+    if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      const rows = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(notifications)
-        .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+    const rows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
 
-      return { count: rows[0]?.count ?? 0 };
-    },
-  );
+    return { count: rows[0]?.count ?? 0 };
+  });
 
   server.post(
     '/notifications/:id/read',
@@ -77,26 +69,21 @@ export async function setupNotificationRoutes(fastify: FastifyInstance) {
       await db
         .update(notifications)
         .set({ readAt: new Date() })
-        .where(
-          and(eq(notifications.id, request.params.id), eq(notifications.userId, userId)),
-        );
+        .where(and(eq(notifications.id, request.params.id), eq(notifications.userId, userId)));
 
       return { success: true };
     },
   );
 
-  server.post(
-    '/notifications/read-all',
-    async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+  server.post('/notifications/read-all', async (request, reply) => {
+    const userId = await getAuthenticatedUserId(request.cookies.sessionId);
+    if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      await db
-        .update(notifications)
-        .set({ readAt: new Date() })
-        .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+    await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
 
-      return { success: true };
-    },
-  );
+    return { success: true };
+  });
 }

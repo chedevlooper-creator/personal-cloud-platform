@@ -11,20 +11,36 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   COOKIE_SECRET: z.string().optional(),
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  AUTH_BYPASS: z
+    .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.literal('')])
+    .optional(),
   BROWSER_PROFILE_DIR: z.string().default('./data/browser-profiles'),
-  BROWSER_SESSION_TIMEOUT_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+  BROWSER_SESSION_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60 * 1000),
   BROWSER_MAX_SESSIONS_PER_USER: z.coerce.number().int().positive().default(3),
 });
 
 const parsed = envSchema.parse(rawEnv);
 const isProduction = parsed.NODE_ENV === 'production';
+const authBypass = parsed.AUTH_BYPASS === '1' || parsed.AUTH_BYPASS === 'true';
+if (isProduction && authBypass) {
+  throw new Error('AUTH_BYPASS must not be enabled when NODE_ENV=production');
+}
 
 export const env = {
   NODE_ENV: parsed.NODE_ENV,
   PORT: parsed.PORT,
   DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
   COOKIE_SECRET: resolveSecret('COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
-  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  INTERNAL_SERVICE_TOKEN: resolveSecret(
+    'INTERNAL_SERVICE_TOKEN',
+    parsed.INTERNAL_SERVICE_TOKEN,
+    32,
+  ),
+  AUTH_BYPASS: !isProduction && authBypass,
   BROWSER_PROFILE_DIR: parsed.BROWSER_PROFILE_DIR,
   BROWSER_SESSION_TIMEOUT_MS: parsed.BROWSER_SESSION_TIMEOUT_MS,
   BROWSER_MAX_SESSIONS_PER_USER: parsed.BROWSER_MAX_SESSIONS_PER_USER,
@@ -41,7 +57,11 @@ function resolveSecret(name: string, value: string | undefined, minLength: numbe
   return resolved;
 }
 
-function resolveProductionValue(name: string, value: string | undefined, fallback?: string): string {
+function resolveProductionValue(
+  name: string,
+  value: string | undefined,
+  fallback?: string,
+): string {
   const resolved = value?.trim() || fallback || '';
   if (isProduction && (!resolved || isUnsafeValue(resolved))) {
     throw new Error(`${name} must be set to a non-default value in production`);
@@ -51,7 +71,12 @@ function resolveProductionValue(name: string, value: string | undefined, fallbac
 
 function isUnsafeValue(value: string): boolean {
   const lower = value.toLowerCase();
-  return lower.includes('change_me') || lower.includes('replace') || lower.startsWith('dev-');
+  return (
+    lower.includes('change_me') ||
+    lower.includes('replace') ||
+    lower.includes('dummy') ||
+    lower.startsWith('dev-')
+  );
 }
 
 function makeDevelopmentSecret(length: number, name: string): string {

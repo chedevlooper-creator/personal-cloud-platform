@@ -2,8 +2,6 @@ import { db } from '@pcp/db/src/client';
 import {
   tasks,
   taskSteps,
-  users,
-  sessions,
   conversations,
   toolCalls,
   workspaces,
@@ -12,6 +10,7 @@ import {
   userPreferences,
   auditLogs,
 } from '@pcp/db/src/schema';
+import { validateSessionUserId } from '@pcp/db/src/session';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { LLMProvider, Message } from './llm/types';
 import { createLLMProvider } from './llm/provider';
@@ -87,19 +86,7 @@ export class AgentOrchestrator {
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
-
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
-    });
-
-    return user?.id || null;
+    return validateSessionUserId(sessionId);
   }
 
   async getConversations(userId: string) {

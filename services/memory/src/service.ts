@@ -1,5 +1,9 @@
 import { db } from '@pcp/db/src/client';
-import { memoryEntries, users, sessions } from '@pcp/db/src/schema';
+import { memoryEntries } from '@pcp/db/src/schema';
+import {
+  validateSessionUserId,
+  verifyUserExists as verifySharedUserExists,
+} from '@pcp/db/src/session';
 import { eq, and, sql } from 'drizzle-orm';
 import { EmbeddingProvider } from './embeddings/types';
 import { OpenAIEmbeddingProvider } from './embeddings/openai';
@@ -14,19 +18,12 @@ export class MemoryService {
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
+    return validateSessionUserId(sessionId);
+  }
 
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
-    });
-
-    return user?.id || null;
+  async verifyUserExists(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    return verifySharedUserExists(userId);
   }
 
   async addMemory(

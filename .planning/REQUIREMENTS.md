@@ -8,7 +8,7 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 ### Security And Isolation
 
-- [ ] **SEC-01**: User session validation is centralized or contract-compatible
+- [x] **SEC-01**: User session validation is centralized or contract-compatible
   across all services so auth behavior cannot drift per service.
 - [ ] **SEC-02**: Every DB-backed resource read/write enforces `userId`,
   `organizationId`, or workspace ownership at the persistence boundary.
@@ -19,14 +19,17 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 ### Config And API Contracts
 
-- [ ] **CONF-01**: Every service validates required environment variables at
+- [x] **CONF-01**: Every service validates required environment variables at
   startup with Zod or equivalent schema validation.
-- [ ] **CONF-02**: Production startup refuses dummy or development secrets,
+- [x] **CONF-02**: Production startup refuses dummy or development secrets,
   including invalid `COOKIE_SECRET` and `ENCRYPTION_KEY` values.
 - [ ] **API-01**: Services return a consistent API error envelope through a
-  Fastify error handler without leaking internal stack details.
+  Fastify error handler without leaking internal stack details. Phase 1 added
+  the shared envelope and publish-service vertical slice; full service rollout
+  remains.
 - [ ] **API-02**: Shared request/response contracts live in `@pcp/shared` and
-  route schemas avoid new `any`, `as any`, or broad `z.any()` shortcuts.
+  route schemas avoid new `any`, `as any`, or broad `z.any()` shortcuts. Phase
+  1 added the shared error contract and avoided new shortcuts in touched files.
 
 ### Sandbox And Runtime
 
@@ -56,7 +59,9 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 ### Observability, Delivery, And Frontend
 
 - [ ] **OBS-01**: Pino logs consistently include `correlationId`, `userId`, and
-  `service` fields with redaction for secrets and PII.
+  `service` fields with redaction for secrets and PII. Phase 1 added the
+  publish-service slice and removed workspace session-cookie logging; full
+  service rollout remains.
 - [ ] **OBS-02**: Services expose metrics and propagate traces across service and
   agent-loop boundaries.
 - [ ] **CI-01**: CI runs `pnpm typecheck`, `pnpm lint`, `pnpm test`, and a smoke
@@ -95,12 +100,12 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 1 | Pending |
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
-| API-01 | Phase 1 | Pending |
-| API-02 | Phase 1 | Pending |
-| OBS-01 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
+| CONF-01 | Phase 1 | Complete |
+| CONF-02 | Phase 1 | Complete |
+| API-01 | Phase 1 | Partial |
+| API-02 | Phase 1 | Partial |
+| OBS-01 | Phase 1 | Partial |
 | SEC-02 | Phase 2 | Pending |
 | SEC-03 | Phase 2 | Pending |
 | SEC-04 | Phase 2 | Pending |
@@ -126,4 +131,4 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-28 after GSD initialization*
+*Last updated: 2026-04-28 after Phase 1 execution*

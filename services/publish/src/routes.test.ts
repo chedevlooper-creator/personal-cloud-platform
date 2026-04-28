@@ -23,6 +23,9 @@ const { mockDb, serviceMethods } = vi.hoisted(() => {
       sessions: {
         findFirst: vi.fn(),
       },
+      users: {
+        findFirst: vi.fn(),
+      },
     },
   };
 
@@ -82,6 +85,7 @@ describe('publish routes tenant identity', () => {
       userId: SESSION_USER_ID,
       expiresAt: new Date(Date.now() + 60_000),
     });
+    mockDb.query.users.findFirst.mockResolvedValue({ id: SESSION_USER_ID });
     serviceMethods.createService.mockResolvedValue(hostedService());
     serviceMethods.listServices.mockResolvedValue([hostedService()]);
     serviceMethods.updateService.mockResolvedValue(hostedService({ name: 'Updated' }));
@@ -144,6 +148,12 @@ describe('publish routes tenant identity', () => {
       url: `/hosted-services?workspaceId=${WORKSPACE_ID}`,
     });
     expect(missing.statusCode).toBe(401);
+    expect(missing.json()).toEqual({
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized',
+      },
+    });
 
     mockDb.query.sessions.findFirst.mockResolvedValueOnce({
       id: 'session-1',

@@ -40,7 +40,13 @@ export const browserApi = axios.create({
 
 export function getApiErrorMessage(error: unknown, fallback: string) {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as { error?: string; message?: string } | undefined;
+    const data = error.response?.data as
+      | { error?: string | { message?: string }; message?: string }
+      | undefined;
+    if (typeof data?.error === 'object') {
+      return data.error.message || data.message || fallback;
+    }
+
     return data?.message || data?.error || fallback;
   }
 

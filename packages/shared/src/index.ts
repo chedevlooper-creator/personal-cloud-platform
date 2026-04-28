@@ -12,3 +12,4 @@ export * from './skills';
 export * from './channels';
 export * from './datasets';
 export * from './browser';
+export * from './errors';
