@@ -89,6 +89,33 @@ describe('RuntimeService workspace ownership', () => {
     expect(providerCreate).not.toHaveBeenCalled();
   });
 
+  it('creates runtimes with tenant-prefixed host paths and tenant labels', async () => {
+    const { RuntimeService } = await import('./service');
+    mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
+    const service = new RuntimeService(logger);
+
+    await service.createRuntime(USER_ID, WORKSPACE_ID, 'node:20-alpine', {});
+
+    expect(providerCreate).toHaveBeenCalledWith(
+      'node:20-alpine',
+      expect.objectContaining({
+        workspacePath: expect.stringContaining(`${USER_ID}`),
+        labels: expect.objectContaining({
+          'pcp.service': 'runtime',
+          'pcp.userId': USER_ID,
+          'pcp.workspaceId': WORKSPACE_ID,
+          'pcp.runtimeId': '550e8400-e29b-41d4-a716-446655440003',
+        }),
+      }),
+    );
+    const [, options] = providerCreate.mock.calls[0] as unknown as [
+      string,
+      { workspacePath: string; labels: Record<string, string> },
+    ];
+    expect(options.workspacePath).toContain(WORKSPACE_ID);
+    expect(options.workspacePath).not.toContain('..');
+  });
+
   it('scopes runtime status updates by runtime id and authenticated user', async () => {
     const { RuntimeService } = await import('./service');
     const { runtimes } = await import('@pcp/db/src/schema');

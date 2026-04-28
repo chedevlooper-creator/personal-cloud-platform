@@ -782,7 +782,7 @@ export class WorkspaceService {
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
 
-    const storageKey = `snapshots/${workspaceId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.json.gz`;
+    const storageKey = `snapshots/${userId}/${workspaceId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.json.gz`;
 
     const [snapshot] = await db
       .insert(snapshots)

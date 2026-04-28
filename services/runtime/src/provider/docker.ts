@@ -21,6 +21,7 @@ export class DockerProvider implements RuntimeProvider {
     const container = await this.docker.createContainer({
       Image: image,
       User: '1000:1000',
+      Labels: options.labels,
       HostConfig: {
         Binds: [`${options.workspacePath}:/workspace`],
         Memory: memoryMb * 1024 * 1024,

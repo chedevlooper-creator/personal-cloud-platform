@@ -3,6 +3,7 @@ export interface RuntimeOptions {
   memory?: number;
   env?: Record<string, string>;
   workspacePath: string;
+  labels?: Record<string, string>;
 }
 
 export interface ExecResult {

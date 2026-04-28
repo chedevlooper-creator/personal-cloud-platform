@@ -15,9 +15,12 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
   2 plan 02-01 added representative scoped DB mutation/read coverage for
   datasets, runtime lifecycle, publish lifecycle, and channel task polling.
 - [ ] **SEC-03**: File storage keys, snapshot paths, runtime labels, and hosted
-  app labels are tenant-prefixed and path traversal safe.
+  app labels are tenant-prefixed and path traversal safe. Phase 2 plan 02-02
+  added tenant-prefixed snapshot keys, runtime host paths, runtime labels, and
+  hosted-app labels.
 - [ ] **SEC-04**: Privileged actions are audit logged without leaking PII,
-  secrets, or plaintext credentials.
+  secrets, or plaintext credentials. Phase 2 plan 02-02 normalized snapshot
+  audit failure handling and kept touched audit details allow-listed.
 
 ### Config And API Contracts
 
@@ -110,8 +113,8 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 | API-02 | Phase 1 | Partial |
 | OBS-01 | Phase 1 | Partial |
 | SEC-02 | Phase 2 | Partial |
-| SEC-03 | Phase 2 | Pending |
-| SEC-04 | Phase 2 | Pending |
+| SEC-03 | Phase 2 | Partial |
+| SEC-04 | Phase 2 | Partial |
 | TST-01 | Phase 2 | Partial |
 | SBOX-01 | Phase 3 | Pending |
 | SBOX-02 | Phase 3 | Pending |
@@ -134,4 +137,4 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-29 after Phase 2 plan 02-01 execution*
+*Last updated: 2026-04-29 after Phase 2 plan 02-02 execution*

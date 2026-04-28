@@ -34,9 +34,9 @@ export class RuntimeService {
     return verifySharedUserExists(userId);
   }
 
-  private async resolveWorkspaceHostPath(workspaceId: string): Promise<string> {
+  private async resolveWorkspaceHostPath(userId: string, workspaceId: string): Promise<string> {
     const root = env.WORKSPACE_HOST_ROOT;
-    const dir = join(root, workspaceId);
+    const dir = join(root, userId, workspaceId);
     try {
       await mkdir(dir, { recursive: true });
     } catch (err) {
@@ -48,20 +48,12 @@ export class RuntimeService {
   async createRuntime(userId: string, workspaceId: string, image: string, options: any) {
     await this.assertWorkspaceOwned(workspaceId, userId);
 
-    const hostWorkspacePath = await this.resolveWorkspaceHostPath(workspaceId);
-
-    const containerId = await this.provider.create(image, {
-      ...options,
-      workspacePath: hostWorkspacePath,
-    });
-
     const [runtime] = await db
       .insert(runtimes)
       .values({
         userId,
         workspaceId,
         image,
-        containerId,
         options,
         status: 'pending',
       })
@@ -69,13 +61,32 @@ export class RuntimeService {
 
     if (!runtime) throw new Error('Failed to create runtime record');
 
+    const hostWorkspacePath = await this.resolveWorkspaceHostPath(userId, workspaceId);
+
+    const containerId = await this.provider.create(image, {
+      ...options,
+      workspacePath: hostWorkspacePath,
+      labels: {
+        ...(options?.labels ?? {}),
+        'pcp.service': 'runtime',
+        'pcp.userId': userId,
+        'pcp.workspaceId': workspaceId,
+        'pcp.runtimeId': runtime.id,
+      },
+    });
+
+    await db
+      .update(runtimes)
+      .set({ containerId })
+      .where(and(eq(runtimes.id, runtime.id), eq(runtimes.userId, userId)));
+
     await db.insert(runtimeEvents).values({
       runtimeId: runtime.id,
       type: 'create',
       payload: { containerId, options },
     });
 
-    return runtime;
+    return { ...runtime, containerId };
   }
 
   private async assertWorkspaceOwned(workspaceId: string, userId: string) {
@@ -140,7 +151,7 @@ export class RuntimeService {
 
     // Sync workspace files into the host-mounted directory so the container sees
     // the latest content. Failures here are logged but non-fatal.
-    const hostPath = await this.resolveWorkspaceHostPath(runtime.workspaceId);
+    const hostPath = await this.resolveWorkspaceHostPath(userId, runtime.workspaceId);
     await this.materializeWorkspace(userId, runtime.workspaceId, hostPath);
 
     const execPromise = this.provider.exec(runtime.containerId, command);
@@ -244,7 +255,7 @@ export class RuntimeService {
 
     const created = await this.createRuntime(userId, workspaceId, image, options);
     await this.startRuntime(created.id, userId);
-    const hostPath = await this.resolveWorkspaceHostPath(workspaceId);
+    const hostPath = await this.resolveWorkspaceHostPath(userId, workspaceId);
     await this.materializeWorkspace(userId, workspaceId, hostPath);
     return (await this.getRuntime(created.id, userId))!;
   }

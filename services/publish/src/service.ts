@@ -152,7 +152,7 @@ export class PublishService {
   private async runContainer(service: HostedServiceRow) {
     try {
       const containerName = `hosted-${service.id}`;
-      const workspaceVolume = `/tmp/workspaces/${service.workspaceId}`;
+      const workspaceVolume = `/tmp/workspaces/${service.userId}/${service.workspaceId}`;
 
       // In MVP, we just use node alpine or nginx depending on kind
       let image = 'node:20-alpine';
@@ -184,6 +184,10 @@ export class PublishService {
         User: '1000:1000',
         WorkingDir: rootPath === '/' ? '/workspace' : `/workspace${rootPath}`,
         Labels: {
+          'pcp.service': 'publish',
+          'pcp.userId': service.userId,
+          'pcp.workspaceId': service.workspaceId,
+          'pcp.hostedServiceId': service.id,
           'traefik.enable': 'true',
           [`traefik.http.routers.${containerName}.rule`]: `Host(\`${slug}.apps.localhost\`)`,
           [`traefik.http.routers.${containerName}.entrypoints`]: 'web',

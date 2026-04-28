@@ -101,7 +101,11 @@ class MemoryStorage implements WorkspaceObjectStorage {
     return content;
   }
 
-  async putBuffer(key: string, buffer: Buffer, _contentType = 'application/octet-stream'): Promise<void> {
+  async putBuffer(
+    key: string,
+    buffer: Buffer,
+    _contentType = 'application/octet-stream',
+  ): Promise<void> {
     this.objects.set(key, buffer.toString('binary'));
   }
 
@@ -298,13 +302,9 @@ describe('WorkspaceService', () => {
       },
     ]);
 
-    const snapshot = await workspaceService.createSnapshot(
-      'workspace-1',
-      'user-1',
-      'baseline',
-    );
+    const snapshot = await workspaceService.createSnapshot('workspace-1', 'user-1', 'baseline');
 
-    expect(snapshot.storageKey).toMatch(/^snapshots\/workspace-1\//);
+    expect(snapshot.storageKey).toMatch(/^snapshots\/user-1\/workspace-1\//);
     expect(storage.objects.has(snapshot.storageKey)).toBe(true);
 
     // Mutate the workspace and pretend the file changed.
@@ -329,8 +329,6 @@ describe('WorkspaceService', () => {
     expect(insertedValues).toContainEqual(
       expect.objectContaining({ path: '/README.md', isDirectory: '0' }),
     );
-    await expect(
-      storage.getText('user-1/workspace-1/README.md'),
-    ).resolves.toBe('# original');
+    await expect(storage.getText('user-1/workspace-1/README.md')).resolves.toBe('# original');
   });
 });

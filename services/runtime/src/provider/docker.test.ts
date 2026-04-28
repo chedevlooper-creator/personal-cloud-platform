@@ -27,12 +27,24 @@ describe('DockerProvider sandbox options', () => {
       cpu: 99,
       memory: 99_999,
       env: { SAFE_NAME: 'ok', 'BAD=NAME': 'no' },
+      labels: {
+        'pcp.service': 'runtime',
+        'pcp.userId': 'user-1',
+        'pcp.workspaceId': 'workspace-1',
+        'pcp.runtimeId': 'runtime-1',
+      },
     });
 
     expect(createContainer).toHaveBeenCalledWith(
       expect.objectContaining({
         User: '1000:1000',
         Env: ['SAFE_NAME=ok'],
+        Labels: expect.objectContaining({
+          'pcp.service': 'runtime',
+          'pcp.userId': 'user-1',
+          'pcp.workspaceId': 'workspace-1',
+          'pcp.runtimeId': 'runtime-1',
+        }),
         HostConfig: expect.objectContaining({
           Binds: ['/tmp/workspaces/workspace-1:/workspace'],
           Memory: 4 * 1024 * 1024 * 1024,

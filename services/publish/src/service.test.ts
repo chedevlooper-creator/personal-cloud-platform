@@ -144,9 +144,15 @@ describe('PublishService security boundaries', () => {
         User: '1000:1000',
         Env: ['SAFE_NAME=ok'],
         WorkingDir: '/workspace',
+        Labels: expect.objectContaining({
+          'pcp.service': 'publish',
+          'pcp.userId': USER_ID,
+          'pcp.workspaceId': WORKSPACE_ID,
+          'pcp.hostedServiceId': SERVICE_ID,
+        }),
         HostConfig: expect.objectContaining({
           NetworkMode: 'pcp_network',
-          Binds: [`/tmp/workspaces/${WORKSPACE_ID}:/workspace:ro`],
+          Binds: [`/tmp/workspaces/${USER_ID}/${WORKSPACE_ID}:/workspace:ro`],
           ReadonlyRootfs: true,
           CapDrop: ['ALL'],
           PidsLimit: 100,
