@@ -106,14 +106,17 @@ export default function ComputerPage() {
 
   const automationsQuery = useQuery({
     queryKey: ['computer', 'automations'],
-    queryFn: async () => (await agentApi.get('/automations')).data as Automation[],
+    queryFn: async () => {
+      const res = await agentApi.get('/automations');
+      return (res.data?.automations ?? res.data ?? []) as Automation[];
+    },
     retry: false,
   });
 
   const workspaces = workspacesQuery.data?.workspaces ?? [];
   const services = servicesQuery.data ?? [];
   const browserSessions = browserQuery.data ?? [];
-  const automations = automationsQuery.data ?? [];
+  const automations = Array.isArray(automationsQuery.data) ? automationsQuery.data : [];
 
   const runningServices = services.filter((s) => s.status === 'running').length;
   const enabledAutomations = automations.filter((a) => a.enabled).length;

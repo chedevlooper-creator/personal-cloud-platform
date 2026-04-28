@@ -114,7 +114,7 @@ export class PublishService {
     await db
       .update(hostedServices)
       .set({ status: 'starting' })
-      .where(eq(hostedServices.id, service.id));
+      .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, userId)));
 
     // Start asynchronously to not block the request
     this.runContainer(service).catch(console.error);
@@ -143,7 +143,7 @@ export class PublishService {
     await db
       .update(hostedServices)
       .set({ status: 'stopped', runnerProcessId: null })
-      .where(eq(hostedServices.id, service.id));
+      .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, userId)));
 
     await emitAudit(userId, 'HOSTED_SERVICE_STOP', { serviceId });
     return { status: 'stopped' };
@@ -215,7 +215,7 @@ export class PublishService {
           runnerProcessId: container.id,
           publicUrl: `http://${slug}.apps.localhost`,
         })
-        .where(eq(hostedServices.id, service.id));
+        .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, service.userId)));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown publish container error';
       await db
@@ -224,7 +224,7 @@ export class PublishService {
           status: 'crashed',
           crashCount: service.crashCount + 1,
         })
-        .where(eq(hostedServices.id, service.id));
+        .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, service.userId)));
 
       await db.insert(hostedServiceLogs).values({
         serviceId: service.id,

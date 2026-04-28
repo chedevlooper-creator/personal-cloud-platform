@@ -21,6 +21,9 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { agentApi, getApiErrorMessage, workspaceApi } from '@/lib/api';
 import { useUser } from '@/lib/auth';
+import { usePersonaStore } from '@/store/persona';
+import { useActiveSkillsStore } from '@/store/skills';
+import { ChatContextBar } from '@/components/workspace/chat-context-bar';
 import { cn } from '@/lib/utils';
 
 type Conversation = {
@@ -47,8 +50,9 @@ type ToolCallInfo = {
 };
 
 type TaskResponse = {
-  taskId: string;
+  id: string;
   status: string;
+  conversationId?: string;
 };
 
 export default function ChatsPage() {
@@ -65,7 +69,7 @@ export default function ChatsPage() {
     queryKey: ['conversations', user?.id],
     enabled: Boolean(user?.id),
     queryFn: async () => {
-      const res = await agentApi.get('/conversations', { params: { userId: user?.id } });
+      const res = await agentApi.get('/agent/conversations');
       return (res.data?.conversations ?? res.data ?? []) as Conversation[];
     },
   });
@@ -75,7 +79,7 @@ export default function ChatsPage() {
     queryKey: ['messages', selectedConvoId],
     enabled: Boolean(selectedConvoId),
     queryFn: async () => {
-      const res = await agentApi.get(`/conversations/${selectedConvoId}/messages`);
+      const res = await agentApi.get(`/agent/conversations/${selectedConvoId}/messages`);
       return (res.data?.messages ?? res.data ?? []) as Message[];
     },
   });
@@ -99,18 +103,22 @@ export default function ChatsPage() {
 
       if (!workspaceId || !user?.id) throw new Error('No workspace or user');
 
-      const res = await agentApi.post('/tasks', {
-        userId: user.id,
+      const personaId = usePersonaStore.getState().activePersonaId;
+      const skillIds = useActiveSkillsStore.getState().activeSkillIds;
+
+      const res = await agentApi.post('/agent/tasks', {
         workspaceId,
         conversationId: selectedConvoId || undefined,
-        prompt,
+        input: prompt,
+        personaId: personaId ?? undefined,
+        skillIds: skillIds.length > 0 ? skillIds : undefined,
       });
       return res.data as TaskResponse;
     },
     onSuccess: (data) => {
       setInput('');
       // Poll for completion
-      pollTask(data.taskId);
+      pollTask(data.id);
     },
     onError: (err) => {
       setIsStreaming(false);
@@ -122,7 +130,7 @@ export default function ChatsPage() {
     const maxAttempts = 60;
     for (let i = 0; i < maxAttempts; i++) {
       try {
-        const res = await agentApi.get(`/tasks/${taskId}`);
+        const res = await agentApi.get(`/agent/tasks/${taskId}`);
         const status = res.data?.status;
         if (status === 'completed' || status === 'failed') {
           setIsStreaming(false);
@@ -176,11 +184,18 @@ export default function ChatsPage() {
             <ul className="space-y-0.5 p-1.5">
               {conversations.map((c) => (
                 <li key={c.id}>
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedConvoId(c.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedConvoId(c.id);
+                      }
+                    }}
                     className={cn(
-                      'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                      'group flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors',
                       selectedConvoId === c.id
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -196,7 +211,7 @@ export default function ChatsPage() {
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -278,30 +293,33 @@ export default function ChatsPage() {
 
         {/* Input */}
         <div className="border-t border-border bg-background p-4">
-          <div className="mx-auto flex max-w-3xl items-end gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Send a message..."
-              rows={1}
-              className="min-h-[44px] max-h-36 flex-1 resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              aria-label="Chat message input"
-            />
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim() || isStreaming}
-              title={isStreaming ? 'Stop' : 'Send message'}
-              aria-label={isStreaming ? 'Stop' : 'Send message'}
-            >
-              {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            </Button>
+          <div className="mx-auto max-w-3xl space-y-2">
+            <ChatContextBar />
+            <div className="flex items-end gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Send a message..."
+                rows={1}
+                className="min-h-[44px] max-h-36 flex-1 resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                aria-label="Chat message input"
+              />
+              <Button
+                size="icon"
+                onClick={handleSend}
+                disabled={!input.trim() || isStreaming}
+                title={isStreaming ? 'Stop' : 'Send message'}
+                aria-label={isStreaming ? 'Stop' : 'Send message'}
+              >
+                {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -317,7 +335,7 @@ export default function ChatsPage() {
         onConfirm={async () => {
           if (!deleteTarget) return;
           try {
-            await agentApi.delete(`/conversations/${deleteTarget}`);
+            await agentApi.delete(`/agent/conversations/${deleteTarget}`);
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
             if (selectedConvoId === deleteTarget) setSelectedConvoId(null);
             toast.success('Conversation deleted');

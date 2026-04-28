@@ -1,19 +1,29 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Use a stable label until mounted so SSR markup matches the first client render.
+  const label = mounted
+    ? resolvedTheme === 'dark'
+      ? 'Switch to light mode'
+      : 'Switch to dark mode'
+    : 'Toggle theme';
 
   return (
     <Button
       type="button"
       size="icon-sm"
       variant="ghost"
-      title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={label}
+      aria-label={label}
       className="text-muted-foreground hover:text-foreground"
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
     >

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { createTaskSchema, taskResponseSchema, taskStepSchema, conversationResponseSchema, messageResponseSchema, toolApprovalSchema } from '@pcp/shared';
 import { AgentOrchestrator } from './orchestrator';
+import { env } from './env';
 import { z } from 'zod';
 
 export async function setupAgentRoutes(fastify: FastifyInstance) {
@@ -9,7 +10,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
   const orchestrator = new AgentOrchestrator(fastify.log);
 
   async function getAuthenticatedUserId(sessionId: string | undefined): Promise<string | null> {
-    if (process.env.AUTH_BYPASS === '1') return 'local-dev-user';
+    if (env.AUTH_BYPASS) return 'local-dev-user';
     if (!sessionId) return null;
     return orchestrator.validateUserFromCookie(sessionId);
   }
@@ -39,7 +40,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      const response = await orchestrator.chat(request.body.input);
+      const response = await orchestrator.chat(request.body.input, userId);
       return {
         content: response.content || '',
         usage: response.usage,
@@ -180,6 +181,21 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
       await orchestrator.submitToolApproval(request.params.id, userId, request.body.decision, request.body.reason);
+      return { success: true };
+    }
+  );
+
+  server.delete(
+    '/agent/conversations/:id',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const userId = await getAuthenticatedUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      await orchestrator.deleteConversation(request.params.id, userId);
       return { success: true };
     }
   );

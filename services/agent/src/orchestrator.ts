@@ -14,6 +14,7 @@ import { validateSessionUserId } from '@pcp/db/src/session';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { LLMProvider, Message } from './llm/types';
 import { createLLMProvider } from './llm/provider';
+import { resolveUserProvider } from './llm/credentials';
 import { ToolRegistry, ToolContext } from './tools/registry';
 import { ReadFileTool } from './tools/read_file';
 import { WriteFileTool } from './tools/write_file';
@@ -94,6 +95,17 @@ export class AgentOrchestrator {
       where: and(eq(conversations.userId, userId), isNull(conversations.archivedAt)),
       orderBy: (conversations, { desc }) => [desc(conversations.createdAt)],
     });
+  }
+
+  async deleteConversation(conversationId: string, userId: string) {
+    const convo = await db.query.conversations.findFirst({
+      where: and(eq(conversations.id, conversationId), eq(conversations.userId, userId)),
+    });
+    if (!convo) throw new Error('Conversation not found');
+    await db
+      .update(conversations)
+      .set({ archivedAt: new Date() })
+      .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
   }
 
   async getMessages(conversationId: string, userId: string) {
@@ -258,8 +270,10 @@ export class AgentOrchestrator {
     return { success: true };
   }
 
-  async chat(input: string) {
-    return this.llm.generate([
+  async chat(input: string, userId?: string) {
+    const userProvider = userId ? await resolveUserProvider(userId).catch(() => null) : null;
+    const llm: LLMProvider = userProvider?.provider ?? this.llm;
+    return llm.generate([
       {
         role: 'system',
         content:
@@ -274,7 +288,9 @@ export class AgentOrchestrator {
     base: string,
     metadata: unknown,
   ): Promise<string> {
-    const meta = (metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {}) as {
+    const meta = (
+      metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {}
+    ) as {
       personaId?: string | null;
       skillIds?: string[];
     };
@@ -300,7 +316,9 @@ export class AgentOrchestrator {
       where: eq(userPreferences.userId, userId),
     });
     if (prefs?.rules && prefs.rules.trim().length > 0) {
-      sections.push(`# User Rules\nThe user has set the following rules. Always honor them.\n${prefs.rules.trim()}`);
+      sections.push(
+        `# User Rules\nThe user has set the following rules. Always honor them.\n${prefs.rules.trim()}`,
+      );
     }
 
     const skillIds = Array.isArray(meta.skillIds) ? meta.skillIds.filter(Boolean) : [];
@@ -324,10 +342,15 @@ export class AgentOrchestrator {
   }
 
   private async runAgentLoop(taskId: string, userId: string) {
-    const task = await db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+    const task = await db.query.tasks.findFirst({
+      where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)),
+    });
     if (!task || task.status !== 'pending') return;
 
-    await db.update(tasks).set({ status: 'executing' }).where(eq(tasks.id, taskId));
+    await db
+      .update(tasks)
+      .set({ status: 'executing' })
+      .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
 
     const systemPrompt = await this.buildSystemPrompt(
       userId,
@@ -343,16 +366,26 @@ export class AgentOrchestrator {
       { role: 'user', content: task.input },
     ];
 
+    // Prefer the user's saved provider credential when available; otherwise
+    // fall back to the service-wide default created in the constructor.
+    const userProvider = await resolveUserProvider(userId).catch((err) => {
+      this.logger?.warn?.({ err, userId }, 'resolveUserProvider failed; using default LLM');
+      return null;
+    });
+    const llm: LLMProvider = userProvider?.provider ?? this.llm;
+
     let stepNumber = 1;
     const maxIterations = 15;
     const tools = this.registry.getAllDefinitions();
 
     for (let i = 0; i < maxIterations; i++) {
-      // Check if cancelled
-      const currentTask = await db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
-      if (currentTask?.status === 'cancelled') return;
+      // Check if cancelled — always re-check with userId scope to prevent cross-tenant reads.
+      const currentTask = await db.query.tasks.findFirst({
+        where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)),
+      });
+      if (!currentTask || currentTask.status === 'cancelled') return;
 
-      const response = await this.llm.generate(messages, tools);
+      const response = await llm.generate(messages, tools);
 
       if (response.content) {
         messages.push({ role: 'assistant', content: response.content });

@@ -257,11 +257,26 @@ export class WorkspaceService {
   async listUserWorkspaces(userId: string, page: number = 1, limit: number = 20) {
     const offset = (page - 1) * limit;
 
-    const results = await db.query.workspaces.findMany({
+    let results = await db.query.workspaces.findMany({
       where: and(eq(workspaces.userId, userId), isNull(workspaces.deletedAt)),
       limit,
       offset,
     });
+
+    // Auto-provision a default workspace on first access so newly registered
+    // users can immediately use chat / files without a manual setup step.
+    if (page === 1 && results.length === 0) {
+      try {
+        await this.createWorkspace(userId, 'Personal workspace');
+      } catch (err) {
+        // Race-safe: if another request created it concurrently, just refetch.
+      }
+      results = await db.query.workspaces.findMany({
+        where: and(eq(workspaces.userId, userId), isNull(workspaces.deletedAt)),
+        limit,
+        offset,
+      });
+    }
 
     return results;
   }
@@ -857,10 +872,7 @@ export class WorkspaceService {
       throw new WorkspaceError('Failed to create pre-restore snapshot', 500);
     }
 
-    await db
-      .update(snapshots)
-      .set({ status: 'restoring' })
-      .where(eq(snapshots.id, snapshotId));
+    await db.update(snapshots).set({ status: 'restoring' }).where(eq(snapshots.id, snapshotId));
 
     try {
       const buffer = await this.storage.getBuffer(snapshot.storageKey);
@@ -871,16 +883,9 @@ export class WorkspaceService {
         throw new Error(`Unsupported snapshot format version ${archive.version}`);
       }
 
-      const restoredCount = await this.applySnapshotArchive(
-        snapshot.workspaceId,
-        userId,
-        archive,
-      );
+      const restoredCount = await this.applySnapshotArchive(snapshot.workspaceId, userId, archive);
 
-      await db
-        .update(snapshots)
-        .set({ status: 'ready' })
-        .where(eq(snapshots.id, snapshotId));
+      await db.update(snapshots).set({ status: 'ready' }).where(eq(snapshots.id, snapshotId));
 
       return { restoredFiles: restoredCount };
     } catch (err) {

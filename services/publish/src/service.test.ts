@@ -65,6 +65,13 @@ vi.mock('@pcp/db/src/client', () => ({
   db: mockDb,
 }));
 
+vi.mock('drizzle-orm', () => ({
+  and: (...conditions: unknown[]) => ({ type: 'and', conditions }),
+  eq: (column: unknown, value: unknown) => ({ type: 'eq', column, value }),
+  isNull: (column: unknown) => ({ type: 'isNull', column }),
+  desc: (column: unknown) => ({ type: 'desc', column }),
+}));
+
 vi.mock('dockerode', () => ({
   default: vi.fn(() => ({
     createContainer,
@@ -144,4 +151,43 @@ describe('PublishService security boundaries', () => {
       }),
     );
   });
+
+  it('scopes hosted service lifecycle status updates by service id and authenticated user', async () => {
+    const { PublishService } = await import('./service');
+    const { hostedServices } = await import('@pcp/db/src/schema');
+    const wherePredicates: unknown[] = [];
+    mockDb.update.mockReturnValue({
+      set: vi.fn(() => ({
+        where: vi.fn((predicate: unknown) => {
+          wherePredicates.push(predicate);
+          return {
+            returning: vi.fn(async () => []),
+          };
+        }),
+      })),
+    });
+    const service = new PublishService();
+
+    await service.startService(SERVICE_ID, USER_ID);
+
+    expect(wherePredicates.length).toBeGreaterThan(0);
+    expect(
+      wherePredicates.some((where) => predicateContainsEq(where, hostedServices.id, SERVICE_ID)),
+    ).toBe(true);
+    expect(
+      wherePredicates.every((where) => predicateContainsEq(where, hostedServices.userId, USER_ID)),
+    ).toBe(true);
+  });
 });
+
+function predicateContainsEq(predicate: unknown, column: unknown, value: unknown): boolean {
+  if (!predicate || typeof predicate !== 'object') return false;
+  const node = predicate as {
+    type?: string;
+    column?: unknown;
+    value?: unknown;
+    conditions?: unknown[];
+  };
+  if (node.type === 'eq') return node.column === column && node.value === value;
+  return node.conditions?.some((child) => predicateContainsEq(child, column, value)) ?? false;
+}

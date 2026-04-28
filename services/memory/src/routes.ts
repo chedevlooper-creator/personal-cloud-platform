@@ -21,7 +21,7 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
         typeof headerUserId === 'string' &&
         headerUserId.length > 0
       ) {
-        return headerUserId;
+        return memoryService.verifyUserExists(headerUserId);
       }
     }
     const sessionId = request.cookies.sessionId;

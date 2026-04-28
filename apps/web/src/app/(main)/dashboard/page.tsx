@@ -98,10 +98,10 @@ export default function DashboardPage() {
         {/* Active Model */}
         <DashboardCard title="Active Model" icon={Sparkles}>
           <div className="flex items-center gap-2">
-            <StatusBadge variant="info" dot>Mock AI</StatusBadge>
+            <StatusBadge variant="success" dot>{process.env.NEXT_PUBLIC_DEFAULT_MODEL || 'MiniMax-M2.7'}</StatusBadge>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Add an API key in Settings to use real models
+            Configured via NEXT_PUBLIC_DEFAULT_MODEL. Manage providers in Settings.
           </p>
         </DashboardCard>
 

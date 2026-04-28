@@ -61,6 +61,7 @@ const settingsTabs: {
 ];
 
 const PROVIDER_OPTIONS = [
+  { value: 'minimax', label: 'MiniMax', placeholder: 'sk-...' },
   { value: 'openai', label: 'OpenAI', placeholder: 'sk-...' },
   { value: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-...' },
   { value: 'google', label: 'Google AI', placeholder: 'AI...' },
@@ -363,7 +364,7 @@ export default function SettingsPage() {
                 Select the AI model for new conversations.
               </p>
               <div className="mt-4 space-y-2">
-                {['Mock AI (Free)', 'GPT-4', 'GPT-4o', 'Claude 3.5 Sonnet', 'Gemini 2.0 Flash'].map(
+                {['MiniMax-M2.7', 'MiniMax-Text-01', 'GPT-4o', 'Claude 3.5 Sonnet', 'Gemini 2.0 Flash'].map(
                   (model, i) => (
                     <button
                       key={model}

@@ -101,7 +101,7 @@ export class RuntimeService {
     await db
       .update(runtimes)
       .set({ status: 'running', lastStartedAt: new Date() })
-      .where(eq(runtimes.id, runtimeId));
+      .where(and(eq(runtimes.id, runtimeId), eq(runtimes.userId, userId)));
 
     await db.insert(runtimeEvents).values({
       runtimeId,
@@ -118,7 +118,7 @@ export class RuntimeService {
     await db
       .update(runtimes)
       .set({ status: 'stopped', lastStoppedAt: new Date() })
-      .where(eq(runtimes.id, runtimeId));
+      .where(and(eq(runtimes.id, runtimeId), eq(runtimes.userId, userId)));
 
     await db.insert(runtimeEvents).values({
       runtimeId,
@@ -194,7 +194,7 @@ export class RuntimeService {
     if (!runtime || !runtime.containerId) throw new Error('Runtime or container not found');
 
     await this.provider.destroy(runtime.containerId);
-    await db.delete(runtimes).where(eq(runtimes.id, runtimeId));
+    await db.delete(runtimes).where(and(eq(runtimes.id, runtimeId), eq(runtimes.userId, userId)));
   }
 
   private async getRuntime(runtimeId: string, userId: string) {

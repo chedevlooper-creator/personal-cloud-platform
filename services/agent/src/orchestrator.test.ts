@@ -125,4 +125,21 @@ describe('AgentOrchestrator', () => {
 
     expect(messages.map((message) => message.taskId)).toEqual(['owned-task']);
   });
+
+  it('runAgentLoop bails out when the task does not belong to the caller', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    // Simulate a tenant-scoped lookup miss: the task exists but is owned by a
+    // different user, so the userId-filtered findFirst returns null.
+    mockDb.query.tasks.findFirst.mockResolvedValue(null);
+    const orchestrator = new AgentOrchestrator(logger);
+
+    await (orchestrator as unknown as {
+      runAgentLoop: (taskId: string, userId: string) => Promise<void>;
+    }).runAgentLoop('550e8400-e29b-41d4-a716-446655440099', USER_ID);
+
+    // The user-scoped lookup returned no row, so we must not transition the task
+    // to "executing" or write any steps for it.
+    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
 });

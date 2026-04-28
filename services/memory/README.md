@@ -1,0 +1,61 @@
+# @pcp/memory-service
+
+Fastify v4 service that owns long-term memory: writes embeddings into
+`memory_entries` and serves cosine similarity searches via pgvector.
+Port **3005**, routes under `/api`.
+
+## Routes
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/api/memory/entries` | Create an entry; embeds `content` and stores the vector. |
+| `POST` | `/api/memory/search` | Cosine search; tenant-scoped to `userId`. |
+| `PATCH` | `/api/memory/entries/:id` | Update content/metadata; re-embeds when content changes. |
+| `DELETE` | `/api/memory/entries/:id` | Delete entry. |
+
+Entries carry a `type` of `short-term`, `long-term`, or `episodic` plus
+optional `workspaceId`, `taskId`, and `tags[]`.
+
+## Embedding providers
+
+`src/embeddings/`:
+
+- **OpenAI** (`text-embedding-3-small`, 1536 dims) — used when
+  `OPENAI_API_KEY` is set to a real key (not `dev-…` and not containing
+  `change_me`).
+- **Local hash fallback** (`embeddings/local.ts`) — SHA-256 per token
+  spread across a 1536-dim Float64Array, signed, L2-normalized. Pure
+  TypeScript, no external dependency. Deterministic and good enough for
+  development; quality is degraded vs. real embeddings, so prefer OpenAI
+  in production.
+
+The provider is selected once at startup based on the env. The dimension
+must remain **1536** to match the schema's `vector(1536)` column.
+
+## Database
+
+The pgvector extension is required (`postgres:pgvector` image is wired up
+in `infra/docker/docker-compose.yml`). The schema declares a custom
+Drizzle type for `vector(1536)` in
+[`packages/db/src/schema/memory_entries.ts`](../../packages/db/src/schema/memory_entries.ts).
+A production-grade ivfflat/hnsw index is **not** yet created — searches
+are sequential scans today; tracked in
+[docs/PROGRESS.md](../../docs/PROGRESS.md).
+
+## Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Selects the OpenAI provider when present and non-dev. |
+| `DATABASE_URL` | Postgres + pgvector. |
+| `INTERNAL_SERVICE_TOKEN` | Required for agent tool calls. |
+| `AUTH_SERVICE_URL` | Cookie session validation. |
+
+## Scripts
+
+```bash
+pnpm --filter @pcp/memory-service dev
+pnpm --filter @pcp/memory-service build
+pnpm --filter @pcp/memory-service test
+pnpm --filter @pcp/memory-service typecheck
+```

@@ -31,7 +31,8 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         typeof headerUserId === 'string' &&
         headerUserId.length > 0
       ) {
-        return headerUserId;
+        // Defence-in-depth: confirm the user id actually exists before trusting it.
+        return workspaceService.verifyUserExists(headerUserId);
       }
     }
     const sessionId = request.cookies.sessionId;
@@ -289,12 +290,12 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
 
   // Get single file metadata
   server.get(
-    '/workspaces/:id/files/*path',
+    '/workspaces/:id/files/*',
     {
       schema: {
         params: z.object({
           id: z.string().uuid(),
-          path: z.string(),
+          '*': z.string(),
         }),
         response: {
           200: fileMetadataSchema,
@@ -308,7 +309,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' } as any);
       }
 
-      const filePath = '/' + request.params.path;
+      const filePath = '/' + (request.params as any)['*'];
       const file = await workspaceService.getFile(request.params.id, userId, filePath);
 
       if (!file) {
@@ -450,12 +451,12 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
 
   // Delete file
   server.delete(
-    '/workspaces/:id/files/*path',
+    '/workspaces/:id/files/*',
     {
       schema: {
         params: z.object({
           id: z.string().uuid(),
-          path: z.string(),
+          '*': z.string(),
         }),
       },
     },
@@ -466,7 +467,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' } as any);
       }
 
-      const filePath = '/' + request.params.path;
+      const filePath = '/' + (request.params as any)['*'];
       await workspaceService.deleteFile(request.params.id, userId, filePath);
 
       return { success: true };

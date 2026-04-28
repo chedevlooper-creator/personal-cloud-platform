@@ -21,7 +21,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
         typeof headerUserId === 'string' &&
         headerUserId.length > 0
       ) {
-        return headerUserId;
+        return runtimeService.verifyUserExists(headerUserId);
       }
     }
     const sessionId = request.cookies.sessionId;

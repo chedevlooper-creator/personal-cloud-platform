@@ -7,14 +7,26 @@ import {
 import { eq, and, sql } from 'drizzle-orm';
 import { EmbeddingProvider } from './embeddings/types';
 import { OpenAIEmbeddingProvider } from './embeddings/openai';
+import { LocalHashEmbeddingProvider } from './embeddings/local';
 import { env } from './env';
 
 export class MemoryService {
   private embeddings: EmbeddingProvider;
 
   constructor(private logger: any) {
-    this.embeddings = new OpenAIEmbeddingProvider(env.OPENAI_API_KEY);
-    this.logger.info('MemoryService initialized');
+    const apiKey = env.OPENAI_API_KEY;
+    const useRemote =
+      apiKey && !apiKey.startsWith('dev-') && !apiKey.toLowerCase().includes('change_me');
+    if (useRemote) {
+      this.embeddings = new OpenAIEmbeddingProvider(apiKey);
+      this.logger.info({ provider: 'openai' }, 'MemoryService initialized');
+    } else {
+      this.embeddings = new LocalHashEmbeddingProvider(1536);
+      this.logger.warn(
+        { provider: 'local-hash' },
+        'MemoryService using local hash embeddings — set OPENAI_API_KEY for higher recall',
+      );
+    }
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {

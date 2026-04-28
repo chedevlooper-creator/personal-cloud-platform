@@ -8,7 +8,7 @@ import { env } from '../env';
 import { dispatchAutomationRunNotification } from './notify';
 
 // Initialize Redis connection
-const connection = new IORedis(env.REDIS_URL);
+const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
 export const automationQueue = new Queue('automations', { connection });
 
