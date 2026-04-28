@@ -94,6 +94,61 @@ describe('channels/router constants', () => {
     expect(predicateContainsEq(taskWhere, tasks.id, 'task-1')).toBe(true);
     expect(predicateContainsEq(taskWhere, tasks.userId, 'user-1')).toBe(true);
   });
+
+  it('does not expose another tenant task output when polling a channel reply', async () => {
+    const { handleIncoming } = await import('./router');
+    const { tasks } = await import('@pcp/db/src/schema');
+    mockDb.query.channelLinks.findFirst.mockResolvedValue({
+      id: 'link-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      channel: 'telegram',
+      externalId: 'external-user-1',
+      enabled: true,
+    });
+    mockDb.query.conversations.findFirst.mockResolvedValue({
+      id: 'conversation-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      channel: 'telegram',
+      channelThreadId: 'thread-1',
+    });
+    mockDb.query.tasks.findFirst.mockImplementation(async (query: { where: unknown }) => {
+      if (predicateContainsEq(query.where, tasks.id, 'task-1')) {
+        if (predicateContainsEq(query.where, tasks.userId, 'user-1')) return null;
+        return {
+          id: 'task-1',
+          userId: 'user-2',
+          status: 'completed',
+          output: 'other tenant output',
+        };
+      }
+      return null;
+    });
+    const orchestrator = {
+      createTask: vi.fn(async () => ({ id: 'task-1' })),
+    };
+    const adapter = {
+      kind: 'telegram' as const,
+      sendReply: vi.fn(async () => undefined),
+    };
+
+    await handleIncoming(
+      {
+        channel: 'telegram',
+        externalUserId: 'external-user-1',
+        externalThreadId: 'thread-1',
+        body: 'hello',
+        receivedAt: new Date('2026-04-29T00:00:00.000Z'),
+      },
+      orchestrator as never,
+      adapter,
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    );
+
+    expect(adapter.sendReply).toHaveBeenCalledWith('thread-1', 'Task kayboldu, tekrar dene.');
+    expect(adapter.sendReply).not.toHaveBeenCalledWith('thread-1', 'other tenant output');
+  });
 });
 
 describe('channels/telegram', () => {

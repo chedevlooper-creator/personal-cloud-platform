@@ -4,12 +4,13 @@ const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
 const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440002';
 const SERVICE_ID = '550e8400-e29b-41d4-a716-446655440003';
 
-const { mockDb, createContainer, updateWherePredicates } = vi.hoisted(() => {
+const { mockDb, createContainer, updateWherePredicates, deleteWherePredicates } = vi.hoisted(() => {
   const createContainer = vi.fn(async () => ({
     id: 'container-1',
     start: vi.fn(async () => undefined),
   }));
   const updateWherePredicates: unknown[] = [];
+  const deleteWherePredicates: unknown[] = [];
 
   const mockDb = {
     query: {
@@ -32,7 +33,9 @@ const { mockDb, createContainer, updateWherePredicates } = vi.hoisted(() => {
       })),
     })),
     delete: vi.fn(() => ({
-      where: vi.fn(),
+      where: vi.fn((predicate: unknown) => {
+        deleteWherePredicates.push(predicate);
+      }),
     })),
   };
 
@@ -62,7 +65,7 @@ const { mockDb, createContainer, updateWherePredicates } = vi.hoisted(() => {
     };
   }
 
-  return { mockDb, createContainer, updateWherePredicates };
+  return { mockDb, createContainer, updateWherePredicates, deleteWherePredicates };
 });
 
 vi.mock('@pcp/db/src/client', () => ({
@@ -90,6 +93,7 @@ describe('PublishService security boundaries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     updateWherePredicates.length = 0;
+    deleteWherePredicates.length = 0;
     mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
     mockDb.query.hostedServices.findFirst.mockResolvedValue({
       id: SERVICE_ID,
@@ -181,6 +185,20 @@ describe('PublishService security boundaries', () => {
         predicateContainsEq(where, hostedServices.userId, USER_ID),
       ),
     ).toBe(true);
+  });
+
+  it('scopes hosted service deletes by service id and authenticated user', async () => {
+    const { PublishService } = await import('./service');
+    const { hostedServices } = await import('@pcp/db/src/schema');
+    const service = new PublishService();
+
+    await service.deleteService(SERVICE_ID, USER_ID);
+
+    expect(deleteWherePredicates.length).toBe(1);
+    expect(predicateContainsEq(deleteWherePredicates[0], hostedServices.id, SERVICE_ID)).toBe(true);
+    expect(predicateContainsEq(deleteWherePredicates[0], hostedServices.userId, USER_ID)).toBe(
+      true,
+    );
   });
 });
 

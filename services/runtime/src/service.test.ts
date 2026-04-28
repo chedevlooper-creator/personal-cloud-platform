@@ -4,47 +4,50 @@ import pino from 'pino';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
 const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440002';
 
-const { mockDb, providerCreate, providerStart, providerDestroy } = vi.hoisted(() => {
-  const providerCreate = vi.fn(async () => 'container-1');
-  const providerStart = vi.fn();
-  const providerDestroy = vi.fn();
-  const insertReturning = vi.fn(async () => [
-    {
-      id: '550e8400-e29b-41d4-a716-446655440003',
-      userId: USER_ID,
-      workspaceId: WORKSPACE_ID,
-      image: 'node:20-alpine',
-      containerId: 'container-1',
-      status: 'pending',
-      createdAt: new Date('2026-04-27T00:00:00.000Z'),
-      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
-    },
-  ]);
+const { mockDb, providerCreate, providerStart, providerStop, providerDestroy, providerExec } =
+  vi.hoisted(() => {
+    const providerCreate = vi.fn(async () => 'container-1');
+    const providerStart = vi.fn();
+    const providerStop = vi.fn();
+    const providerDestroy = vi.fn();
+    const providerExec = vi.fn();
+    const insertReturning = vi.fn(async () => [
+      {
+        id: '550e8400-e29b-41d4-a716-446655440003',
+        userId: USER_ID,
+        workspaceId: WORKSPACE_ID,
+        image: 'node:20-alpine',
+        containerId: 'container-1',
+        status: 'pending',
+        createdAt: new Date('2026-04-27T00:00:00.000Z'),
+        updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+      },
+    ]);
 
-  const mockDb = {
-    query: {
-      sessions: { findFirst: vi.fn() },
-      users: { findFirst: vi.fn() },
-      workspaces: { findFirst: vi.fn() },
-      runtimes: { findFirst: vi.fn() },
-    },
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        returning: insertReturning,
+    const mockDb = {
+      query: {
+        sessions: { findFirst: vi.fn() },
+        users: { findFirst: vi.fn() },
+        workspaces: { findFirst: vi.fn() },
+        runtimes: { findFirst: vi.fn() },
+      },
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          returning: insertReturning,
+        })),
       })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(),
+        })),
+      })),
+      delete: vi.fn(() => ({
         where: vi.fn(),
       })),
-    })),
-    delete: vi.fn(() => ({
-      where: vi.fn(),
-    })),
-  };
+    };
 
-  return { mockDb, providerCreate, providerStart, providerDestroy };
-});
+    return { mockDb, providerCreate, providerStart, providerStop, providerDestroy, providerExec };
+  });
 
 vi.mock('@pcp/db/src/client', () => ({
   db: mockDb,
@@ -62,9 +65,9 @@ vi.mock('./provider/docker', () => ({
   DockerProvider: vi.fn(() => ({
     create: providerCreate,
     start: providerStart,
-    stop: vi.fn(),
+    stop: providerStop,
     destroy: providerDestroy,
-    exec: vi.fn(),
+    exec: providerExec,
     attach: vi.fn(),
     getStatus: vi.fn(),
   })),
@@ -141,6 +144,46 @@ describe('RuntimeService workspace ownership', () => {
     expect(providerStart).toHaveBeenCalledWith('container-1');
     expect(predicateContainsEq(updateWhere, runtimes.id, 'runtime-1')).toBe(true);
     expect(predicateContainsEq(updateWhere, runtimes.userId, USER_ID)).toBe(true);
+  });
+
+  it('scopes runtime stop updates by runtime id and authenticated user', async () => {
+    const { RuntimeService } = await import('./service');
+    const { runtimes } = await import('@pcp/db/src/schema');
+    let updateWhere: unknown;
+    mockDb.query.runtimes.findFirst.mockResolvedValue({
+      id: 'runtime-1',
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      containerId: 'container-1',
+      status: 'running',
+    });
+    mockDb.update.mockReturnValue({
+      set: vi.fn(() => ({
+        where: vi.fn((predicate: unknown) => {
+          updateWhere = predicate;
+        }),
+      })),
+    });
+    const service = new RuntimeService(logger);
+
+    await service.stopRuntime('runtime-1', USER_ID);
+
+    expect(providerStop).toHaveBeenCalledWith('container-1');
+    expect(predicateContainsEq(updateWhere, runtimes.id, 'runtime-1')).toBe(true);
+    expect(predicateContainsEq(updateWhere, runtimes.userId, USER_ID)).toBe(true);
+  });
+
+  it('does not execute commands or write logs for a runtime outside the tenant', async () => {
+    const { RuntimeService } = await import('./service');
+    mockDb.query.runtimes.findFirst.mockResolvedValue(null);
+    const service = new RuntimeService(logger);
+
+    await expect(service.execCommand('runtime-1', USER_ID, ['id'])).rejects.toThrow(
+      'Runtime not running or container not found',
+    );
+
+    expect(providerExec).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it('scopes runtime deletes by runtime id and authenticated user', async () => {

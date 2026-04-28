@@ -409,7 +409,7 @@ export class WorkspaceService {
         storageUsed: workspace.storageUsed + data.size,
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return file;
   }
@@ -491,7 +491,7 @@ export class WorkspaceService {
         storageUsed: workspace.storageUsed + size,
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return file;
   }
@@ -581,7 +581,7 @@ export class WorkspaceService {
         storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return { bytesWritten: size, path: normalizedPath };
   }
@@ -670,7 +670,7 @@ export class WorkspaceService {
         storageUsed: Math.max(0, workspace.storageUsed - fileSize),
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
   }
 
   async moveFile(
@@ -811,7 +811,13 @@ export class WorkspaceService {
           sizeBytes: buffer.byteLength.toString(),
           fileCount: archive.files.length,
         })
-        .where(eq(snapshots.id, snapshot.id))
+        .where(
+          and(
+            eq(snapshots.id, snapshot.id),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        )
         .returning();
 
       return updated ?? snapshot;
@@ -821,7 +827,13 @@ export class WorkspaceService {
       await db
         .update(snapshots)
         .set({ status: 'failed', error: message })
-        .where(eq(snapshots.id, snapshot.id));
+        .where(
+          and(
+            eq(snapshots.id, snapshot.id),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        );
       throw new WorkspaceError(`Snapshot failed: ${message}`, 500);
     }
   }
@@ -846,7 +858,13 @@ export class WorkspaceService {
     await db
       .update(snapshots)
       .set({ deletedAt: new Date(), status: 'deleted' })
-      .where(eq(snapshots.id, snapshotId));
+      .where(
+        and(
+          eq(snapshots.id, snapshotId),
+          eq(snapshots.userId, userId),
+          isNull(snapshots.deletedAt),
+        ),
+      );
   }
 
   async restoreSnapshot(snapshotId: string, userId: string): Promise<{ restoredFiles: number }> {
@@ -872,7 +890,16 @@ export class WorkspaceService {
       throw new WorkspaceError('Failed to create pre-restore snapshot', 500);
     }
 
-    await db.update(snapshots).set({ status: 'restoring' }).where(eq(snapshots.id, snapshotId));
+    await db
+      .update(snapshots)
+      .set({ status: 'restoring' })
+      .where(
+        and(
+          eq(snapshots.id, snapshotId),
+          eq(snapshots.userId, userId),
+          isNull(snapshots.deletedAt),
+        ),
+      );
 
     try {
       const buffer = await this.storage.getBuffer(snapshot.storageKey);
@@ -885,7 +912,16 @@ export class WorkspaceService {
 
       const restoredCount = await this.applySnapshotArchive(snapshot.workspaceId, userId, archive);
 
-      await db.update(snapshots).set({ status: 'ready' }).where(eq(snapshots.id, snapshotId));
+      await db
+        .update(snapshots)
+        .set({ status: 'ready' })
+        .where(
+          and(
+            eq(snapshots.id, snapshotId),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        );
 
       return { restoredFiles: restoredCount };
     } catch (err) {
@@ -894,7 +930,13 @@ export class WorkspaceService {
       await db
         .update(snapshots)
         .set({ status: 'failed', error: message })
-        .where(eq(snapshots.id, snapshotId));
+        .where(
+          and(
+            eq(snapshots.id, snapshotId),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        );
       throw new WorkspaceError(`Restore failed: ${message}`, 500);
     }
   }
@@ -982,7 +1024,7 @@ export class WorkspaceService {
     await db
       .update(workspaces)
       .set({ storageUsed: totalSize, updatedAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return restored;
   }

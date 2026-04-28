@@ -24,23 +24,25 @@ without leaking tenant data, credentials, or host resources.
 - [x] pnpm workspace exists with `apps/*`, `services/*`, and `packages/*`.
 - [x] Next.js 16 and React 19 web app exists in `apps/web`.
 - [x] Seven Fastify services exist for auth, workspace, runtime, agent, memory,
-  publish, and browser.
+      publish, and browser.
 - [x] PostgreSQL/pgvector, Redis, MinIO, Traefik, and Mailhog local infra exists.
 - [x] `@pcp/db` owns schema, migrations, seed, and DB client.
 - [x] `@pcp/shared` provides source-only Zod DTOs with no build artifact.
 - [x] Existing docs describe agent tools, BYOK, data model, production guidance,
-  and current open work.
+      and current open work.
+- [x] Phase 2 validated representative tenant isolation for DB predicates,
+      storage paths, runtime/publish container metadata, channel task polling, and
+      snapshot audit details.
 
 ### Active
 
 - [ ] Centralize and harden authentication/session validation across services.
-- [ ] Enforce tenant scoping in every data, storage, runtime, and hosting path.
 - [ ] Validate service environment configuration at startup and reject dummy
-  production secrets.
+      production secrets.
 - [ ] Standardize API error envelopes, logging fields, and audit coverage.
 - [ ] Harden Docker runtime and publish sandboxes for untrusted execution.
 - [ ] Make agent approvals, task durability, streaming, memory, and telemetry
-  production-ready.
+      production-ready.
 - [ ] Add CI, targeted test coverage, metrics, traces, and frontend polish.
 
 ### Out of Scope
@@ -98,19 +100,21 @@ six services or a no-op typecheck.
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Keep pnpm monorepo | Shared types and atomic cross-service changes are valuable. | Pending |
-| Keep Drizzle as DB layer | SQL-first schema ownership already exists in `@pcp/db`. | Pending |
-| Harden Docker before microVM migration | Docker is the current implementation and fastest path to safer MVP. | Pending |
-| Keep pgvector for memory | Avoids a second vector database while scale is modest. | Pending |
-| Treat GSD as production-readiness tracker | Existing codebase already exists; roadmap should focus on hardening and verification. | Pending |
+| Decision                                                | Rationale                                                                             | Outcome              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------- |
+| Keep pnpm monorepo                                      | Shared types and atomic cross-service changes are valuable.                           | Pending              |
+| Keep Drizzle as DB layer                                | SQL-first schema ownership already exists in `@pcp/db`.                               | Pending              |
+| Harden Docker before microVM migration                  | Docker is the current implementation and fastest path to safer MVP.                   | Pending              |
+| Keep pgvector for memory                                | Avoids a second vector database while scale is modest.                                | Pending              |
+| Treat GSD as production-readiness tracker               | Existing codebase already exists; roadmap should focus on hardening and verification. | Active               |
+| Use representative predicate tests for tenant isolation | They catch regressions without introducing a broad repository rewrite.                | Validated in Phase 2 |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 After each phase transition:
+
 1. Requirements invalidated? Move to Out of Scope with reason.
 2. Requirements validated? Move to Validated with phase reference.
 3. New requirements emerged? Add to Active.
@@ -118,10 +122,12 @@ After each phase transition:
 5. What This Is still accurate? Update if drifted.
 
 After each milestone:
+
 1. Full review of all sections.
 2. Core Value check - still the right priority?
 3. Audit Out of Scope - reasons still valid?
 4. Update Context with current state.
 
 ---
-*Last updated: 2026-04-28 after GSD initialization from existing repo docs*
+
+_Last updated: 2026-04-29 after Phase 2 tenant isolation completion_
