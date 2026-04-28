@@ -68,7 +68,7 @@ at the boundary where side effects happen.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: Audit and enforce DB/resource scoping.
+- [x] 02-01: Audit and enforce DB/resource scoping.
 - [ ] 02-02: Harden storage paths, runtime labels, and audit coverage.
 - [ ] 02-03: Add tenant isolation and contract regression tests.
 
@@ -135,7 +135,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contracts, Config, And Auth Foundation | 3/3 | Complete | 2026-04-28 |
-| 2. Tenant Isolation And Audit Hardening | 0/3 | Ready to execute | - |
+| 2. Tenant Isolation And Audit Hardening | 1/3 | In progress | - |
 | 3. Runtime And Publish Sandbox Hardening | 0/3 | Not started | - |
 | 4. Agent Durability, Approval, And Memory | 0/3 | Not started | - |
 | 5. Delivery, Observability, And Frontend Polish | 0/2 | Not started | - |

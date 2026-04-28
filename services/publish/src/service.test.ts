@@ -4,11 +4,12 @@ const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
 const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440002';
 const SERVICE_ID = '550e8400-e29b-41d4-a716-446655440003';
 
-const { mockDb, createContainer } = vi.hoisted(() => {
+const { mockDb, createContainer, updateWherePredicates } = vi.hoisted(() => {
   const createContainer = vi.fn(async () => ({
     id: 'container-1',
     start: vi.fn(async () => undefined),
   }));
+  const updateWherePredicates: unknown[] = [];
 
   const mockDb = {
     query: {
@@ -22,9 +23,12 @@ const { mockDb, createContainer } = vi.hoisted(() => {
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
-        where: vi.fn(() => ({
-          returning: vi.fn(async () => [hostedService()]),
-        })),
+        where: vi.fn((predicate: unknown) => {
+          updateWherePredicates.push(predicate);
+          return {
+            returning: vi.fn(async () => [hostedService()]),
+          };
+        }),
       })),
     })),
     delete: vi.fn(() => ({
@@ -58,7 +62,7 @@ const { mockDb, createContainer } = vi.hoisted(() => {
     };
   }
 
-  return { mockDb, createContainer };
+  return { mockDb, createContainer, updateWherePredicates };
 });
 
 vi.mock('@pcp/db/src/client', () => ({
@@ -85,6 +89,7 @@ vi.mock('dockerode', () => ({
 describe('PublishService security boundaries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    updateWherePredicates.length = 0;
     mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
     mockDb.query.hostedServices.findFirst.mockResolvedValue({
       id: SERVICE_ID,
@@ -155,27 +160,20 @@ describe('PublishService security boundaries', () => {
   it('scopes hosted service lifecycle status updates by service id and authenticated user', async () => {
     const { PublishService } = await import('./service');
     const { hostedServices } = await import('@pcp/db/src/schema');
-    const wherePredicates: unknown[] = [];
-    mockDb.update.mockReturnValue({
-      set: vi.fn(() => ({
-        where: vi.fn((predicate: unknown) => {
-          wherePredicates.push(predicate);
-          return {
-            returning: vi.fn(async () => []),
-          };
-        }),
-      })),
-    });
     const service = new PublishService();
 
     await service.startService(SERVICE_ID, USER_ID);
 
-    expect(wherePredicates.length).toBeGreaterThan(0);
+    expect(updateWherePredicates.length).toBeGreaterThan(0);
     expect(
-      wherePredicates.some((where) => predicateContainsEq(where, hostedServices.id, SERVICE_ID)),
+      updateWherePredicates.some((where) =>
+        predicateContainsEq(where, hostedServices.id, SERVICE_ID),
+      ),
     ).toBe(true);
     expect(
-      wherePredicates.every((where) => predicateContainsEq(where, hostedServices.userId, USER_ID)),
+      updateWherePredicates.every((where) =>
+        predicateContainsEq(where, hostedServices.userId, USER_ID),
+      ),
     ).toBe(true);
   });
 });

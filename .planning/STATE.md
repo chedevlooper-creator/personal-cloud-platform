@@ -11,18 +11,18 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 ## Current Position
 
 Phase: 2 of 5 (Tenant Isolation And Audit Hardening)
-Plan: 0 of 3 in current phase
-Status: Phase 2 planned; ready to execute 02-01
-Last activity: 2026-04-29 - Phase 2 context, research, and 3 plan files
-created for tenant isolation, storage/container tenant metadata, audit hygiene,
-and regression tests.
+Plan: 1 of 3 in current phase
+Status: 02-01 complete; ready to execute 02-02
+Last activity: 2026-04-29 - 02-01 completed: representative DB side-effect
+predicates now include tenant ownership checks for workspace datasets, runtime
+lifecycle, publish lifecycle, and agent channel task polling.
 
-Progress: [##--------] 20%
+Progress: [###-------] 29%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: N/A
 - Total execution time: 0.0 hours
 
@@ -31,14 +31,14 @@ Progress: [##--------] 20%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 3/3 | 0.5h | 0.2h |
-| 2 | 0/3 | 0.0h | N/A |
+| 2 | 1/3 | 0.4h | 0.4h |
 | 3 | 0/3 | 0.0h | N/A |
 | 4 | 0/3 | 0.0h | N/A |
 | 5 | 0/2 | 0.0h | N/A |
 
 **Recent Trend:**
-- Last 5 plans: 01-01, 01-02, 01-03
-- Trend: Phase 1 foundation complete; Phase 2 ready for execution.
+- Last 5 plans: 01-01, 01-02, 01-03, 02-01
+- Trend: Phase 2 DB/resource scoping complete; storage/audit hardening next.
 
 ## Accumulated Context
 
@@ -72,6 +72,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-29 02:04 +03:00
-Stopped at: Phase 2 planned; execute 02-01 next.
-Resume file: .planning/phases/02-tenant-isolation-and-audit-hardening/02-01-PLAN.md
+Last session: 2026-04-29 02:32 +03:00
+Stopped at: 02-01 complete; execute 02-02 next.
+Resume file: .planning/phases/02-tenant-isolation-and-audit-hardening/02-02-PLAN.md

@@ -73,6 +73,7 @@ describe('channels/router constants', () => {
       createTask: vi.fn(async () => ({ id: 'task-1' })),
     };
     const adapter = {
+      kind: 'telegram' as const,
       sendReply: vi.fn(async () => undefined),
     };
 

@@ -11,7 +11,9 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 - [x] **SEC-01**: User session validation is centralized or contract-compatible
   across all services so auth behavior cannot drift per service.
 - [ ] **SEC-02**: Every DB-backed resource read/write enforces `userId`,
-  `organizationId`, or workspace ownership at the persistence boundary.
+  `organizationId`, or workspace ownership at the persistence boundary. Phase
+  2 plan 02-01 added representative scoped DB mutation/read coverage for
+  datasets, runtime lifecycle, publish lifecycle, and channel task polling.
 - [ ] **SEC-03**: File storage keys, snapshot paths, runtime labels, and hosted
   app labels are tenant-prefixed and path traversal safe.
 - [ ] **SEC-04**: Privileged actions are audit logged without leaking PII,
@@ -68,7 +70,8 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
   gate before merge.
 - [ ] **TST-01**: Critical services have tests for tenant isolation, env
   validation, API errors, and sandbox policy; `apps/web` and `packages/shared`
-  have baseline coverage.
+  have baseline coverage. Phase 2 plan 02-01 added focused tenant isolation
+  regression tests for DB/resource scoping.
 - [ ] **FE-01**: Frontend chat, tool approval, and async mutation states are
   accessible, realtime-aware, and invalidated predictably.
 - [ ] **FE-02**: The web UI has an accessibility and mixed TR/EN copy pass for
@@ -106,10 +109,10 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 | API-01 | Phase 1 | Partial |
 | API-02 | Phase 1 | Partial |
 | OBS-01 | Phase 1 | Partial |
-| SEC-02 | Phase 2 | Pending |
+| SEC-02 | Phase 2 | Partial |
 | SEC-03 | Phase 2 | Pending |
 | SEC-04 | Phase 2 | Pending |
-| TST-01 | Phase 2 | Pending |
+| TST-01 | Phase 2 | Partial |
 | SBOX-01 | Phase 3 | Pending |
 | SBOX-02 | Phase 3 | Pending |
 | SBOX-03 | Phase 3 | Pending |
@@ -131,4 +134,4 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-28 after Phase 1 execution*
+*Last updated: 2026-04-29 after Phase 2 plan 02-01 execution*
