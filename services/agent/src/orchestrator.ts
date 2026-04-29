@@ -4,6 +4,7 @@ import {
   taskSteps,
   conversations,
   toolCalls,
+  approvalRequests,
   workspaces,
   personas as personasTable,
   skills as skillsTable,
@@ -35,6 +36,10 @@ import {
 import { WorkspaceClient } from './clients/workspace';
 import { RuntimeClient } from './clients/runtime';
 import { MemoryClient } from './clients/memory';
+
+const TOOL_APPROVAL_TTL_MS = 15 * 60 * 1000;
+const INTERRUPTED_WORK_MESSAGE =
+  'Agent work was interrupted before completion and was marked failed to avoid replaying side effects.';
 
 export class AgentOrchestrator {
   private llm: LLMProvider;
@@ -270,6 +275,40 @@ export class AgentOrchestrator {
     return { success: true };
   }
 
+  async recoverInterruptedWork() {
+    const interruptedTasks = await db.query.tasks.findMany({
+      where: eq(tasks.status, 'executing'),
+    });
+    for (const task of interruptedTasks) {
+      await db
+        .update(tasks)
+        .set({ status: 'failed', output: INTERRUPTED_WORK_MESSAGE, updatedAt: new Date() })
+        .where(and(eq(tasks.id, task.id), eq(tasks.userId, task.userId)));
+      await emitAudit(task.userId, 'AGENT_TASK_RECOVERED_FAILED', {
+        taskId: task.id,
+        previousStatus: 'executing',
+      });
+    }
+
+    const runningToolCalls = await db.query.toolCalls.findMany({
+      where: eq(toolCalls.status, 'running'),
+    });
+    for (const call of runningToolCalls) {
+      await db
+        .update(toolCalls)
+        .set({
+          status: 'failed',
+          error: INTERRUPTED_WORK_MESSAGE,
+          completedAt: new Date(),
+        })
+        .where(and(eq(toolCalls.id, call.id), eq(toolCalls.userId, call.userId)));
+      await emitAudit(call.userId, 'TOOL_CALL_RECOVERED_FAILED', {
+        taskId: call.taskId,
+        toolCallId: call.id,
+      });
+    }
+  }
+
   async chat(input: string, userId?: string) {
     const userProvider = userId ? await resolveUserProvider(userId).catch(() => null) : null;
     const llm: LLMProvider = userProvider?.provider ?? this.llm;
@@ -404,28 +443,51 @@ export class AgentOrchestrator {
 
         const tool = this.registry.get(toolCall.name);
         const requiresApproval = tool?.requiresApproval ?? false;
+        const toolArgs = parseToolArguments(toolCall.arguments);
 
-        await db
+        const [recordedToolCall] = await db
           .insert(toolCalls)
           .values({
             taskId,
             userId,
+            providerCallId: toolCall.id,
             toolName: toolCall.name,
-            args: JSON.parse(toolCall.arguments),
+            args: toolArgs,
             status: requiresApproval ? 'awaiting_approval' : 'running',
           })
-          .execute();
+          .returning();
+        if (!recordedToolCall) throw new Error('Failed to record tool call');
 
         await db.insert(taskSteps).values({
           taskId,
           stepNumber: stepNumber++,
           type: 'action',
           toolName: toolCall.name,
-          toolInput: JSON.parse(toolCall.arguments),
+          toolInput: toolArgs,
         });
 
         if (requiresApproval) {
-          await db.update(tasks).set({ status: 'waiting_approval' }).where(eq(tasks.id, taskId));
+          const approval = await this.createApprovalRequest(
+            userId,
+            taskId,
+            recordedToolCall.id,
+            toolCall.name,
+            toolArgs,
+          );
+          await db
+            .update(toolCalls)
+            .set({ approvalId: approval.id })
+            .where(and(eq(toolCalls.id, recordedToolCall.id), eq(toolCalls.userId, userId)));
+          await emitAudit(userId, 'TOOL_APPROVAL_REQUESTED', {
+            taskId,
+            toolCallId: recordedToolCall.id,
+            approvalId: approval.id,
+            tool: toolCall.name,
+          });
+          await db
+            .update(tasks)
+            .set({ status: 'waiting_approval', updatedAt: new Date() })
+            .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
           return; // Pause execution
         }
 
@@ -437,10 +499,15 @@ export class AgentOrchestrator {
 
         let toolOutputStr = '';
         const ctx = this.buildToolContext(taskId, userId, task.workspaceId);
+        const startedAt = Date.now();
         try {
           const output = await this.registry.execute(toolCall.name, toolCall.arguments, ctx);
           toolOutputStr = typeof output === 'string' ? output : JSON.stringify(output);
           this.rememberRuntimeId(taskId, ctx);
+          await this.completeToolCall(recordedToolCall.id, userId, 'completed', {
+            result: toolOutputStr,
+            durationMs: String(Date.now() - startedAt),
+          });
           await emitAudit(userId, 'TOOL_EXECUTE', {
             tool: toolCall.name,
             taskId,
@@ -448,6 +515,10 @@ export class AgentOrchestrator {
           });
         } catch (error: any) {
           toolOutputStr = `Error executing tool: ${error.message}`;
+          await this.completeToolCall(recordedToolCall.id, userId, 'failed', {
+            error: error?.message,
+            durationMs: String(Date.now() - startedAt),
+          });
           await emitAudit(userId, 'TOOL_EXECUTE', {
             tool: toolCall.name,
             taskId,
@@ -524,44 +595,86 @@ export class AgentOrchestrator {
       throw new Error('Task not waiting for approval');
 
     const pendingCall = await db.query.toolCalls.findFirst({
-      where: and(eq(toolCalls.taskId, taskId), eq(toolCalls.status, 'awaiting_approval')),
+      where: and(
+        eq(toolCalls.taskId, taskId),
+        eq(toolCalls.userId, userId),
+        eq(toolCalls.status, 'awaiting_approval'),
+      ),
     });
 
     if (!pendingCall) throw new Error('No pending tool calls');
 
+    const approval = await db.query.approvalRequests.findFirst({
+      where: and(
+        eq(approvalRequests.toolCallId, pendingCall.id),
+        eq(approvalRequests.taskId, taskId),
+        eq(approvalRequests.userId, userId),
+      ),
+    });
+    if (!approval) throw new Error('No pending approval request');
+
+    if (approval.expiresAt.getTime() <= Date.now()) {
+      await this.expireApproval(userId, taskId, pendingCall.id, approval.id);
+      throw new Error('Tool approval expired');
+    }
+
     await db
-      .update(toolCalls)
+      .update(approvalRequests)
       .set({
-        status: decision === 'approve' ? 'running' : 'rejected',
-        error: decision === 'reject' ? reason : null,
+        decision,
+        decisionReason: reason ?? null,
+        decidedAt: new Date(),
       })
-      .where(eq(toolCalls.id, pendingCall.id));
+      .where(and(eq(approvalRequests.id, approval.id), eq(approvalRequests.userId, userId)));
+    await emitAudit(userId, 'TOOL_APPROVAL_DECIDED', {
+      taskId,
+      toolCallId: pendingCall.id,
+      approvalId: approval.id,
+      tool: pendingCall.toolName,
+      decision,
+    });
 
     if (decision === 'reject') {
+      await this.completeToolCall(pendingCall.id, userId, 'rejected', {
+        error: reason ?? 'Rejected by user',
+      });
       await db.insert(taskSteps).values({
         taskId,
         stepNumber: 999,
         type: 'observation',
         toolOutput: `User rejected tool execution: ${reason || 'No reason provided'}`,
       });
-      await db.update(tasks).set({ status: 'executing' }).where(eq(tasks.id, taskId));
+      await db
+        .update(tasks)
+        .set({ status: 'executing', updatedAt: new Date() })
+        .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
       // Resume
       this.runAgentLoop(taskId, userId).catch(console.error);
     } else {
       // Execute tool and resume
       const ctx = this.buildToolContext(taskId, userId, task.workspaceId);
+      const startedAt = Date.now();
+      await db
+        .update(toolCalls)
+        .set({ status: 'running' })
+        .where(and(eq(toolCalls.id, pendingCall.id), eq(toolCalls.userId, userId)));
       try {
         const output = await this.registry.executeApproved(
           pendingCall.toolName,
           JSON.stringify(pendingCall.args),
           ctx,
         );
+        const toolOutput = typeof output === 'string' ? output : JSON.stringify(output);
         this.rememberRuntimeId(taskId, ctx);
         await db.insert(taskSteps).values({
           taskId,
           stepNumber: 999,
           type: 'observation',
-          toolOutput: typeof output === 'string' ? output : JSON.stringify(output),
+          toolOutput,
+        });
+        await this.completeToolCall(pendingCall.id, userId, 'completed', {
+          result: toolOutput,
+          durationMs: String(Date.now() - startedAt),
         });
         await emitAudit(userId, 'TOOL_EXECUTE_APPROVED', {
           tool: pendingCall.toolName,
@@ -575,6 +688,10 @@ export class AgentOrchestrator {
           type: 'observation',
           toolOutput: `Error executing tool: ${err.message}`,
         });
+        await this.completeToolCall(pendingCall.id, userId, 'failed', {
+          error: err?.message,
+          durationMs: String(Date.now() - startedAt),
+        });
         await emitAudit(userId, 'TOOL_EXECUTE_APPROVED', {
           tool: pendingCall.toolName,
           taskId,
@@ -583,14 +700,95 @@ export class AgentOrchestrator {
         });
       }
       await db
-        .update(toolCalls)
-        .set({ status: 'completed' })
-        .where(eq(toolCalls.id, pendingCall.id));
-      await db.update(tasks).set({ status: 'executing' }).where(eq(tasks.id, taskId));
+        .update(tasks)
+        .set({ status: 'executing', updatedAt: new Date() })
+        .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
       // Resume
       this.runAgentLoop(taskId, userId).catch(console.error);
     }
   }
+
+  private async createApprovalRequest(
+    userId: string,
+    taskId: string,
+    toolCallId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+  ) {
+    const [approval] = await db
+      .insert(approvalRequests)
+      .values({
+        userId,
+        taskId,
+        toolCallId,
+        toolName,
+        args,
+        riskNote: `${toolName} requires explicit user approval before execution.`,
+        decision: null,
+        expiresAt: new Date(Date.now() + TOOL_APPROVAL_TTL_MS),
+      })
+      .returning();
+    if (!approval) throw new Error('Failed to create approval request');
+    return approval;
+  }
+
+  private async expireApproval(
+    userId: string,
+    taskId: string,
+    toolCallId: string,
+    approvalId: string,
+  ): Promise<void> {
+    await db
+      .update(approvalRequests)
+      .set({ decision: 'expired', decidedAt: new Date() })
+      .where(and(eq(approvalRequests.id, approvalId), eq(approvalRequests.userId, userId)));
+    await db
+      .update(toolCalls)
+      .set({
+        status: 'timeout',
+        error: 'Tool approval expired before the user approved execution',
+        completedAt: new Date(),
+      })
+      .where(and(eq(toolCalls.id, toolCallId), eq(toolCalls.userId, userId)));
+    await db
+      .update(tasks)
+      .set({
+        status: 'failed',
+        output: 'Tool approval expired before execution.',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+    await emitAudit(userId, 'TOOL_APPROVAL_EXPIRED', {
+      taskId,
+      toolCallId,
+      approvalId,
+    });
+  }
+
+  private async completeToolCall(
+    toolCallId: string,
+    userId: string,
+    status: 'completed' | 'failed' | 'rejected',
+    result: { result?: string; error?: string; durationMs?: string },
+  ): Promise<void> {
+    await db
+      .update(toolCalls)
+      .set({
+        status,
+        result: result.result,
+        error: result.error,
+        durationMs: result.durationMs,
+        completedAt: new Date(),
+      })
+      .where(and(eq(toolCalls.id, toolCallId), eq(toolCalls.userId, userId)));
+  }
+}
+
+function parseToolArguments(input: string): Record<string, unknown> {
+  const parsed = JSON.parse(input);
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
 }
 
 async function emitAudit(

@@ -11,18 +11,19 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 ## Current Position
 
 Phase: 4 of 5 (Agent Durability, Approval, And Memory)
-Plan: 0 of 3 in current phase
-Status: Phase 4 planned; ready to execute 04-01
-Last activity: 2026-04-29 - Phase 4 planned: approval/recovery, streaming
-telemetry, and memory retrieval slices are ready.
+Plan: 1 of 3 in current phase
+Status: 04-01 complete; ready to execute 04-02
+Last activity: 2026-04-29 - 04-01 completed: expiring tool approvals, scoped
+approval decisions, approval audit events, and interrupted-work recovery are in
+place with regression tests.
 
-Progress: [######----] 64%
+Progress: [#######---] 71%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: N/A
 - Total execution time: 0.0 hours
 
@@ -33,14 +34,14 @@ Progress: [######----] 64%
 | 1     | 3/3   | 0.5h  | 0.2h     |
 | 2     | 3/3   | 1.2h  | 0.4h     |
 | 3     | 3/3   | 0.8h  | 0.3h     |
-| 4     | 0/3   | 0.0h  | N/A      |
+| 4     | 1/3   | 0.4h  | 0.4h     |
 | 5     | 0/2   | 0.0h  | N/A      |
 
 **Recent Trend:**
 
-- Last 5 plans: 02-02, 02-03, 03-01, 03-02, 03-03
-- Trend: Phase 3 sandbox hardening completed; Phase 4 approval and recovery
-  hardening ready to execute.
+- Last 5 plans: 02-03, 03-01, 03-02, 03-03, 04-01
+- Trend: Phase 4 approval and recovery hardening completed; streaming and
+  telemetry next.
 
 ## Accumulated Context
 
@@ -74,6 +75,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-29 03:35 +03:00
-Stopped at: Phase 4 planned; execute 04-01 next.
-Resume file: .planning/phases/04-agent-durability-approval-and-memory/04-01-PLAN.md
+Last session: 2026-04-29 03:45 +03:00
+Stopped at: 04-01 complete; execute 04-02 next.
+Resume file: .planning/phases/04-agent-durability-approval-and-memory/04-02-PLAN.md

@@ -68,10 +68,15 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 ### Agent And Automation
 
-- [ ] **AGT-01**: High-risk tools, including `run_command`, browser click, and
-      browser fill, require approval with expiry and auditable outcomes.
-- [ ] **AGT-02**: Agent tasks, task steps, and tool calls recover or fail safely
-      after process restart without double-executing side effects.
+- [x] **AGT-01**: High-risk tools, including `run_command`, browser click, and
+      browser fill, require approval with expiry and auditable outcomes. Phase 4
+      plan 04-01 added durable approval request rows with expiry, scoped
+      decisions, expired-approval blocking, and audit events for request,
+      decision, and expiry.
+- [x] **AGT-02**: Agent tasks, task steps, and tool calls recover or fail safely
+      after process restart without double-executing side effects. Phase 4 plan
+      04-01 added startup recovery that marks abandoned `executing` tasks and
+      `running` tool calls failed instead of replaying side effects silently.
 - [ ] **AGT-03**: Chat and task progress can stream to the frontend through
       WebSocket or SSE instead of relying only on polling.
 - [ ] **AGT-04**: Token usage, model choice, provider, latency, and cost metadata
@@ -140,8 +145,8 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 | SBOX-02     | Phase 3 | Complete |
 | SBOX-03     | Phase 3 | Complete |
 | SBOX-04     | Phase 3 | Complete |
-| AGT-01      | Phase 4 | Pending  |
-| AGT-02      | Phase 4 | Pending  |
+| AGT-01      | Phase 4 | Complete |
+| AGT-02      | Phase 4 | Complete |
 | AGT-03      | Phase 4 | Pending  |
 | AGT-04      | Phase 4 | Pending  |
 | MEM-01      | Phase 4 | Pending  |
@@ -159,4 +164,4 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 ---
 
 _Requirements defined: 2026-04-28_
-_Last updated: 2026-04-29 after Phase 3 plan 03-03 execution_
+_Last updated: 2026-04-29 after Phase 4 plan 04-01 execution_

@@ -126,7 +126,7 @@ progress, record cost telemetry, and use production-grade memory retrieval.
 
 Plans:
 
-- [ ] 04-01: Harden tool approval and task recovery semantics.
+- [x] 04-01: Harden tool approval and task recovery semantics.
 - [ ] 04-02: Add streaming and token/cost telemetry.
 - [ ] 04-03: Add pgvector memory indexing and retrieval improvements.
 
@@ -160,7 +160,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Contracts, Config, And Auth Foundation       | 3/3            | Complete    | 2026-04-28 |
 | 2. Tenant Isolation And Audit Hardening         | 3/3            | Complete    | 2026-04-29 |
 | 3. Runtime And Publish Sandbox Hardening        | 3/3            | Complete    | 2026-04-29 |
-| 4. Agent Durability, Approval, And Memory       | 0/3            | Not started | -          |
+| 4. Agent Durability, Approval, And Memory       | 1/3            | In progress | -          |
 | 5. Delivery, Observability, And Frontend Polish | 0/2            | Not started | -          |
 
 ## Backlog
