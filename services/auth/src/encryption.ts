@@ -38,3 +38,18 @@ export function decrypt(encrypted: string, ivBase64: string, authTagBase64: stri
 
   return decrypted;
 }
+
+export function encryptOAuthToken(token: string): string {
+  const { encrypted, iv, authTag } = encrypt(token);
+  return `enc:v1:${iv}:${authTag}:${encrypted}`;
+}
+
+export function decryptOAuthToken(token: string): string {
+  const [prefix, version, iv, authTag, encrypted] = token.split(':');
+
+  if (prefix !== 'enc' || version !== 'v1' || !iv || !authTag || !encrypted) {
+    throw new Error('Invalid encrypted OAuth token format');
+  }
+
+  return decrypt(encrypted, iv, authTag);
+}

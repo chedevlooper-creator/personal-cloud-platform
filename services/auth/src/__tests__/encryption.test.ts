@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encrypt, decrypt } from '../encryption';
+import { encrypt, decrypt, decryptOAuthToken, encryptOAuthToken } from '../encryption';
 
 describe('AES-256-GCM Encryption', () => {
   it('should encrypt and decrypt a string correctly', () => {
@@ -55,5 +55,18 @@ describe('AES-256-GCM Encryption', () => {
     const { encrypted, iv, authTag } = encrypt(plaintext);
     const decrypted = decrypt(encrypted, iv, authTag);
     expect(decrypted).toBe(plaintext);
+  });
+
+  it('should serialize OAuth tokens in an encrypted format', () => {
+    const token = 'ya29.oauth-access-token-secret';
+    const encryptedToken = encryptOAuthToken(token);
+
+    expect(encryptedToken).toMatch(/^enc:v1:/);
+    expect(encryptedToken).not.toContain(token);
+    expect(decryptOAuthToken(encryptedToken)).toBe(token);
+  });
+
+  it('should reject malformed encrypted OAuth tokens', () => {
+    expect(() => decryptOAuthToken('plaintext-token')).toThrow('Invalid encrypted OAuth token format');
   });
 });

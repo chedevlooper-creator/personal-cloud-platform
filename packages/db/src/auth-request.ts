@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { validateSessionUserId, verifyUserExists } from './session';
 
 /**
@@ -49,7 +50,7 @@ export async function resolveAuthenticatedUserId(
     const auth = readHeader(request.headers, 'authorization');
     if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
       const token = auth.slice('Bearer '.length).trim();
-      if (token && token === internalToken) {
+      if (token && constantTimeEquals(token, internalToken)) {
         const headerUserId = readHeader(request.headers, 'x-user-id');
         if (typeof headerUserId === 'string' && headerUserId.length > 0) {
           return verifyUserExists(headerUserId);
@@ -61,4 +62,21 @@ export async function resolveAuthenticatedUserId(
   const sessionId = request.cookies?.sessionId;
   if (!sessionId) return null;
   return validateSessionUserId(sessionId);
+}
+
+/**
+ * Constant-time string comparison to prevent timing-oracle attacks against
+ * the internal service token. Strings of differing length are compared
+ * against a fixed-length buffer so the early-exit path does not leak length.
+ */
+function constantTimeEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
+  if (aBuf.length !== bBuf.length) {
+    // Still perform a comparison of equal-size buffers so the timing path
+    // does not branch on length alone.
+    timingSafeEqual(aBuf, aBuf);
+    return false;
+  }
+  return timingSafeEqual(aBuf, bBuf);
 }

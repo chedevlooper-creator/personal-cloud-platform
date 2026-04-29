@@ -115,4 +115,18 @@ describe('resolveAuthenticatedUserId', () => {
     expect(result).toBe('user-cookie');
     expect(sessionHelpers.verifyUserExists).not.toHaveBeenCalled();
   });
+
+  it('rejects bearer with a different-length token (timing-safe path)', async () => {
+    sessionHelpers.validateSessionUserId.mockResolvedValue(null);
+
+    const result = await resolveAuthenticatedUserId(
+      makeRequest({
+        headers: { authorization: 'Bearer short', 'x-user-id': 'user-2' },
+      }),
+      { internalServiceToken: 'a-much-longer-secret-token-value' },
+    );
+
+    expect(result).toBeNull();
+    expect(sessionHelpers.verifyUserExists).not.toHaveBeenCalled();
+  });
 });

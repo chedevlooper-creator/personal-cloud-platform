@@ -3,6 +3,7 @@ import { users, sessions, oauthAccounts, auditLogs } from '@pcp/db/src/schema';
 import { eq, and } from 'drizzle-orm';
 import * as argon2 from 'argon2';
 import crypto from 'crypto';
+import { encryptOAuthToken } from './encryption';
 
 export type SanitizedUser = {
   id: string;
@@ -148,6 +149,9 @@ export class AuthService {
 
     if (!user) throw new Error('User not found');
 
+    const encryptedAccessToken = encryptOAuthToken(data.accessToken);
+    const encryptedRefreshToken = data.refreshToken ? encryptOAuthToken(data.refreshToken) : undefined;
+
     const existingOauth = await db.query.oauthAccounts.findFirst({
       where: and(
         eq(oauthAccounts.providerId, data.providerId),
@@ -159,8 +163,8 @@ export class AuthService {
       await db
         .update(oauthAccounts)
         .set({
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken || existingOauth.refreshToken,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken || existingOauth.refreshToken,
           updatedAt: new Date(),
         })
         .where(
@@ -174,8 +178,8 @@ export class AuthService {
         providerId: data.providerId,
         providerUserId: data.providerUserId,
         userId: user.id,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
       });
     }
 
