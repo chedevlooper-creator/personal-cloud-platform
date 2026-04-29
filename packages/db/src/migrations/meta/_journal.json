@@ -78,6 +78,13 @@
       "when": 1777400000000,
       "tag": "0010_memory_vector_index",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777500000000,
+      "tag": "0011_widen_oauth_tokens",
+      "breakpoints": true
     }
   ]
 }

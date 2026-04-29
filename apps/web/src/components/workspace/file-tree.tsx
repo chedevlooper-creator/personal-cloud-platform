@@ -144,7 +144,13 @@ function TreeBranch({ workspaceId, path, level }: { workspaceId: string; path: s
 
   const deleteMutation = useMutation({
     mutationFn: async (filePath: string) => {
-      await workspaceApi.delete(`/workspaces/${workspaceId}/files${filePath}`);
+      // filePath has form '/foo/bar baz.txt'. Encode each segment so spaces,
+      // '#', '?' and unicode survive the URL while preserving slashes.
+      const encoded = filePath
+        .split('/')
+        .map((seg) => encodeURIComponent(seg))
+        .join('/');
+      await workspaceApi.delete(`/workspaces/${workspaceId}/files${encoded}`);
     },
     onSuccess: (_, filePath) => {
       queryClient.invalidateQueries({ queryKey: ['workspace-files', workspaceId] });

@@ -119,9 +119,11 @@ export class AgentOrchestrator {
     return validateSessionUserId(sessionId);
   }
 
-  async getConversations(userId: string) {
+  async getConversations(userId: string, workspaceId?: string) {
+    const filters = [eq(conversations.userId, userId), isNull(conversations.archivedAt)];
+    if (workspaceId) filters.push(eq(conversations.workspaceId, workspaceId));
     return db.query.conversations.findMany({
-      where: and(eq(conversations.userId, userId), isNull(conversations.archivedAt)),
+      where: and(...filters),
       orderBy: (conversations, { desc }) => [desc(conversations.createdAt)],
     });
   }

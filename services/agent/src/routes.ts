@@ -143,6 +143,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     '/agent/conversations',
     {
       schema: {
+        querystring: z.object({ workspaceId: z.string().uuid().optional() }),
         response: {
           200: z.object({
             conversations: z.array(conversationResponseSchema),
@@ -154,7 +155,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
-      const convos = await orchestrator.getConversations(userId);
+      const convos = await orchestrator.getConversations(userId, request.query.workspaceId);
       return { conversations: convos };
     },
   );

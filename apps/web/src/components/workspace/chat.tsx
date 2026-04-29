@@ -3,11 +3,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Bot, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Send, Bot, Loader2, CheckCircle2, XCircle, Paperclip, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { agentApi, toastApiError} from '@/lib/api';
+import { agentApi, workspaceApi, toastApiError} from '@/lib/api';
 import { usePersonaStore } from '@/store/persona';
 import { useActiveSkillsStore } from '@/store/skills';
 
@@ -34,16 +34,22 @@ type Conversation = {
 
 export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) {
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<{ path: string; name: string }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
-  // Fetch conversations
+  // Fetch conversations scoped to the current workspace.
   const { data: convosData } = useQuery({
-    queryKey: ['agent-conversations'],
+    queryKey: ['agent-conversations', workspaceId],
     queryFn: async () => {
-      const res = await agentApi.get('/agent/conversations');
+      const res = await agentApi.get('/agent/conversations', {
+        params: { workspaceId },
+      });
       return res.data.conversations as Conversation[];
     },
+    enabled: Boolean(workspaceId),
   });
 
   const activeConversationId = convosData?.[0]?.id;
@@ -77,9 +83,13 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
     mutationFn: async (content: string) => {
       const personaId = usePersonaStore.getState().activePersonaId;
       const skillIds = useActiveSkillsStore.getState().activeSkillIds;
+      const composed =
+        attachments.length > 0
+          ? `${content}\n\n${attachments.map((a) => `[Attached: ${a.path}]`).join('\n')}`
+          : content;
       await agentApi.post('/agent/tasks', {
         workspaceId,
-        input: content,
+        input: composed,
         conversationId: activeConversationId,
         personaId: personaId ?? undefined,
         skillIds: skillIds.length > 0 ? skillIds : undefined,
@@ -92,6 +102,7 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
       } else {
         queryClient.invalidateQueries({ queryKey: ['agent-messages', activeConversationId] });
       }
+      setAttachments([]);
     },
     onError: (error) => {
       toastApiError(error, 'Failed to send message');
@@ -121,9 +132,43 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || sendMutation.isPending) return;
+    if ((!input.trim() && attachments.length === 0) || sendMutation.isPending) return;
     sendMutation.mutate(input);
     setInput('');
+  };
+
+  const handleFilePick = () => fileInputRef.current?.click();
+
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    if (!workspaceId) {
+      toast.error('Open a workspace before attaching files.');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      for (const file of files) {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('path', `/chat-uploads/${Date.now()}-${file.name}`);
+        const res = await workspaceApi.post(`/workspaces/${workspaceId}/upload`, form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const path = res.data?.path ?? `/chat-uploads/${file.name}`;
+        setAttachments((prev) => [...prev, { path, name: file.name }]);
+      }
+      toast.success(`${files.length} file${files.length > 1 ? 's' : ''} attached.`);
+    } catch (err) {
+      toastApiError(err, 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
   return (
@@ -135,11 +180,11 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {isLoadingMessages && !messages.length ? (
-          <div className="flex justify-center text-zinc-500 py-4">
+          <div className="flex justify-center text-zinc-500 py-4 animate-in fade-in duration-200">
             <Loader2 className="animate-spin h-5 w-5" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-zinc-500">
+          <div className="flex h-full flex-col items-center justify-center text-zinc-500 animate-in fade-in zoom-in-95 duration-300">
             <Bot className="mb-2 h-10 w-10 text-zinc-600" />
             <p>How can I help you today?</p>
           </div>
@@ -148,12 +193,12 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex flex-col max-w-[85%] ${
+            className={`flex flex-col max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300 ${
               msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'
             }`}
           >
             <div
-              className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+              className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap transition-colors ${
                 msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-[#37373d] text-zinc-200'
               }`}
             >
@@ -225,19 +270,64 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
       </div>
 
       <div className="border-t border-[#333333] p-3">
+        {attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-200">
+            {attachments.map((a, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1 rounded-full bg-blue-600/20 px-2 py-1 text-[11px] text-blue-200 border border-blue-500/30"
+                title={a.path}
+              >
+                <Paperclip className="h-3 w-3" />
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(idx)}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-blue-500/30 transition-colors"
+                  aria-label={`Remove ${a.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <form onSubmit={handleSend} className="flex items-center space-x-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFilesSelected}
+          />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={handleFilePick}
+            disabled={isUploading || sendMutation.isPending}
+            className="h-9 w-9 text-zinc-400 hover:text-zinc-100 hover:bg-[#3c3c3c] transition-colors"
+            aria-label="Attach files"
+            title="Attach files to message"
+          >
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Paperclip className="h-4 w-4" />
+            )}
+          </Button>
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask agent to do something..."
             disabled={sendMutation.isPending}
-            className="h-9 flex-1 bg-[#3c3c3c] border-none text-zinc-200 placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-blue-500"
+            className="h-9 flex-1 bg-[#3c3c3c] border-none text-zinc-200 placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-blue-500 transition-shadow"
           />
           <Button
             type="submit"
             size="icon"
-            className="h-9 w-9 bg-blue-600 hover:bg-blue-500"
-            disabled={!input.trim() || sendMutation.isPending}
+            className="h-9 w-9 bg-blue-600 hover:bg-blue-500 transition-colors"
+            disabled={(!input.trim() && attachments.length === 0) || sendMutation.isPending}
             aria-label={sendMutation.isPending ? 'Sending message' : 'Send message'}
           >
             {sendMutation.isPending ? (

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, RotateCcw } from 'lucide-react';
+import { Camera, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import {workspaceApi , toastApiError} from '@/lib/api';
 import { formatDate } from '@/lib/format';
 
 type WorkspacesResponse = {
-  workspaces?: { id: string }[];
+  workspaces?: { id: string; name: string }[];
 };
 
 type Snapshot = {
@@ -30,6 +30,8 @@ export default function SnapshotsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [restoreTarget, setRestoreTarget] = useState<Snapshot | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Snapshot | null>(null);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
 
   // We need a workspaceId. For now, get user's first workspace.
   const { data: wsData } = useQuery({
@@ -40,7 +42,8 @@ export default function SnapshotsPage() {
     },
   });
 
-  const workspaceId = wsData?.workspaces?.[0]?.id;
+  const allWorkspaces = wsData?.workspaces ?? [];
+  const workspaceId = selectedWorkspaceId ?? allWorkspaces[0]?.id;
 
   const { data: snapshots, isLoading } = useQuery({
     queryKey: ['snapshots', workspaceId],
@@ -77,6 +80,18 @@ export default function SnapshotsPage() {
     onError: (e) => toastApiError(e, 'Failed to restore'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await workspaceApi.delete(`/snapshots/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] });
+      toast.success('Snapshot deleted');
+      setDeleteTarget(null);
+    },
+    onError: (e) => toastApiError(e, 'Failed to delete'),
+  });
+
   const items = snapshots || [];
 
   return (
@@ -86,10 +101,26 @@ export default function SnapshotsPage() {
           <h2 className="text-lg font-semibold text-foreground">Snapshots</h2>
           <p className="text-sm text-muted-foreground">Backup and restore your workspace</p>
         </div>
-        <Button size="sm" onClick={() => setShowCreate((v) => !v)} disabled={!workspaceId}>
-          <Camera className="mr-1.5 h-3.5 w-3.5" />
-          Create Snapshot
-        </Button>
+        <div className="flex items-center gap-2">
+          {allWorkspaces.length > 1 ? (
+            <select
+              value={workspaceId ?? ''}
+              onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+              aria-label="Workspace"
+            >
+              {allWorkspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <Button size="sm" onClick={() => setShowCreate((v) => !v)} disabled={!workspaceId}>
+            <Camera className="mr-1.5 h-3.5 w-3.5" />
+            Create Snapshot
+          </Button>
+        </div>
       </div>
 
       {showCreate && (
@@ -149,6 +180,14 @@ export default function SnapshotsPage() {
                   <Button size="sm" variant="outline" onClick={() => setRestoreTarget(snap)}>
                     <RotateCcw className="mr-1 h-3.5 w-3.5" /> Restore
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDeleteTarget(snap)}
+                    aria-label="Delete snapshot"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             ))}
@@ -175,6 +214,18 @@ export default function SnapshotsPage() {
         variant="destructive"
         onConfirm={async () => {
           if (restoreTarget) await restoreMutation.mutateAsync(restoreTarget.id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={() => setDeleteTarget(null)}
+        title="Delete snapshot"
+        description={`Permanently delete "${deleteTarget?.name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={async () => {
+          if (deleteTarget) await deleteMutation.mutateAsync(deleteTarget.id);
         }}
       />
     </div>
