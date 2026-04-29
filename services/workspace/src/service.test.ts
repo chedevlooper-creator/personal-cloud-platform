@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { Readable } from 'node:stream';
 import { WorkspaceObjectStorage, WorkspaceService } from './service';
 import pino from 'pino';
 
@@ -417,6 +418,35 @@ describe('WorkspaceService', () => {
     expect(predicateContainsEq(deleteUpdate?.where, snapshots.id, 'snapshot-1')).toBe(true);
     expect(predicateContainsEq(deleteUpdate?.where, snapshots.userId, 'user-1')).toBe(true);
     expect(predicateContainsIsNull(deleteUpdate?.where, snapshots.deletedAt)).toBe(true);
+  });
+
+  it('counts uploaded bytes from any readable stream', async () => {
+    const storage = new MemoryStorage();
+    const workspaceService = new WorkspaceService(logger, storage);
+    mockDb.query.workspaceFiles.findFirst.mockResolvedValue(undefined);
+
+    const payload = 'hello upload — π';
+    const expectedSize = Buffer.byteLength(payload, 'utf8');
+    const source = Readable.from([Buffer.from(payload, 'utf8')]);
+
+    const file = await workspaceService.uploadFile(
+      'workspace-1',
+      'user-1',
+      '/upload.txt',
+      'upload.txt',
+      'text/plain',
+      source,
+    );
+
+    expect(file.size).toBe(expectedSize.toString());
+    expect(insertedValues).toContainEqual(
+      expect.objectContaining({
+        path: '/upload.txt',
+        size: expectedSize.toString(),
+        storageKey: 'user-1/workspace-1/upload.txt',
+      }),
+    );
+    await expect(storage.getText('user-1/workspace-1/upload.txt')).resolves.toBe(payload);
   });
 });
 
