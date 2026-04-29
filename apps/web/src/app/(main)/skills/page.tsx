@@ -2,7 +2,19 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Plus, Pencil, Sparkles, Trash2, Download, Check, Library } from 'lucide-react';
+import {
+  Bot,
+  Plus,
+  Pencil,
+  Sparkles,
+  Trash2,
+  Download,
+  Check,
+  Library,
+  Globe,
+  Search,
+  ExternalLink,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +54,9 @@ export default function SkillsPage() {
   const qc = useQueryClient();
   const [editor, setEditor] = useState<FormState | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [showDiscover, setShowDiscover] = useState(false);
+  const [discoverQuery, setDiscoverQuery] = useState('');
+  const [discoverView, setDiscoverView] = useState<'trending' | 'all-time' | 'hot'>('trending');
 
   const { data, isLoading } = useQuery({
     queryKey: ['skills'],
@@ -81,6 +96,43 @@ export default function SkillsPage() {
       toast.success('Skill installed.');
     },
     onError: (e) => toastApiError(e, 'Could not install skill.'),
+  });
+
+  type RegistryItem = {
+    id: string;
+    slug: string;
+    name: string;
+    source: string;
+    installs: number;
+    sourceType: string;
+    installUrl: string | null;
+    url: string;
+    isDuplicate?: boolean;
+    installed: boolean;
+  };
+
+  const { data: discoverData, isLoading: discoverLoading } = useQuery({
+    queryKey: ['skills-discover', discoverView, discoverQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams({ view: discoverView, limit: '30' });
+      if (discoverQuery.trim().length >= 2) params.set('q', discoverQuery.trim());
+      const res = await agentApi.get(`/skills/registry?${params.toString()}`);
+      return (res.data?.skills ?? []) as RegistryItem[];
+    },
+    enabled: showDiscover,
+    retry: false,
+  });
+
+  const installRegistry = useMutation({
+    mutationFn: async (id: string) => {
+      await agentApi.post('/skills/registry/install', { id });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skills'] });
+      qc.invalidateQueries({ queryKey: ['skills-discover'] });
+      toast.success('Skill imported from skills.sh.');
+    },
+    onError: (e) => toastApiError(e, 'Could not install skill from skills.sh.'),
   });
 
   const save = useMutation({
@@ -155,6 +207,10 @@ export default function SkillsPage() {
             <Library className="mr-1.5 h-3.5 w-3.5" />
             {showCatalog ? 'Hide catalog' : 'Browse catalog'}
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowDiscover((v) => !v)}>
+            <Globe className="mr-1.5 h-3.5 w-3.5" />
+            {showDiscover ? 'Hide skills.sh' : 'Discover (skills.sh)'}
+          </Button>
           <Button size="sm" onClick={() => setEditor({ ...empty })}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> New skill
           </Button>
@@ -218,6 +274,100 @@ export default function SkillsPage() {
                       {c.triggers.length > 4 && '…'}
                     </p>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {showDiscover && (
+        <section className="mb-6 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="mb-3 flex items-center gap-2">
+            <Globe className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Discover on skills.sh
+            </h2>
+            <a
+              href="https://skills.sh"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+            >
+              skills.sh
+            </a>
+          </div>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={discoverQuery}
+                onChange={(e) => setDiscoverQuery(e.target.value)}
+                placeholder="Search skills (min 2 chars)…"
+                className="pl-7"
+              />
+            </div>
+            <select
+              value={discoverView}
+              onChange={(e) => setDiscoverView(e.target.value as typeof discoverView)}
+              disabled={discoverQuery.trim().length >= 2}
+              className="h-8 rounded-lg border border-border bg-card px-2 text-sm text-foreground disabled:opacity-50"
+            >
+              <option value="trending">Trending</option>
+              <option value="hot">Hot</option>
+              <option value="all-time">All-time</option>
+            </select>
+          </div>
+          {discoverLoading ? (
+            <p className="text-sm text-muted-foreground">Loading from skills.sh…</p>
+          ) : (discoverData ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No skills found.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {(discoverData ?? []).map((s) => (
+                <div
+                  key={s.id}
+                  className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate font-medium text-foreground">{s.name}</h3>
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-muted-foreground hover:text-foreground"
+                          title="Open on skills.sh"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] font-mono text-muted-foreground">
+                        {s.source}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {s.installs.toLocaleString()} installs
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={s.installed ? 'outline' : 'default'}
+                      disabled={s.installed || installRegistry.isPending}
+                      onClick={() => installRegistry.mutate(s.id)}
+                      className="shrink-0"
+                    >
+                      {s.installed ? (
+                        <>
+                          <Check className="mr-1 h-3.5 w-3.5" /> Imported
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-1 h-3.5 w-3.5" /> Import
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

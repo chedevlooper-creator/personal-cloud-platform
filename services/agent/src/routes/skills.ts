@@ -10,6 +10,15 @@ import {
 } from '@pcp/shared';
 import { SkillsService } from '../skills/service';
 import { SKILL_CATALOG } from '../skills/catalog';
+import {
+  buildLocalSlug,
+  getCurated,
+  getSkillDetail,
+  listSkills,
+  parseSkillMd,
+  searchSkills,
+  type RegistrySkill,
+} from '../skills/registry';
 import { AgentOrchestrator } from '../orchestrator';
 import { env } from '../env';
 
@@ -186,6 +195,153 @@ export async function setupSkillsRoutes(fastify: FastifyInstance) {
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const matched = await service.matchTriggers(userId, request.body.input);
       return { skills: matched };
+    },
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // skills.sh registry integration
+  //
+  // Browse, search and one-click install community skills published on
+  // https://skills.sh. Each registry skill resolves to a SKILL.md file that
+  // we parse and persist as a regular local skill bound to the user.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const registrySkillSchema = z.object({
+    id: z.string(),
+    slug: z.string(),
+    name: z.string(),
+    source: z.string(),
+    installs: z.number().int().nonnegative(),
+    sourceType: z.string(),
+    installUrl: z.string().nullable(),
+    url: z.string(),
+    isDuplicate: z.boolean().optional(),
+  });
+
+  function annotate(items: RegistrySkill[], installedSourceIds: Set<string>) {
+    return items.map((s) => ({ ...s, installed: installedSourceIds.has(s.id) }));
+  }
+
+  async function loadInstalledSourceIds(userId: string): Promise<Set<string>> {
+    const installed = await service.list(userId);
+    const ids = new Set<string>();
+    for (const row of installed) {
+      if (row.sourcePath?.startsWith('skills.sh:')) {
+        ids.add(row.sourcePath.slice('skills.sh:'.length));
+      }
+    }
+    return ids;
+  }
+
+  server.get(
+    '/skills/registry',
+    {
+      schema: {
+        querystring: z.object({
+          view: z.enum(['all-time', 'trending', 'hot']).default('trending'),
+          q: z.string().min(2).max(200).optional(),
+          limit: z.coerce.number().int().min(1).max(100).default(30),
+        }),
+        response: {
+          200: z.object({
+            skills: z.array(registrySkillSchema.extend({ installed: z.boolean() })),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      try {
+        const { view, q, limit } = request.query;
+        const items = q ? await searchSkills(q, limit) : await listSkills(view, limit);
+        const installed = await loadInstalledSourceIds(userId);
+        return { skills: annotate(items, installed) };
+      } catch (err: unknown) {
+        const status = (err as { statusCode?: number }).statusCode ?? 502;
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          (err as Error).message ?? 'skills.sh request failed',
+        );
+      }
+    },
+  );
+
+  server.get(
+    '/skills/registry/curated',
+    {
+      schema: {
+        response: {
+          200: z.object({
+            skills: z.array(registrySkillSchema.extend({ installed: z.boolean() })),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      try {
+        const items = await getCurated();
+        const installed = await loadInstalledSourceIds(userId);
+        return { skills: annotate(items, installed) };
+      } catch (err: unknown) {
+        const status = (err as { statusCode?: number }).statusCode ?? 502;
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          (err as Error).message ?? 'skills.sh request failed',
+        );
+      }
+    },
+  );
+
+  server.post(
+    '/skills/registry/install',
+    {
+      schema: {
+        body: z.object({ id: z.string().min(3).max(300) }),
+        response: { 201: skillResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request.cookies.sessionId);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      try {
+        const detail = await getSkillDetail(request.body.id);
+        const skillMd = detail.files?.find((f) => /SKILL\.md$/i.test(f.path));
+        if (!skillMd) {
+          return sendApiError(
+            reply,
+            422,
+            'VALIDATION_ERROR',
+            'Skill has no SKILL.md snapshot yet',
+          );
+        }
+        const parsed = parseSkillMd(skillMd.contents);
+        const localSlug = buildLocalSlug(detail.source, detail.slug);
+        const row = await service.create(userId, {
+          slug: localSlug,
+          name: parsed.name ?? detail.slug,
+          description: parsed.description,
+          bodyMarkdown: parsed.body,
+          sourcePath: `skills.sh:${detail.id}`,
+          triggers: [],
+          enabled: true,
+        });
+        return reply.code(201).send(row);
+      } catch (err: unknown) {
+        const status = (err as { statusCode?: number }).statusCode ?? 502;
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          (err as Error).message ?? 'Failed to install registry skill',
+        );
+      }
     },
   );
 }
