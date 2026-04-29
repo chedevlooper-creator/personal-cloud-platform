@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatComposer } from '@/components/app-shell/chat-composer';
+import { ChatMessages, type ChatMessage } from '@/components/app-shell/chat-messages';
 import { DottedBackground } from '@/components/app-shell/dotted-background';
 import { StatusToast } from '@/components/app-shell/status-toast';
 import { ToolApproval } from '@/components/app-shell/tool-approval-card';
@@ -9,24 +10,29 @@ import { agentApi, getApiErrorMessage } from '@/lib/api';
 
 export function ChatHome() {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<
-    Array<{ id: string; role: 'user' | 'assistant'; content: string }>
-  >([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [toolApproval, setToolApproval] = useState<ToolApproval | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const stopGeneration = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
+  const clearStreamTimer = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    setIsThinking(false);
   }, []);
+
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    clearStreamTimer();
+    setMessages((current) =>
+      current.map((m) => (m.streaming ? { ...m, streaming: false } : m)),
+    );
+    setIsThinking(false);
+  }, [clearStreamTimer]);
 
   const startNewChat = useCallback(() => {
     stopGeneration();
@@ -82,8 +88,6 @@ export function ChatHome() {
     // task SSE stream and `/agent/tasks/:id/tool-approval`.
 
     const assistantId = crypto.randomUUID();
-    setMessages((current) => [...current, { id: assistantId, role: 'assistant', content: '' }]);
-
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -97,17 +101,43 @@ export function ChatHome() {
         (response.data as { content?: string }).content ||
         'I did not receive a response from the model.';
 
-      setMessages((current) =>
-        current.map((message) => (message.id === assistantId ? { ...message, content } : message)),
-      );
+      // Word-by-word reveal for a streaming feel.
+      setMessages((current) => [
+        ...current,
+        { id: assistantId, role: 'assistant', content: '', streaming: true },
+      ]);
+      const tokens = content.split(/(\s+)/);
+      let i = 0;
+      clearStreamTimer();
+      intervalRef.current = setInterval(() => {
+        if (controller.signal.aborted) {
+          clearStreamTimer();
+          return;
+        }
+        const chunk = tokens.slice(0, i + 2).join('');
+        i += 2;
+        setMessages((current) =>
+          current.map((m) => (m.id === assistantId ? { ...m, content: chunk } : m)),
+        );
+        if (i >= tokens.length) {
+          clearStreamTimer();
+          setMessages((current) =>
+            current.map((m) =>
+              m.id === assistantId ? { ...m, content, streaming: false } : m,
+            ),
+          );
+        }
+      }, 24);
     } catch (error) {
       const content = controller.signal.aborted
         ? 'Generation stopped.'
         : getApiErrorMessage(error, 'The MiniMax agent service is not available.');
-
-      setMessages((current) =>
-        current.map((message) => (message.id === assistantId ? { ...message, content } : message)),
-      );
+      setMessages((current) => {
+        if (current.some((m) => m.id === assistantId)) {
+          return current.map((m) => (m.id === assistantId ? { ...m, content, streaming: false } : m));
+        }
+        return [...current, { id: assistantId, role: 'assistant', content }];
+      });
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
@@ -168,27 +198,14 @@ export function ChatHome() {
         className="pointer-events-none absolute right-[12%] bottom-[28%] h-px w-44 rotate-[14deg] bg-gradient-to-r from-transparent to-[#E0BCFF] opacity-45"
       />
       <input ref={fileInputRef} type="file" multiple className="hidden" aria-label="Upload files" />
-      <div className="relative z-10 mx-auto flex w-[calc(100vw-3rem)] min-w-0 max-w-full flex-1 flex-col justify-center pb-20 pt-8 sm:w-full sm:max-w-[700px] lg:justify-start lg:pt-[27vh]">
+      <div
+        className={`relative z-10 mx-auto flex w-[calc(100vw-3rem)] min-w-0 max-w-full flex-1 flex-col pb-20 pt-8 sm:w-full sm:max-w-[760px] ${
+          messages.length === 0 ? 'justify-center lg:pt-[27vh]' : 'justify-start lg:pt-12'
+        }`}
+      >
         <StatusToast isThinking={isThinking} onStop={stopGeneration} />
         {messages.length > 0 && (
-          <div className="mb-5 max-h-[32vh] space-y-3 overflow-auto rounded-xl border border-zinc-800 bg-zinc-950/35 p-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={message.role === 'user' ? 'text-right' : 'text-left'}
-              >
-                <div
-                  className={`inline-block max-w-[84%] rounded-xl px-4 py-2 text-sm leading-6 ${
-                    message.role === 'user'
-                      ? 'bg-blue-500/15 text-blue-100 ring-1 ring-blue-400/20'
-                      : 'bg-zinc-900 text-zinc-200 ring-1 ring-zinc-800'
-                  }`}
-                >
-                  {message.content || '...'}
-                </div>
-              </div>
-            ))}
-          </div>
+          <ChatMessages messages={messages} isThinking={isThinking} />
         )}
         <ChatComposer
           value={input}
