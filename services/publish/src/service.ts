@@ -3,6 +3,8 @@ import { hostedServices, hostedServiceLogs, workspaces, auditLogs } from '@pcp/d
 import { eq, desc, and, isNull } from 'drizzle-orm';
 import Docker from 'dockerode';
 import { encryptEnvVars, decryptEnvVars, redactEnvVars } from './encryption';
+import { env } from './env';
+import { buildPublishSecurityOptions, resolvePublishImage } from './policy';
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/;
@@ -114,7 +116,7 @@ export class PublishService {
     await db
       .update(hostedServices)
       .set({ status: 'starting' })
-      .where(eq(hostedServices.id, service.id));
+      .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, userId)));
 
     // Start asynchronously to not block the request
     this.runContainer(service).catch(console.error);
@@ -143,7 +145,7 @@ export class PublishService {
     await db
       .update(hostedServices)
       .set({ status: 'stopped', runnerProcessId: null })
-      .where(eq(hostedServices.id, service.id));
+      .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, userId)));
 
     await emitAudit(userId, 'HOSTED_SERVICE_STOP', { serviceId });
     return { status: 'stopped' };
@@ -152,14 +154,14 @@ export class PublishService {
   private async runContainer(service: HostedServiceRow) {
     try {
       const containerName = `hosted-${service.id}`;
-      const workspaceVolume = `/tmp/workspaces/${service.workspaceId}`;
+      const workspaceVolume = `/tmp/workspaces/${service.userId}/${service.workspaceId}`;
 
       // In MVP, we just use node alpine or nginx depending on kind
-      let image = 'node:20-alpine';
+      let image = resolvePublishImage(service.kind as 'static' | 'vite' | 'node');
       let cmd: string[] = [];
 
       if (service.kind === 'static') {
-        image = 'nginxinc/nginx-unprivileged:alpine';
+        image = resolvePublishImage('static');
       } else if (service.startCommand) {
         cmd = ['sh', '-c', normalizeStartCommand(service.startCommand) || ''];
       } else if (service.kind === 'node') {
@@ -184,6 +186,10 @@ export class PublishService {
         User: '1000:1000',
         WorkingDir: rootPath === '/' ? '/workspace' : `/workspace${rootPath}`,
         Labels: {
+          'pcp.service': 'publish',
+          'pcp.userId': service.userId,
+          'pcp.workspaceId': service.workspaceId,
+          'pcp.hostedServiceId': service.id,
           'traefik.enable': 'true',
           [`traefik.http.routers.${containerName}.rule`]: `Host(\`${slug}.apps.localhost\`)`,
           [`traefik.http.routers.${containerName}.entrypoints`]: 'web',
@@ -193,11 +199,18 @@ export class PublishService {
           NetworkMode: 'pcp_network',
           Binds: [`${workspaceVolume}:/workspace:ro`],
           Memory: 512 * 1024 * 1024,
+          MemorySwap: 512 * 1024 * 1024,
           NanoCpus: 1_000_000_000,
           ReadonlyRootfs: true,
+          Privileged: false,
+          Init: true,
+          OomKillDisable: false,
           CapDrop: ['ALL'],
           PidsLimit: 100,
-          SecurityOpt: ['no-new-privileges:true'],
+          SecurityOpt: buildPublishSecurityOptions({
+            seccompProfile: env.PUBLISH_SECCOMP_PROFILE,
+            appArmorProfile: env.PUBLISH_APPARMOR_PROFILE,
+          }),
           Tmpfs: {
             '/tmp': 'rw,noexec,nosuid,size=100m',
           },
@@ -215,7 +228,7 @@ export class PublishService {
           runnerProcessId: container.id,
           publicUrl: `http://${slug}.apps.localhost`,
         })
-        .where(eq(hostedServices.id, service.id));
+        .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, service.userId)));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown publish container error';
       await db
@@ -224,7 +237,7 @@ export class PublishService {
           status: 'crashed',
           crashCount: service.crashCount + 1,
         })
-        .where(eq(hostedServices.id, service.id));
+        .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, service.userId)));
 
       await db.insert(hostedServiceLogs).values({
         serviceId: service.id,

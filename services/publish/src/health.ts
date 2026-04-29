@@ -38,7 +38,7 @@ function getState(serviceId: string): ServiceHealthState {
 async function pingUrl(url: string, signal: AbortSignal): Promise<boolean> {
   try {
     const res = await fetch(url, { method: 'GET', signal, redirect: 'follow' });
-    // Treat any 2xx/3xx/401/403 as "process is alive". Only network failures and
+    // Treat any 2xx/3xx/4xx as "process is alive"; only network failures and
     // 5xx count as unhealthy.
     if (res.status >= 500) return false;
     return true;
@@ -87,9 +87,11 @@ async function runHealthCheck(publishService: PublishService, log: FastifyBaseLo
   });
 
   await Promise.all(
-    services.map((svc) => checkOne(svc, publishService, log).catch((err) => {
-      log.error({ err, serviceId: svc.id }, 'health check failed');
-    })),
+    services.map((svc) =>
+      checkOne(svc, publishService, log).catch((err) => {
+        log.error({ err, serviceId: svc.id }, 'health check failed');
+      }),
+    ),
   );
 
   // Also progress crashed services that are eligible for auto-restart.
@@ -101,9 +103,11 @@ async function runHealthCheck(publishService: PublishService, log: FastifyBaseLo
     ),
   });
   await Promise.all(
-    crashed.map((svc) => attemptRestart(svc, publishService, log).catch((err) => {
-      log.error({ err, serviceId: svc.id }, 'restart attempt failed');
-    })),
+    crashed.map((svc) =>
+      attemptRestart(svc, publishService, log).catch((err) => {
+        log.error({ err, serviceId: svc.id }, 'restart attempt failed');
+      }),
+    ),
   );
 }
 

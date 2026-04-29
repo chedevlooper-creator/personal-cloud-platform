@@ -1,15 +1,26 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { createTaskSchema, taskResponseSchema, taskStepSchema, conversationResponseSchema, messageResponseSchema, toolApprovalSchema } from '@pcp/shared';
+import {
+  createTaskSchema,
+  taskResponseSchema,
+  taskStepSchema,
+  conversationResponseSchema,
+  messageResponseSchema,
+  toolApprovalSchema,
+} from '@pcp/shared';
 import { AgentOrchestrator } from './orchestrator';
+import { env } from './env';
 import { z } from 'zod';
 
 export async function setupAgentRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const orchestrator = new AgentOrchestrator(fastify.log);
+  orchestrator.recoverInterruptedWork().catch((err) => {
+    fastify.log.error({ err }, 'Failed to recover interrupted agent work');
+  });
 
   async function getAuthenticatedUserId(sessionId: string | undefined): Promise<string | null> {
-    if (process.env.AUTH_BYPASS === '1') return 'local-dev-user';
+    if (env.AUTH_BYPASS) return 'local-dev-user';
     if (!sessionId) return null;
     return orchestrator.validateUserFromCookie(sessionId);
   }
@@ -39,12 +50,12 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      const response = await orchestrator.chat(request.body.input);
+      const response = await orchestrator.chat(request.body.input, userId);
       return {
         content: response.content || '',
         usage: response.usage,
       };
-    }
+    },
   );
 
   server.post(
@@ -67,7 +78,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
         skillIds: skillIds ?? [],
       });
       return reply.code(201).send(task);
-    }
+    },
   );
 
   server.get(
@@ -86,9 +97,9 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
 
       const task = await orchestrator.getTask(request.params.id, userId);
       if (!task) return reply.code(404).send({ error: 'Task not found' } as any);
-      
+
       return task;
-    }
+    },
   );
 
   server.get(
@@ -107,7 +118,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
 
       const steps = await orchestrator.getTaskSteps(request.params.id, userId);
       return { steps };
-    }
+    },
   );
 
   server.post(
@@ -123,7 +134,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
 
       await orchestrator.cancelTask(request.params.id, userId);
       return { success: true };
-    }
+    },
   );
 
   server.get(
@@ -143,7 +154,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
 
       const convos = await orchestrator.getConversations(userId);
       return { conversations: convos };
-    }
+    },
   );
 
   server.get(
@@ -164,7 +175,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
 
       const messages = await orchestrator.getMessages(request.params.id, userId);
       return { messages };
-    }
+    },
   );
 
   server.post(
@@ -179,8 +190,28 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      await orchestrator.submitToolApproval(request.params.id, userId, request.body.decision, request.body.reason);
+      await orchestrator.submitToolApproval(
+        request.params.id,
+        userId,
+        request.body.decision,
+        request.body.reason,
+      );
       return { success: true };
-    }
+    },
+  );
+
+  server.delete(
+    '/agent/conversations/:id',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const userId = await getAuthenticatedUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      await orchestrator.deleteConversation(request.params.id, userId);
+      return { success: true };
+    },
   );
 }

@@ -1,32 +1,41 @@
 import { db } from '@pcp/db/src/client';
-import { memoryEntries, users, sessions } from '@pcp/db/src/schema';
+import { memoryEntries } from '@pcp/db/src/schema';
+import {
+  validateSessionUserId,
+  verifyUserExists as verifySharedUserExists,
+} from '@pcp/db/src/session';
 import { eq, and, sql } from 'drizzle-orm';
 import { EmbeddingProvider } from './embeddings/types';
 import { OpenAIEmbeddingProvider } from './embeddings/openai';
+import { LocalHashEmbeddingProvider } from './embeddings/local';
 import { env } from './env';
 
 export class MemoryService {
   private embeddings: EmbeddingProvider;
 
   constructor(private logger: any) {
-    this.embeddings = new OpenAIEmbeddingProvider(env.OPENAI_API_KEY);
-    this.logger.info('MemoryService initialized');
+    const apiKey = env.OPENAI_API_KEY;
+    const useRemote =
+      apiKey && !apiKey.startsWith('dev-') && !apiKey.toLowerCase().includes('change_me');
+    if (useRemote) {
+      this.embeddings = new OpenAIEmbeddingProvider(apiKey);
+      this.logger.info({ provider: 'openai' }, 'MemoryService initialized');
+    } else {
+      this.embeddings = new LocalHashEmbeddingProvider(1536);
+      this.logger.warn(
+        { provider: 'local-hash' },
+        'MemoryService using local hash embeddings — set OPENAI_API_KEY for higher recall',
+      );
+    }
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
+    return validateSessionUserId(sessionId);
+  }
 
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
-    });
-
-    return user?.id || null;
+  async verifyUserExists(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    return verifySharedUserExists(userId);
   }
 
   async addMemory(
@@ -77,7 +86,9 @@ export class MemoryService {
 
     const whereClause = sql.join(conditions, sql` AND `);
 
-    // Using exact cosine distance with <-> operator from pgvector
+    // L2 distance via pgvector `<->`. Both embedding providers emit
+    // L2-normalized vectors, so L2 ranking is monotonic with cosine ranking.
+    // The 0010 migration adds an HNSW index on (embedding vector_l2_ops).
     const results = await db.execute(sql`
       SELECT id, user_id, workspace_id, type, content, metadata, created_at, updated_at,
              1 - (embedding <-> ${embeddingStr}::vector) as similarity

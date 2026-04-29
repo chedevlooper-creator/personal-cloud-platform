@@ -26,7 +26,13 @@ const MAX_ROW_LIMIT = 10000;
 export class DatasetsService {
   private dataDir: string;
 
-  constructor(private logger?: { info: (...a: any[]) => void; warn: (...a: any[]) => void; error: (...a: any[]) => void }) {
+  constructor(
+    private logger?: {
+      info: (...a: any[]) => void;
+      warn: (...a: any[]) => void;
+      error: (...a: any[]) => void;
+    },
+  ) {
     this.dataDir = path.resolve(env.DATASETS_DATA_DIR);
   }
 
@@ -137,7 +143,10 @@ export class DatasetsService {
     } finally {
       await conn.close().catch(() => {});
     }
-    await db.update(datasets).set({ deletedAt: new Date() }).where(eq(datasets.id, id));
+    await db
+      .update(datasets)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(datasets.id, id), eq(datasets.userId, userId), isNull(datasets.deletedAt)));
     return { success: true };
   }
 
@@ -151,7 +160,9 @@ export class DatasetsService {
       case 'parquet':
         return `read_parquet('${escaped}')`;
       default:
-        throw Object.assign(new Error(`Unsupported source type: ${sourceType}`), { statusCode: 400 });
+        throw Object.assign(new Error(`Unsupported source type: ${sourceType}`), {
+          statusCode: 400,
+        });
     }
   }
 

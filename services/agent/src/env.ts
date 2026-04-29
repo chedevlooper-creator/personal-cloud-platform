@@ -23,6 +23,9 @@ const envSchema = z.object({
   MINIMAX_BASE_URL: z.string().url().default('https://api.minimax.io/anthropic'),
   MINIMAX_MODEL: z.string().default('MiniMax-M2.7'),
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  AUTH_BYPASS: z
+    .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.literal('')])
+    .optional(),
   WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
   RUNTIME_SERVICE_URL: z.string().url().default('http://localhost:3003'),
   MEMORY_SERVICE_URL: z.string().url().default('http://localhost:3005'),
@@ -31,10 +34,15 @@ const envSchema = z.object({
   WEB_SEARCH_PROVIDER: z.enum(['none', 'brave', 'tavily', 'serpapi']).default('none'),
   WEB_SEARCH_API_KEY: z.string().optional(),
   WEB_FETCH_MAX_BYTES: z.coerce.number().int().positive().default(200_000),
+  ENCRYPTION_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.parse(rawEnv);
 const isProduction = parsed.NODE_ENV === 'production';
+const authBypass = parsed.AUTH_BYPASS === '1' || parsed.AUTH_BYPASS === 'true';
+if (isProduction && authBypass) {
+  throw new Error('AUTH_BYPASS must not be enabled when NODE_ENV=production');
+}
 
 validateSelectedProvider();
 
@@ -52,6 +60,7 @@ export const env = {
   MINIMAX_BASE_URL: parsed.MINIMAX_BASE_URL,
   MINIMAX_MODEL: parsed.MINIMAX_MODEL,
   INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  AUTH_BYPASS: !isProduction && authBypass,
   WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
   RUNTIME_SERVICE_URL: parsed.RUNTIME_SERVICE_URL,
   MEMORY_SERVICE_URL: parsed.MEMORY_SERVICE_URL,
@@ -60,6 +69,7 @@ export const env = {
   WEB_SEARCH_PROVIDER: parsed.WEB_SEARCH_PROVIDER,
   WEB_SEARCH_API_KEY: parsed.WEB_SEARCH_API_KEY,
   WEB_FETCH_MAX_BYTES: parsed.WEB_FETCH_MAX_BYTES,
+  ENCRYPTION_KEY: parsed.ENCRYPTION_KEY,
 };
 
 function loadLocalEnv(): void {

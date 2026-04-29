@@ -12,6 +12,7 @@ import {
 import { AgentOrchestrator } from '../orchestrator';
 import { TelegramAdapter } from '../channels/telegram';
 import { handleIncoming } from '../channels/router';
+import { env } from '../env';
 
 /**
  * Channel routes: CRUD for channel_links + Telegram webhook receiver.
@@ -22,7 +23,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
   const telegram = TelegramAdapter.fromEnv();
 
   async function getUserId(sessionId: string | undefined): Promise<string | null> {
-    if (process.env.AUTH_BYPASS === '1') return 'local-dev-user';
+    if (env.AUTH_BYPASS) return 'local-dev-user';
     if (!sessionId) return null;
     return orchestrator.validateUserFromCookie(sessionId);
   }

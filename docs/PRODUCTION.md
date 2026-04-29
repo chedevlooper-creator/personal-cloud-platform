@@ -7,7 +7,7 @@ This document covers deploying CloudMind OS to a production environment. The pla
 ## Architecture
 
 ```
-Internet → Traefik (HTTPS) → {auth, workspace, runtime, agent, publish} → PostgreSQL + Redis + MinIO
+Internet → Traefik (HTTPS) → {auth, workspace, runtime, agent, memory, publish, browser} → PostgreSQL + Redis + MinIO
                             → Next.js (SSR/static)
 ```
 
@@ -15,10 +15,12 @@ Internet → Traefik (HTTPS) → {auth, workspace, runtime, agent, publish} → 
 
 ### 1. Secrets & Encryption
 
-- [ ] Generate a cryptographically secure `ENCRYPTION_KEY` (exactly 32 bytes):
+- [ ] Generate a cryptographically secure `ENCRYPTION_KEY` (exactly 32 bytes, must not start with `dev-` and must not contain `change_me`):
   ```bash
-  openssl rand -hex 16  # produces 32 hex chars = 16 bytes — use `openssl rand 32 | base64` for 32 bytes
-  node -e "console.log(require('crypto').randomBytes(32).toString('hex').slice(0, 32))"
+  # 32 random bytes, base64-encoded (decode at runtime if you need raw 32 bytes):
+  openssl rand -base64 32
+  # Or 32 raw bytes hex-encoded (then take the first 32 chars as utf-8 string):
+  node -e "console.log(require('crypto').randomBytes(24).toString('base64'))"  # 32 base64 chars
   ```
 - [ ] Generate strong `COOKIE_SECRET`:
   ```bash
@@ -111,7 +113,9 @@ Each service exposes `GET /health`:
 - Workspace: `:3002/health`
 - Runtime: `:3003/health`
 - Agent: `:3004/health`
+- Memory: `:3005/health`
 - Publish: `:3006/health`
+- Browser: `:3007/health`
 
 Use these for load balancer health probes and uptime monitors.
 

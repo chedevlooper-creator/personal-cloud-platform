@@ -18,6 +18,9 @@ const { mockDb, updateReturning, deleteWhere, insertReturning, automationQueue }
         sessions: {
           findFirst: vi.fn(),
         },
+        users: {
+          findFirst: vi.fn(),
+        },
         automations: {
           findFirst: vi.fn(),
           findMany: vi.fn(),
@@ -89,6 +92,7 @@ describe('automation route tenant scope', () => {
       userId: USER_ID,
       expiresAt: new Date(Date.now() + 60_000),
     });
+    mockDb.query.users.findFirst.mockResolvedValue({ id: USER_ID });
     mockDb.query.automations.findFirst.mockResolvedValue(automation());
     mockDb.query.automations.findMany.mockResolvedValue([automation()]);
     mockDb.query.automationRuns.findMany.mockResolvedValue([]);

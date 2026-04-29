@@ -13,6 +13,8 @@ const envSchema = z.object({
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
   WORKSPACE_HOST_ROOT: z.string().default('/var/lib/pcp/workspaces'),
   WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+  RUNTIME_SECCOMP_PROFILE: z.string().optional(),
+  RUNTIME_APPARMOR_PROFILE: z.string().optional(),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -23,9 +25,15 @@ export const env = {
   PORT: parsed.PORT,
   DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
   COOKIE_SECRET: resolveSecret('COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
-  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  INTERNAL_SERVICE_TOKEN: resolveSecret(
+    'INTERNAL_SERVICE_TOKEN',
+    parsed.INTERNAL_SERVICE_TOKEN,
+    32,
+  ),
   WORKSPACE_HOST_ROOT: parsed.WORKSPACE_HOST_ROOT,
   WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
+  RUNTIME_SECCOMP_PROFILE: parsed.RUNTIME_SECCOMP_PROFILE,
+  RUNTIME_APPARMOR_PROFILE: parsed.RUNTIME_APPARMOR_PROFILE,
 };
 
 function resolveSecret(name: string, value: string | undefined, minLength: number): string {
@@ -49,7 +57,12 @@ function resolveProductionValue(name: string, value: string | undefined): string
 
 function isUnsafeValue(value: string): boolean {
   const lower = value.toLowerCase();
-  return lower.includes('change_me') || lower.includes('replace') || lower.startsWith('dev-');
+  return (
+    lower.includes('change_me') ||
+    lower.includes('replace') ||
+    lower.includes('dummy') ||
+    lower.startsWith('dev-')
+  );
 }
 
 function makeDevelopmentSecret(length: number, name: string): string {

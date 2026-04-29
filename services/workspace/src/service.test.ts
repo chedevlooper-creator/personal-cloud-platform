@@ -2,9 +2,10 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { WorkspaceObjectStorage, WorkspaceService } from './service';
 import pino from 'pino';
 
-const { mockDb, insertedValues } = vi.hoisted(() => {
+const { mockDb, insertedValues, updateCalls } = vi.hoisted(() => {
   const now = new Date('2026-04-26T12:00:00.000Z');
   const insertedValues: any[] = [];
+  const updateCalls: Array<{ table: unknown; set: any; where?: unknown }> = [];
 
   const makeWorkspace = (value: any) => ({
     id: 'workspace-1',
@@ -35,13 +36,20 @@ const { mockDb, insertedValues } = vi.hoisted(() => {
         };
       }),
     })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(() => ({
-          returning: vi.fn(async () => []),
-          execute: vi.fn(async () => undefined),
-        })),
-      })),
+    update: vi.fn((table: unknown) => ({
+      set: vi.fn((value: any) => {
+        const call: { table: unknown; set: any; where?: unknown } = { table, set: value };
+        updateCalls.push(call);
+        return {
+          where: vi.fn((predicate: unknown) => {
+            call.where = predicate;
+            return {
+              returning: vi.fn(async () => []),
+              execute: vi.fn(async () => undefined),
+            };
+          }),
+        };
+      }),
     })),
     query: {
       workspaces: {
@@ -65,11 +73,18 @@ const { mockDb, insertedValues } = vi.hoisted(() => {
     },
   };
 
-  return { mockDb, insertedValues };
+  return { mockDb, insertedValues, updateCalls };
 });
 
 vi.mock('@pcp/db/src/client', () => ({
   db: mockDb,
+}));
+
+vi.mock('drizzle-orm', () => ({
+  and: (...conditions: unknown[]) => ({ type: 'and', conditions }),
+  desc: (column: unknown) => ({ type: 'desc', column }),
+  eq: (column: unknown, value: unknown) => ({ type: 'eq', column, value }),
+  isNull: (column: unknown) => ({ type: 'isNull', column }),
 }));
 
 class MemoryStorage implements WorkspaceObjectStorage {
@@ -101,7 +116,11 @@ class MemoryStorage implements WorkspaceObjectStorage {
     return content;
   }
 
-  async putBuffer(key: string, buffer: Buffer, _contentType = 'application/octet-stream'): Promise<void> {
+  async putBuffer(
+    key: string,
+    buffer: Buffer,
+    _contentType = 'application/octet-stream',
+  ): Promise<void> {
     this.objects.set(key, buffer.toString('binary'));
   }
 
@@ -129,6 +148,7 @@ describe('WorkspaceService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     insertedValues.length = 0;
+    updateCalls.length = 0;
     mockDb.query.workspaces.findFirst.mockResolvedValue(workspace);
   });
 
@@ -205,6 +225,35 @@ describe('WorkspaceService', () => {
     );
   });
 
+  it('rejects traversal paths before touching storage or file metadata', async () => {
+    const storage = new MemoryStorage();
+    const workspaceService = new WorkspaceService(logger, storage);
+
+    await expect(
+      workspaceService.writeTextFile('workspace-1', 'user-1', '../secret.txt', 'leak'),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+    });
+
+    expect(storage.objects.size).toBe(0);
+    expect(mockDb.query.workspaceFiles.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('scopes workspace metadata updates by workspace id and authenticated user', async () => {
+    const { workspaces } = await import('@pcp/db/src/schema');
+    const workspaceService = new WorkspaceService(logger, new MemoryStorage());
+    mockDb.query.workspaceFiles.findFirst.mockResolvedValue(null);
+
+    await workspaceService.writeTextFile('workspace-1', 'user-1', '/notes.txt', 'tenant scoped');
+
+    const metadataUpdate = updateCalls.find(
+      (call) => call.table === workspaces && 'storageUsed' in call.set,
+    );
+    expect(metadataUpdate).toBeDefined();
+    expect(predicateContainsEq(metadataUpdate?.where, workspaces.id, 'workspace-1')).toBe(true);
+    expect(predicateContainsEq(metadataUpdate?.where, workspaces.userId, 'user-1')).toBe(true);
+  });
+
   it('previews text files and rejects directories or binary files', async () => {
     const storage = new MemoryStorage();
     await storage.putText('user-1/workspace-1/README.md', '# Preview');
@@ -276,6 +325,7 @@ describe('WorkspaceService', () => {
   });
 
   it('round-trips a snapshot: create writes a gzipped archive, restore re-inserts files', async () => {
+    const { snapshots } = await import('@pcp/db/src/schema');
     const storage = new MemoryStorage();
     const workspaceService = new WorkspaceService(logger, storage);
 
@@ -298,13 +348,9 @@ describe('WorkspaceService', () => {
       },
     ]);
 
-    const snapshot = await workspaceService.createSnapshot(
-      'workspace-1',
-      'user-1',
-      'baseline',
-    );
+    const snapshot = await workspaceService.createSnapshot('workspace-1', 'user-1', 'baseline');
 
-    expect(snapshot.storageKey).toMatch(/^snapshots\/workspace-1\//);
+    expect(snapshot.storageKey).toMatch(/^snapshots\/user-1\/workspace-1\//);
     expect(storage.objects.has(snapshot.storageKey)).toBe(true);
 
     // Mutate the workspace and pretend the file changed.
@@ -329,8 +375,66 @@ describe('WorkspaceService', () => {
     expect(insertedValues).toContainEqual(
       expect.objectContaining({ path: '/README.md', isDirectory: '0' }),
     );
-    await expect(
-      storage.getText('user-1/workspace-1/README.md'),
-    ).resolves.toBe('# original');
+    await expect(storage.getText('user-1/workspace-1/README.md')).resolves.toBe('# original');
+
+    const snapshotStatusUpdates = updateCalls.filter(
+      (call) =>
+        call.table === snapshots &&
+        ['ready', 'restoring'].includes(call.set.status) &&
+        predicateContainsEq(call.where, snapshots.id, snapshot.id),
+    );
+    expect(snapshotStatusUpdates.length).toBeGreaterThanOrEqual(2);
+    expect(
+      snapshotStatusUpdates.every((call) =>
+        predicateContainsEq(call.where, snapshots.userId, 'user-1'),
+      ),
+    ).toBe(true);
+    expect(
+      snapshotStatusUpdates.every((call) =>
+        predicateContainsIsNull(call.where, snapshots.deletedAt),
+      ),
+    ).toBe(true);
+  });
+
+  it('scopes snapshot delete updates by snapshot id and authenticated user', async () => {
+    const { snapshots } = await import('@pcp/db/src/schema');
+    const workspaceService = new WorkspaceService(logger, new MemoryStorage());
+    mockDb.query.snapshots.findFirst.mockResolvedValue({
+      id: 'snapshot-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      storageKey: 'snapshots/user-1/workspace-1/archive.json.gz',
+      status: 'ready',
+      deletedAt: null,
+    });
+
+    await workspaceService.deleteSnapshot('snapshot-1', 'user-1');
+
+    const deleteUpdate = updateCalls.find(
+      (call) => call.table === snapshots && call.set.status === 'deleted',
+    );
+    expect(deleteUpdate).toBeDefined();
+    expect(predicateContainsEq(deleteUpdate?.where, snapshots.id, 'snapshot-1')).toBe(true);
+    expect(predicateContainsEq(deleteUpdate?.where, snapshots.userId, 'user-1')).toBe(true);
+    expect(predicateContainsIsNull(deleteUpdate?.where, snapshots.deletedAt)).toBe(true);
   });
 });
+
+function predicateContainsEq(predicate: unknown, column: unknown, value: unknown): boolean {
+  if (!predicate || typeof predicate !== 'object') return false;
+  const node = predicate as {
+    type?: string;
+    column?: unknown;
+    value?: unknown;
+    conditions?: unknown[];
+  };
+  if (node.type === 'eq') return node.column === column && node.value === value;
+  return node.conditions?.some((child) => predicateContainsEq(child, column, value)) ?? false;
+}
+
+function predicateContainsIsNull(predicate: unknown, column: unknown): boolean {
+  if (!predicate || typeof predicate !== 'object') return false;
+  const node = predicate as { type?: string; column?: unknown; conditions?: unknown[] };
+  if (node.type === 'isNull') return node.column === column;
+  return node.conditions?.some((child) => predicateContainsIsNull(child, column)) ?? false;
+}

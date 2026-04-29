@@ -60,3 +60,7 @@ export const toolApprovalSchema = z.object({
   decision: z.enum(['approve', 'reject']),
   reason: z.string().optional(),
 });
+
+export const taskEventStreamQuerySchema = z.object({
+  snapshot: z.coerce.boolean().optional(),
+});

@@ -23,7 +23,11 @@ export const env = {
   DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
   COOKIE_SECRET: resolveSecret('COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
   OPENAI_API_KEY: resolveProviderKey('OPENAI_API_KEY', parsed.OPENAI_API_KEY),
-  INTERNAL_SERVICE_TOKEN: resolveSecret('INTERNAL_SERVICE_TOKEN', parsed.INTERNAL_SERVICE_TOKEN, 32),
+  INTERNAL_SERVICE_TOKEN: resolveSecret(
+    'INTERNAL_SERVICE_TOKEN',
+    parsed.INTERNAL_SERVICE_TOKEN,
+    32,
+  ),
 };
 
 function resolveSecret(name: string, value: string | undefined, minLength: number): string {
@@ -55,7 +59,12 @@ function resolveProductionValue(name: string, value: string | undefined): string
 
 function isUnsafeValue(value: string): boolean {
   const lower = value.toLowerCase();
-  return lower.includes('change_me') || lower.includes('replace') || lower.startsWith('dev-');
+  return (
+    lower.includes('change_me') ||
+    lower.includes('replace') ||
+    lower.includes('dummy') ||
+    lower.startsWith('dev-')
+  );
 }
 
 function makeDevelopmentSecret(length: number, name: string): string {

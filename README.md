@@ -110,6 +110,7 @@ curl -fsS http://localhost:3003/health
 curl -fsS http://localhost:3004/health
 curl -fsS http://localhost:3005/health
 curl -fsS http://localhost:3006/health
+curl -fsS http://localhost:3007/health
 ```
 
 ## Project Structure
@@ -219,9 +220,14 @@ pnpm --filter @pcp/workspace-service exec vitest run src/service.test.ts
 - **Terminal Policy:** Configurable risk levels (strict/balanced/permissive) with command blocklist
 - **Admin Access:** `ADMIN_EMAIL` env var gates admin routes (MVP; upgrade to role column for production)
 
-## Roadmap
+## Documentation
 
-See [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) and [docs/PROGRESS.md](docs/PROGRESS.md) for the current build plan and progress.
+- [docs/PROGRESS.md](docs/PROGRESS.md) — current status snapshot and open work.
+- [docs/PRODUCTION.md](docs/PRODUCTION.md) — production deployment guide.
+- [docs/DECISIONS.md](docs/DECISIONS.md) — architectural decisions log.
+- [docs/DATA_MODEL.md](docs/DATA_MODEL.md) — full table-by-table schema reference.
+- [docs/AGENT.md](docs/AGENT.md) — agent loop, system prompt pipeline, tool catalog, BYOK.
+- Per-service READMEs under [services/](services) and [packages/](packages).
 
 ## License
 

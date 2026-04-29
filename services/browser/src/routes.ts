@@ -3,10 +3,10 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { browserSessionSchema, navigateSchema, clickSchema, fillSchema } from '@pcp/shared';
 import { BrowserService, type BrowserSessionInfo } from './service';
-import { validateSessionCookie } from './auth';
+import { validateSessionCookie, verifyUserExists } from './auth';
 import { env } from './env';
 
-const AUTH_BYPASS = process.env.AUTH_BYPASS === '1';
+const AUTH_BYPASS = env.AUTH_BYPASS;
 
 function toJson(s: BrowserSessionInfo) {
   return {
@@ -34,7 +34,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
         typeof headerUserId === 'string' &&
         headerUserId.length > 0
       ) {
-        return headerUserId;
+        return verifyUserExists(headerUserId);
       }
     }
     return validateSessionCookie(request.cookies.sessionId ?? '');

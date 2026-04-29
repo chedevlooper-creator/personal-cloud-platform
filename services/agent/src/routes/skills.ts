@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createSkillSchema, skillResponseSchema, updateSkillSchema } from '@pcp/shared';
 import { SkillsService } from '../skills/service';
 import { AgentOrchestrator } from '../orchestrator';
+import { env } from '../env';
 
 export async function setupSkillsRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -11,7 +12,7 @@ export async function setupSkillsRoutes(fastify: FastifyInstance) {
   const orchestrator = new AgentOrchestrator(fastify.log);
 
   async function getUserId(sessionId: string | undefined): Promise<string | null> {
-    if (process.env.AUTH_BYPASS === '1') return 'local-dev-user';
+    if (env.AUTH_BYPASS) return 'local-dev-user';
     if (!sessionId) return null;
     return orchestrator.validateUserFromCookie(sessionId);
   }

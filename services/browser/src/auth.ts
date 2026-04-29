@@ -1,6 +1,7 @@
-import { db } from '@pcp/db/src/client';
-import { sessions, users } from '@pcp/db/src/schema';
-import { eq } from 'drizzle-orm';
+import {
+  validateSessionUserId,
+  verifyUserExists as verifySharedUserExists,
+} from '@pcp/db/src/session';
 
 /**
  * Validate a session cookie against the shared sessions table. Returns the userId
@@ -8,8 +9,14 @@ import { eq } from 'drizzle-orm';
  */
 export async function validateSessionCookie(sessionId: string): Promise<string | null> {
   if (!sessionId) return null;
-  const session = await db.query.sessions.findFirst({ where: eq(sessions.id, sessionId) });
-  if (!session || session.expiresAt.getTime() < Date.now()) return null;
-  const user = await db.query.users.findFirst({ where: eq(users.id, session.userId) });
-  return user?.id ?? null;
+  return validateSessionUserId(sessionId);
+}
+
+/**
+ * Confirm that a user id received via internal Bearer + x-user-id header maps
+ * to a real account.
+ */
+export async function verifyUserExists(userId: string): Promise<string | null> {
+  if (!userId) return null;
+  return verifySharedUserExists(userId);
 }

@@ -1,12 +1,9 @@
 import { db } from '@pcp/db/src/client';
+import { runtimes, runtimeLogs, runtimeEvents, workspaces } from '@pcp/db/src/schema';
 import {
-  runtimes,
-  runtimeLogs,
-  runtimeEvents,
-  sessions,
-  users,
-  workspaces,
-} from '@pcp/db/src/schema';
+  validateSessionUserId,
+  verifyUserExists as verifySharedUserExists,
+} from '@pcp/db/src/session';
 import { eq, and, isNull, desc, ne } from 'drizzle-orm';
 import { mkdir, writeFile, readFile, readdir, stat } from 'node:fs/promises';
 import { join, relative, resolve, dirname, sep } from 'node:path';
@@ -14,6 +11,11 @@ import { DockerProvider } from './provider/docker';
 import { RuntimeProvider } from './provider/types';
 import { env } from './env';
 import { WorkspaceClient } from './workspaceClient';
+import {
+  assertRuntimeCommandAllowed,
+  assertRuntimeImageAllowed,
+  RUNTIME_COMMAND_POLICY,
+} from './policy';
 
 const SYNC_IGNORE_DIRS = new Set(['node_modules', '.git', '.cache', 'dist', '.next', '.venv']);
 const SYNC_BACK_MAX_BYTES = 512 * 1024;
@@ -29,24 +31,17 @@ export class RuntimeService {
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
-
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
-    });
-
-    return user?.id || null;
+    return validateSessionUserId(sessionId);
   }
 
-  private async resolveWorkspaceHostPath(workspaceId: string): Promise<string> {
+  async verifyUserExists(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    return verifySharedUserExists(userId);
+  }
+
+  private async resolveWorkspaceHostPath(userId: string, workspaceId: string): Promise<string> {
     const root = env.WORKSPACE_HOST_ROOT;
-    const dir = join(root, workspaceId);
+    const dir = join(root, userId, workspaceId);
     try {
       await mkdir(dir, { recursive: true });
     } catch (err) {
@@ -57,13 +52,7 @@ export class RuntimeService {
 
   async createRuntime(userId: string, workspaceId: string, image: string, options: any) {
     await this.assertWorkspaceOwned(workspaceId, userId);
-
-    const hostWorkspacePath = await this.resolveWorkspaceHostPath(workspaceId);
-
-    const containerId = await this.provider.create(image, {
-      ...options,
-      workspacePath: hostWorkspacePath,
-    });
+    assertRuntimeImageAllowed(image);
 
     const [runtime] = await db
       .insert(runtimes)
@@ -71,7 +60,6 @@ export class RuntimeService {
         userId,
         workspaceId,
         image,
-        containerId,
         options,
         status: 'pending',
       })
@@ -79,13 +67,32 @@ export class RuntimeService {
 
     if (!runtime) throw new Error('Failed to create runtime record');
 
+    const hostWorkspacePath = await this.resolveWorkspaceHostPath(userId, workspaceId);
+
+    const containerId = await this.provider.create(image, {
+      ...options,
+      workspacePath: hostWorkspacePath,
+      labels: {
+        ...(options?.labels ?? {}),
+        'pcp.service': 'runtime',
+        'pcp.userId': userId,
+        'pcp.workspaceId': workspaceId,
+        'pcp.runtimeId': runtime.id,
+      },
+    });
+
+    await db
+      .update(runtimes)
+      .set({ containerId })
+      .where(and(eq(runtimes.id, runtime.id), eq(runtimes.userId, userId)));
+
     await db.insert(runtimeEvents).values({
       runtimeId: runtime.id,
       type: 'create',
       payload: { containerId, options },
     });
 
-    return runtime;
+    return { ...runtime, containerId };
   }
 
   private async assertWorkspaceOwned(workspaceId: string, userId: string) {
@@ -111,7 +118,7 @@ export class RuntimeService {
     await db
       .update(runtimes)
       .set({ status: 'running', lastStartedAt: new Date() })
-      .where(eq(runtimes.id, runtimeId));
+      .where(and(eq(runtimes.id, runtimeId), eq(runtimes.userId, userId)));
 
     await db.insert(runtimeEvents).values({
       runtimeId,
@@ -128,7 +135,7 @@ export class RuntimeService {
     await db
       .update(runtimes)
       .set({ status: 'stopped', lastStoppedAt: new Date() })
-      .where(eq(runtimes.id, runtimeId));
+      .where(and(eq(runtimes.id, runtimeId), eq(runtimes.userId, userId)));
 
     await db.insert(runtimeEvents).values({
       runtimeId,
@@ -142,21 +149,20 @@ export class RuntimeService {
       throw new Error('Runtime not running or container not found');
     }
 
-    const commandStr = command.join(' ');
-    const blockedPatterns = [/rm\s+-rf\s+\//, /^sudo\b/, /:\(\)\{\s*:\|:&\s*\};:/];
-    if (blockedPatterns.some((pattern) => pattern.test(commandStr))) {
-      throw new Error('Command blocked by security policy');
-    }
+    assertRuntimeCommandAllowed(command);
 
     // Sync workspace files into the host-mounted directory so the container sees
     // the latest content. Failures here are logged but non-fatal.
-    const hostPath = await this.resolveWorkspaceHostPath(runtime.workspaceId);
+    const hostPath = await this.resolveWorkspaceHostPath(userId, runtime.workspaceId);
     await this.materializeWorkspace(userId, runtime.workspaceId, hostPath);
 
     const execPromise = this.provider.exec(runtime.containerId, command);
     const timeoutPromise = new Promise<{ stdout: string; stderr: string; exitCode: number }>(
       (_, reject) => {
-        setTimeout(() => reject(new Error('Command execution timed out after 60 seconds')), 60000);
+        setTimeout(
+          () => reject(new Error('Command execution timed out after 60 seconds')),
+          RUNTIME_COMMAND_POLICY.timeoutMs,
+        );
       },
     );
 
@@ -204,7 +210,7 @@ export class RuntimeService {
     if (!runtime || !runtime.containerId) throw new Error('Runtime or container not found');
 
     await this.provider.destroy(runtime.containerId);
-    await db.delete(runtimes).where(eq(runtimes.id, runtimeId));
+    await db.delete(runtimes).where(and(eq(runtimes.id, runtimeId), eq(runtimes.userId, userId)));
   }
 
   private async getRuntime(runtimeId: string, userId: string) {
@@ -241,7 +247,10 @@ export class RuntimeService {
         try {
           await this.startRuntime(existing.id, userId);
         } catch (err) {
-          this.logger.warn({ err, runtimeId: existing.id }, 'Failed to restart existing runtime; creating new one');
+          this.logger.warn(
+            { err, runtimeId: existing.id },
+            'Failed to restart existing runtime; creating new one',
+          );
           // Fall through to create new
         }
       }
@@ -251,7 +260,7 @@ export class RuntimeService {
 
     const created = await this.createRuntime(userId, workspaceId, image, options);
     await this.startRuntime(created.id, userId);
-    const hostPath = await this.resolveWorkspaceHostPath(workspaceId);
+    const hostPath = await this.resolveWorkspaceHostPath(userId, workspaceId);
     await this.materializeWorkspace(userId, workspaceId, hostPath);
     return (await this.getRuntime(created.id, userId))!;
   }
@@ -263,11 +272,7 @@ export class RuntimeService {
    * but do not prevent the exec from running (the container will simply see
    * stale or missing files).
    */
-  async materializeWorkspace(
-    userId: string,
-    workspaceId: string,
-    hostPath: string,
-  ): Promise<void> {
+  async materializeWorkspace(userId: string, workspaceId: string, hostPath: string): Promise<void> {
     let manifest: Awaited<ReturnType<WorkspaceClient['getSyncManifest']>>;
     try {
       manifest = await this.workspaceClient.getSyncManifest(userId, workspaceId);
@@ -311,11 +316,7 @@ export class RuntimeService {
    * canonical workspace storage. Skips heavyweight directories such as
    * `node_modules` and `.git` to avoid unbounded uploads. Best-effort.
    */
-  async syncBackWorkspace(
-    userId: string,
-    workspaceId: string,
-    hostPath: string,
-  ): Promise<void> {
+  async syncBackWorkspace(userId: string, workspaceId: string, hostPath: string): Promise<void> {
     let manifest: Awaited<ReturnType<WorkspaceClient['getSyncManifest']>>;
     try {
       manifest = await this.workspaceClient.getSyncManifest(userId, workspaceId);
@@ -368,12 +369,7 @@ export class RuntimeService {
       if (previous && previous.contentBase64 === base64) continue;
 
       try {
-        await this.workspaceClient.writeFile(
-          userId,
-          workspaceId,
-          rel,
-          buf.toString('utf8'),
-        );
+        await this.workspaceClient.writeFile(userId, workspaceId, rel, buf.toString('utf8'));
       } catch (err) {
         this.logger.warn({ err, path: rel }, 'Failed to sync file back to workspace');
       }

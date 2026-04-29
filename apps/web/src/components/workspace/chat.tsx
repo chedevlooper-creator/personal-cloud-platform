@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { agentApi, getApiErrorMessage } from '@/lib/api';
 import { usePersonaStore } from '@/store/persona';
+import { useActiveSkillsStore } from '@/store/skills';
 
 type ToolCall = {
   name: string;
@@ -75,11 +76,13 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       const personaId = usePersonaStore.getState().activePersonaId;
+      const skillIds = useActiveSkillsStore.getState().activeSkillIds;
       await agentApi.post('/agent/tasks', {
         workspaceId,
         input: content,
         conversationId: activeConversationId,
         personaId: personaId ?? undefined,
+        skillIds: skillIds.length > 0 ? skillIds : undefined,
       });
     },
     onSuccess: () => {

@@ -1,11 +1,37 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+const { mockDb } = vi.hoisted(() => ({
+  mockDb: {
+    query: {
+      channelLinks: {
+        findFirst: vi.fn(),
+      },
+      conversations: {
+        findFirst: vi.fn(),
+      },
+      workspaces: {
+        findFirst: vi.fn(),
+      },
+      tasks: {
+        findFirst: vi.fn(),
+      },
+    },
+  },
+}));
+
 // Mock db client to avoid env validation at module load.
-vi.mock('@pcp/db/src/client', () => ({ db: {} }));
+vi.mock('@pcp/db/src/client', () => ({ db: mockDb }));
+vi.mock('drizzle-orm', () => ({
+  and: (...conditions: unknown[]) => ({ type: 'and', conditions }),
+  eq: (column: unknown, value: unknown) => ({ type: 'eq', column, value }),
+  isNull: (column: unknown) => ({ type: 'isNull', column }),
+  desc: (column: unknown) => ({ type: 'desc', column }),
+}));
 
 describe('channels/router constants', () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.clearAllMocks();
   });
 
   it('exposes sane test constants', async () => {
@@ -13,6 +39,115 @@ describe('channels/router constants', () => {
     expect(mod.__test__.POLL_INTERVAL_MS).toBeGreaterThan(0);
     expect(mod.__test__.TASK_TIMEOUT_MS).toBeGreaterThan(mod.__test__.POLL_INTERVAL_MS);
     expect(mod.__test__.TASK_TIMEOUT_MS).toBeLessThanOrEqual(15 * 60 * 1000);
+  });
+
+  it('polls task completion by task id and authenticated channel user', async () => {
+    const { handleIncoming } = await import('./router');
+    const { tasks } = await import('@pcp/db/src/schema');
+    let taskWhere: unknown;
+    mockDb.query.channelLinks.findFirst.mockResolvedValue({
+      id: 'link-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      channel: 'telegram',
+      externalId: 'external-user-1',
+      enabled: true,
+    });
+    mockDb.query.conversations.findFirst.mockResolvedValue({
+      id: 'conversation-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      channel: 'telegram',
+      channelThreadId: 'thread-1',
+    });
+    mockDb.query.tasks.findFirst.mockImplementation(async (query: { where: unknown }) => {
+      taskWhere = query.where;
+      return {
+        id: 'task-1',
+        userId: 'user-1',
+        status: 'completed',
+        output: 'done',
+      };
+    });
+    const orchestrator = {
+      createTask: vi.fn(async () => ({ id: 'task-1' })),
+    };
+    const adapter = {
+      kind: 'telegram' as const,
+      sendReply: vi.fn(async () => undefined),
+    };
+
+    await handleIncoming(
+      {
+        channel: 'telegram',
+        externalUserId: 'external-user-1',
+        externalThreadId: 'thread-1',
+        body: 'hello',
+        receivedAt: new Date('2026-04-29T00:00:00.000Z'),
+      },
+      orchestrator as never,
+      adapter,
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    );
+
+    expect(adapter.sendReply).toHaveBeenCalledWith('thread-1', 'done');
+    expect(predicateContainsEq(taskWhere, tasks.id, 'task-1')).toBe(true);
+    expect(predicateContainsEq(taskWhere, tasks.userId, 'user-1')).toBe(true);
+  });
+
+  it('does not expose another tenant task output when polling a channel reply', async () => {
+    const { handleIncoming } = await import('./router');
+    const { tasks } = await import('@pcp/db/src/schema');
+    mockDb.query.channelLinks.findFirst.mockResolvedValue({
+      id: 'link-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      channel: 'telegram',
+      externalId: 'external-user-1',
+      enabled: true,
+    });
+    mockDb.query.conversations.findFirst.mockResolvedValue({
+      id: 'conversation-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      channel: 'telegram',
+      channelThreadId: 'thread-1',
+    });
+    mockDb.query.tasks.findFirst.mockImplementation(async (query: { where: unknown }) => {
+      if (predicateContainsEq(query.where, tasks.id, 'task-1')) {
+        if (predicateContainsEq(query.where, tasks.userId, 'user-1')) return null;
+        return {
+          id: 'task-1',
+          userId: 'user-2',
+          status: 'completed',
+          output: 'other tenant output',
+        };
+      }
+      return null;
+    });
+    const orchestrator = {
+      createTask: vi.fn(async () => ({ id: 'task-1' })),
+    };
+    const adapter = {
+      kind: 'telegram' as const,
+      sendReply: vi.fn(async () => undefined),
+    };
+
+    await handleIncoming(
+      {
+        channel: 'telegram',
+        externalUserId: 'external-user-1',
+        externalThreadId: 'thread-1',
+        body: 'hello',
+        receivedAt: new Date('2026-04-29T00:00:00.000Z'),
+      },
+      orchestrator as never,
+      adapter,
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    );
+
+    expect(adapter.sendReply).toHaveBeenCalledWith('thread-1', 'Task kayboldu, tekrar dene.');
+    expect(adapter.sendReply).not.toHaveBeenCalledWith('thread-1', 'other tenant output');
   });
 });
 
@@ -51,3 +186,15 @@ describe('channels/telegram', () => {
     }
   });
 });
+
+function predicateContainsEq(predicate: unknown, column: unknown, value: unknown): boolean {
+  if (!predicate || typeof predicate !== 'object') return false;
+  const node = predicate as {
+    type?: string;
+    column?: unknown;
+    value?: unknown;
+    conditions?: unknown[];
+  };
+  if (node.type === 'eq') return node.column === column && node.value === value;
+  return node.conditions?.some((child) => predicateContainsEq(child, column, value)) ?? false;
+}

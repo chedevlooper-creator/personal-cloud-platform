@@ -93,7 +93,7 @@ export async function handleIncoming(
 
   const task = await orchestrator.createTask(link.userId, workspaceId, msg.body, convo.id);
 
-  const reply = await waitForTaskCompletion(task.id, logger);
+  const reply = await waitForTaskCompletion(task.id, link.userId, logger);
 
   try {
     await adapter.sendReply(msg.externalThreadId, reply);
@@ -104,11 +104,14 @@ export async function handleIncoming(
 
 async function waitForTaskCompletion(
   taskId: string,
+  userId: string,
   logger: { warn: Function },
 ): Promise<string> {
   const deadline = Date.now() + TASK_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const t = await db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+    const t = await db.query.tasks.findFirst({
+      where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)),
+    });
     if (!t) return 'Task kayboldu, tekrar dene.';
     if (t.status === 'completed') return t.output ?? '(boş yanıt)';
     if (t.status === 'failed') return `Hata: ${t.output ?? 'bilinmiyor'}`;

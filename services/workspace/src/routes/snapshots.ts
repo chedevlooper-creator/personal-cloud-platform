@@ -7,6 +7,7 @@ import { db } from '@pcp/db/src/client';
 import { auditLogs } from '@pcp/db/src/schema';
 
 async function emitAudit(
+  fastify: FastifyInstance,
   userId: string | null,
   action: string,
   details: Record<string, unknown>,
@@ -14,12 +15,14 @@ async function emitAudit(
   try {
     await db.insert(auditLogs).values({ userId, action, details });
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('audit_log emit failed', { action, error: (e as Error).message });
+    fastify.log.warn({ action, err: e }, 'audit_log emit failed');
   }
 }
 
-export async function setupSnapshotRoutes(fastify: FastifyInstance, workspaceService: WorkspaceService) {
+export async function setupSnapshotRoutes(
+  fastify: FastifyInstance,
+  workspaceService: WorkspaceService,
+) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
 
   server.post(
@@ -41,11 +44,11 @@ export async function setupSnapshotRoutes(fastify: FastifyInstance, workspaceSer
         request.params.id,
         userId,
         request.body.name,
-        request.body.description
+        request.body.description,
       );
 
       return reply.code(201).send(snapshot);
-    }
+    },
   );
 
   server.get(
@@ -66,7 +69,7 @@ export async function setupSnapshotRoutes(fastify: FastifyInstance, workspaceSer
 
       const snapshots = await workspaceService.getSnapshots(request.params.id, userId);
       return { snapshots };
-    }
+    },
   );
 
   server.post(
@@ -81,9 +84,9 @@ export async function setupSnapshotRoutes(fastify: FastifyInstance, workspaceSer
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
       const result = await workspaceService.restoreSnapshot(request.params.id, userId);
-      await emitAudit(userId, 'SNAPSHOT_RESTORE', { snapshotId: request.params.id });
+      await emitAudit(fastify, userId, 'SNAPSHOT_RESTORE', { snapshotId: request.params.id });
       return { success: true, ...result };
-    }
+    },
   );
 
   server.delete(
@@ -98,8 +101,8 @@ export async function setupSnapshotRoutes(fastify: FastifyInstance, workspaceSer
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
       await workspaceService.deleteSnapshot(request.params.id, userId);
-      await emitAudit(userId, 'SNAPSHOT_DELETE', { snapshotId: request.params.id });
+      await emitAudit(fastify, userId, 'SNAPSHOT_DELETE', { snapshotId: request.params.id });
       return { success: true };
-    }
+    },
   );
 }

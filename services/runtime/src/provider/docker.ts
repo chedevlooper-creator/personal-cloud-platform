@@ -1,5 +1,7 @@
 import Docker from 'dockerode';
 import { RuntimeProvider, RuntimeOptions, ExecResult } from './types';
+import { env } from '../env';
+import { buildRuntimeSecurityOptions } from '../policy';
 
 const DEFAULT_CPU = 1;
 const MAX_CPU = 4;
@@ -21,17 +23,25 @@ export class DockerProvider implements RuntimeProvider {
     const container = await this.docker.createContainer({
       Image: image,
       User: '1000:1000',
+      Labels: options.labels,
       HostConfig: {
         Binds: [`${options.workspacePath}:/workspace`],
         Memory: memoryMb * 1024 * 1024,
+        MemorySwap: memoryMb * 1024 * 1024,
         // Docker expects NanoCpus as an integer; round to preserve the requested
         // CPU allocation despite floating-point imprecision in `cpu * 1e9`.
         NanoCpus: Math.round(cpu * 1e9),
         NetworkMode: 'none', // Default security: no network
         ReadonlyRootfs: true,
+        Privileged: false,
+        Init: true,
+        OomKillDisable: false,
         CapDrop: ['ALL'],
         PidsLimit: 100,
-        SecurityOpt: ['no-new-privileges:true'],
+        SecurityOpt: buildRuntimeSecurityOptions({
+          seccompProfile: env.RUNTIME_SECCOMP_PROFILE,
+          appArmorProfile: env.RUNTIME_APPARMOR_PROFILE,
+        }),
         Tmpfs: {
           '/tmp': 'rw,noexec,nosuid,size=100m',
         },

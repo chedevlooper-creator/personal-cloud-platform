@@ -7,7 +7,11 @@ import {
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { db } from '@pcp/db/src/client';
-import { sessions, snapshots, users, workspaceFiles, workspaces } from '@pcp/db/src/schema';
+import { snapshots, workspaceFiles, workspaces } from '@pcp/db/src/schema';
+import {
+  validateSessionUserId,
+  verifyUserExists as verifySharedUserExists,
+} from '@pcp/db/src/session';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { env } from './env';
@@ -222,20 +226,17 @@ export class WorkspaceService {
   }
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
-    this.logger.info({ sessionId: sessionId?.substring(0, 8) + '...' }, 'Validating session');
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
+    this.logger.info('Validating session');
+    return validateSessionUserId(sessionId);
+  }
 
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
-    });
-
-    return user?.id || null;
+  /**
+   * Confirm that a user id received via internal Bearer + x-user-id header maps
+   * to a real account. Returns the userId on success, null otherwise.
+   */
+  async verifyUserExists(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    return verifySharedUserExists(userId);
   }
 
   async createWorkspace(userId: string, name: string): Promise<any> {
@@ -256,11 +257,26 @@ export class WorkspaceService {
   async listUserWorkspaces(userId: string, page: number = 1, limit: number = 20) {
     const offset = (page - 1) * limit;
 
-    const results = await db.query.workspaces.findMany({
+    let results = await db.query.workspaces.findMany({
       where: and(eq(workspaces.userId, userId), isNull(workspaces.deletedAt)),
       limit,
       offset,
     });
+
+    // Auto-provision a default workspace on first access so newly registered
+    // users can immediately use chat / files without a manual setup step.
+    if (page === 1 && results.length === 0) {
+      try {
+        await this.createWorkspace(userId, 'Personal workspace');
+      } catch (err) {
+        // Race-safe: if another request created it concurrently, just refetch.
+      }
+      results = await db.query.workspaces.findMany({
+        where: and(eq(workspaces.userId, userId), isNull(workspaces.deletedAt)),
+        limit,
+        offset,
+      });
+    }
 
     return results;
   }
@@ -393,7 +409,7 @@ export class WorkspaceService {
         storageUsed: workspace.storageUsed + data.size,
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return file;
   }
@@ -475,7 +491,7 @@ export class WorkspaceService {
         storageUsed: workspace.storageUsed + size,
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return file;
   }
@@ -565,7 +581,7 @@ export class WorkspaceService {
         storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return { bytesWritten: size, path: normalizedPath };
   }
@@ -654,7 +670,7 @@ export class WorkspaceService {
         storageUsed: Math.max(0, workspace.storageUsed - fileSize),
         updatedAt: new Date(),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
   }
 
   async moveFile(
@@ -766,7 +782,7 @@ export class WorkspaceService {
     const workspace = await this.getWorkspace(workspaceId, userId);
     if (!workspace) throw new WorkspaceError('Workspace not found', 404);
 
-    const storageKey = `snapshots/${workspaceId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.json.gz`;
+    const storageKey = `snapshots/${userId}/${workspaceId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.json.gz`;
 
     const [snapshot] = await db
       .insert(snapshots)
@@ -795,7 +811,13 @@ export class WorkspaceService {
           sizeBytes: buffer.byteLength.toString(),
           fileCount: archive.files.length,
         })
-        .where(eq(snapshots.id, snapshot.id))
+        .where(
+          and(
+            eq(snapshots.id, snapshot.id),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        )
         .returning();
 
       return updated ?? snapshot;
@@ -805,7 +827,13 @@ export class WorkspaceService {
       await db
         .update(snapshots)
         .set({ status: 'failed', error: message })
-        .where(eq(snapshots.id, snapshot.id));
+        .where(
+          and(
+            eq(snapshots.id, snapshot.id),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        );
       throw new WorkspaceError(`Snapshot failed: ${message}`, 500);
     }
   }
@@ -830,7 +858,13 @@ export class WorkspaceService {
     await db
       .update(snapshots)
       .set({ deletedAt: new Date(), status: 'deleted' })
-      .where(eq(snapshots.id, snapshotId));
+      .where(
+        and(
+          eq(snapshots.id, snapshotId),
+          eq(snapshots.userId, userId),
+          isNull(snapshots.deletedAt),
+        ),
+      );
   }
 
   async restoreSnapshot(snapshotId: string, userId: string): Promise<{ restoredFiles: number }> {
@@ -859,7 +893,13 @@ export class WorkspaceService {
     await db
       .update(snapshots)
       .set({ status: 'restoring' })
-      .where(eq(snapshots.id, snapshotId));
+      .where(
+        and(
+          eq(snapshots.id, snapshotId),
+          eq(snapshots.userId, userId),
+          isNull(snapshots.deletedAt),
+        ),
+      );
 
     try {
       const buffer = await this.storage.getBuffer(snapshot.storageKey);
@@ -870,16 +910,18 @@ export class WorkspaceService {
         throw new Error(`Unsupported snapshot format version ${archive.version}`);
       }
 
-      const restoredCount = await this.applySnapshotArchive(
-        snapshot.workspaceId,
-        userId,
-        archive,
-      );
+      const restoredCount = await this.applySnapshotArchive(snapshot.workspaceId, userId, archive);
 
       await db
         .update(snapshots)
         .set({ status: 'ready' })
-        .where(eq(snapshots.id, snapshotId));
+        .where(
+          and(
+            eq(snapshots.id, snapshotId),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        );
 
       return { restoredFiles: restoredCount };
     } catch (err) {
@@ -888,7 +930,13 @@ export class WorkspaceService {
       await db
         .update(snapshots)
         .set({ status: 'failed', error: message })
-        .where(eq(snapshots.id, snapshotId));
+        .where(
+          and(
+            eq(snapshots.id, snapshotId),
+            eq(snapshots.userId, userId),
+            isNull(snapshots.deletedAt),
+          ),
+        );
       throw new WorkspaceError(`Restore failed: ${message}`, 500);
     }
   }
@@ -976,7 +1024,7 @@ export class WorkspaceService {
     await db
       .update(workspaces)
       .set({ storageUsed: totalSize, updatedAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return restored;
   }

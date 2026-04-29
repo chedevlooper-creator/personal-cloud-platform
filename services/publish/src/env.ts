@@ -6,6 +6,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3006),
   DATABASE_URL: z.string().url().optional(),
   ENCRYPTION_KEY: z.string().optional(),
+  PUBLISH_SECCOMP_PROFILE: z.string().optional(),
+  PUBLISH_APPARMOR_PROFILE: z.string().optional(),
 });
 
 const parsed = envSchema.parse(process.env);
@@ -16,6 +18,8 @@ export const env = {
   PORT: parsed.PORT,
   DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
   ENCRYPTION_KEY: resolveEncryptionKey(parsed.ENCRYPTION_KEY),
+  PUBLISH_SECCOMP_PROFILE: parsed.PUBLISH_SECCOMP_PROFILE,
+  PUBLISH_APPARMOR_PROFILE: parsed.PUBLISH_APPARMOR_PROFILE,
 };
 
 function resolveProductionValue(name: string, value: string | undefined): string {
@@ -28,16 +32,31 @@ function resolveProductionValue(name: string, value: string | undefined): string
 
 function resolveEncryptionKey(value: string | undefined): string {
   const resolved = value?.trim() || '';
-  if (resolved && resolved.length === 32) return resolved;
-  if (isProduction) {
-    throw new Error('ENCRYPTION_KEY must be exactly 32 bytes in production');
+  if (resolved && resolved.length === 32) {
+    if (isProduction && isUnsafeValue(resolved)) {
+      throw new Error('ENCRYPTION_KEY must be set to a non-default value in production');
+    }
+    return resolved;
   }
-  // Deterministic dev key derived from a constant. Logged loudly elsewhere.
+  if (isProduction) {
+    throw new Error('ENCRYPTION_KEY must be exactly 32 characters in production');
+  }
+  console.warn(
+    '[publish] WARNING: ENCRYPTION_KEY is not set to a valid 32-character value. ' +
+      'Using an insecure deterministic development fallback key derived from a constant string. ' +
+      'This must never be used with production or real data.',
+  );
+  // Deterministic dev key derived from a constant.
   // Never use this value outside development.
   return crypto.createHash('sha256').update('pcp-publish-dev-key').digest('hex').slice(0, 32);
 }
 
 function isUnsafeValue(value: string): boolean {
   const lower = value.toLowerCase();
-  return lower.includes('change_me') || lower.includes('replace') || lower.startsWith('dev-');
+  return (
+    lower.includes('change_me') ||
+    lower.includes('replace') ||
+    lower.includes('dummy') ||
+    lower.startsWith('dev-')
+  );
 }

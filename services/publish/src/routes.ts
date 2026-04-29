@@ -2,33 +2,24 @@ import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { PublishService } from './service';
 import {
+  createApiErrorResponse,
   createHostedServiceSchema,
+  apiErrorResponseSchema,
   updateHostedServiceSchema,
   hostedServiceResponseSchema,
 } from '@pcp/shared';
-import { db } from '@pcp/db/src/client';
-import { sessions } from '@pcp/db/src/schema';
-import { eq } from 'drizzle-orm';
-import { FastifyRequest } from 'fastify';
+import { validateSessionUserId } from '@pcp/db/src/session';
+import { FastifyReply, FastifyRequest } from 'fastify';
 
-const errorResponseSchema = z.object({ error: z.string() });
+function sendUnauthorized(reply: FastifyReply) {
+  return reply.code(401).send(createApiErrorResponse('UNAUTHORIZED', 'Unauthorized'));
+}
 
 export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
   const publishService = new PublishService();
 
   async function getAuthenticatedUserId(request: FastifyRequest): Promise<string | null> {
-    const sessionId = request.cookies.sessionId;
-    if (!sessionId) return null;
-
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-    });
-
-    if (!session || session.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    return session.userId;
+    return validateSessionUserId(request.cookies.sessionId);
   }
 
   app.post(
@@ -38,13 +29,13 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
         body: createHostedServiceSchema,
         response: {
           201: hostedServiceResponseSchema,
-          401: errorResponseSchema,
+          401: apiErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!userId) return sendUnauthorized(reply);
 
       const service = await publishService.createService({ ...request.body, userId });
       return reply.code(201).send(service);
@@ -60,13 +51,13 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
         }),
         response: {
           200: z.array(hostedServiceResponseSchema),
-          401: errorResponseSchema,
+          401: apiErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!userId) return sendUnauthorized(reply);
 
       const services = await publishService.listServices(request.query.workspaceId, userId);
       return reply.code(200).send(services);
@@ -81,13 +72,13 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
         body: updateHostedServiceSchema,
         response: {
           200: hostedServiceResponseSchema,
-          401: errorResponseSchema,
+          401: apiErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!userId) return sendUnauthorized(reply);
 
       const service = await publishService.updateService(request.params.id, userId, request.body);
       return reply.code(200).send(service);
@@ -103,7 +94,7 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!userId) return sendUnauthorized(reply);
 
       await publishService.deleteService(request.params.id, userId);
       return reply.code(204).send();
@@ -119,7 +110,7 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!userId) return sendUnauthorized(reply);
 
       const result = await publishService.startService(request.params.id, userId);
       return reply.code(200).send(result);
@@ -135,7 +126,7 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!userId) return sendUnauthorized(reply);
 
       const result = await publishService.stopService(request.params.id, userId);
       return reply.code(200).send(result);
@@ -151,7 +142,7 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!userId) return sendUnauthorized(reply);
 
       await publishService.stopService(request.params.id, userId);
       const result = await publishService.startService(request.params.id, userId);

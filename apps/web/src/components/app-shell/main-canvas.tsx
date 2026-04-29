@@ -87,7 +87,7 @@ export function MainCanvas({
             className="hidden gap-1.5 text-muted-foreground hover:text-foreground lg:flex"
           >
             <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-            <span className="text-xs">GPT-4</span>
+            <span className="text-xs">{process.env.NEXT_PUBLIC_DEFAULT_MODEL || 'MiniMax-M2.7'}</span>
           </Button>
 
           {/* New Chat */}
