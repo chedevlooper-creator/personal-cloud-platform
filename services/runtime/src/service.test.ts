@@ -4,13 +4,14 @@ import pino from 'pino';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
 const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440002';
 
-const { mockDb, providerCreate, providerStart, providerStop, providerDestroy, providerExec } =
+const { mockDb, providerCreate, providerStart, providerStop, providerDestroy, providerExec, providerAttach } =
   vi.hoisted(() => {
     const providerCreate = vi.fn(async () => 'container-1');
     const providerStart = vi.fn();
     const providerStop = vi.fn();
     const providerDestroy = vi.fn();
     const providerExec = vi.fn();
+    const providerAttach = vi.fn();
     const insertReturning = vi.fn(async () => [
       {
         id: '550e8400-e29b-41d4-a716-446655440003',
@@ -46,7 +47,15 @@ const { mockDb, providerCreate, providerStart, providerStop, providerDestroy, pr
       })),
     };
 
-    return { mockDb, providerCreate, providerStart, providerStop, providerDestroy, providerExec };
+    return {
+      mockDb,
+      providerCreate,
+      providerStart,
+      providerStop,
+      providerDestroy,
+      providerExec,
+      providerAttach,
+    };
   });
 
 vi.mock('@pcp/db/src/client', () => ({
@@ -68,7 +77,7 @@ vi.mock('./provider/docker', () => ({
     stop: providerStop,
     destroy: providerDestroy,
     exec: providerExec,
-    attach: vi.fn(),
+    attach: providerAttach,
     getStatus: vi.fn(),
   })),
 }));
@@ -197,6 +206,44 @@ describe('RuntimeService workspace ownership', () => {
 
     expect(providerExec).not.toHaveBeenCalled();
     expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('passes the runtime command timeout to the provider', async () => {
+    const { RuntimeService } = await import('./service');
+    const { RUNTIME_COMMAND_POLICY } = await import('./policy');
+    mockDb.query.runtimes.findFirst.mockResolvedValue({
+      id: 'runtime-1',
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      containerId: 'container-1',
+      status: 'running',
+    });
+    providerExec.mockResolvedValue({ stdout: 'ok', stderr: '', exitCode: 0 });
+    const service = new RuntimeService(logger);
+
+    await service.execCommand('runtime-1', USER_ID, ['node', '--version']);
+
+    expect(providerExec).toHaveBeenCalledWith('container-1', ['node', '--version'], {
+      timeoutMs: RUNTIME_COMMAND_POLICY.timeoutMs,
+    });
+  });
+
+  it('blocks terminal attach when terminal access is disabled', async () => {
+    const { RuntimeService } = await import('./service');
+    const { env } = await import('./env');
+    const originalValue = env.RUNTIME_TERMINAL_ENABLED;
+    env.RUNTIME_TERMINAL_ENABLED = false;
+    const service = new RuntimeService(logger);
+
+    try {
+      await expect(service.attachTerminal('runtime-1', USER_ID)).rejects.toMatchObject({
+        statusCode: 403,
+      });
+      expect(providerAttach).not.toHaveBeenCalled();
+      expect(mockDb.query.runtimes.findFirst).not.toHaveBeenCalled();
+    } finally {
+      env.RUNTIME_TERMINAL_ENABLED = originalValue;
+    }
   });
 
   it('scopes runtime deletes by runtime id and authenticated user', async () => {

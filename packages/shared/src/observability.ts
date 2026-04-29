@@ -1,11 +1,14 @@
-import { Counter, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 
 /**
  * Minimal Fastify-compatible app surface used by the observability plugin.
  * Kept structural so `@pcp/shared` does not need to depend on `fastify`.
  */
 interface ObservabilityApp {
-  addHook(name: 'onResponse', handler: (request: unknown, reply: unknown, done: () => void) => void): unknown;
+  addHook(
+    name: 'onRequest' | 'onResponse',
+    handler: (request: unknown, reply: unknown, done: () => void) => void,
+  ): unknown;
   get(path: string, handler: (request: unknown, reply: unknown) => unknown | Promise<unknown>): unknown;
 }
 
@@ -43,6 +46,7 @@ export interface ObservabilityHandles {
   registry: Registry;
   httpRequestsTotal: Counter<string>;
   httpRequestDurationSeconds: Histogram<string>;
+  httpRequestsInFlight: Gauge<string>;
 }
 
 /**
@@ -74,6 +78,31 @@ export function registerObservability(
     registers: [registry],
   });
 
+  const httpRequestsInFlight = new Gauge({
+    name: 'http_requests_in_flight',
+    help: 'Number of HTTP requests currently being processed.',
+    labelNames: ['method'],
+    registers: [registry],
+  });
+
+  /**
+   * Resolve a low-cardinality route label. Only Fastify's matched route
+   * template (`/users/:id`) is allowed; otherwise we collapse to a fixed
+   * sentinel to keep metric cardinality bounded. Using `req.url` directly
+   * would explode the time-series count under UUIDs / query strings.
+   */
+  const routeLabel = (req: { url?: string; routeOptions?: { url?: string } }): string => {
+    const matched = req.routeOptions?.url;
+    if (typeof matched === 'string' && matched.length > 0) return matched;
+    return 'unmatched';
+  };
+
+  app.addHook('onRequest', (request: unknown, _reply: unknown, done: () => void) => {
+    const req = request as { method?: string };
+    httpRequestsInFlight.inc({ method: req.method ?? 'GET' });
+    done();
+  });
+
   app.addHook('onResponse', (request: unknown, reply: unknown, done: () => void) => {
     const req = request as {
       method?: string;
@@ -81,12 +110,13 @@ export function registerObservability(
       routeOptions?: { url?: string };
     };
     const rep = reply as { statusCode?: number; elapsedTime?: number };
-    const route = req.routeOptions?.url ?? req.url ?? 'unknown';
+    const method = req.method ?? 'GET';
+    httpRequestsInFlight.dec({ method });
+    const route = routeLabel(req);
     if (route === '/metrics') {
       done();
       return;
     }
-    const method = req.method ?? 'GET';
     const status = String(rep.statusCode ?? 0);
     httpRequestsTotal.inc({ method, route, status });
     const elapsedMs = Number(rep.elapsedTime ?? 0);
@@ -100,7 +130,7 @@ export function registerObservability(
     return registry.metrics();
   });
 
-  return { registry, httpRequestsTotal, httpRequestDurationSeconds };
+  return { registry, httpRequestsTotal, httpRequestDurationSeconds, httpRequestsInFlight };
 }
 
 /**

@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createContainer, containerExec, containerKill } = vi.hoisted(() => {
+const { createContainer, containerExec, containerKill, execStreamDestroy } = vi.hoisted(() => {
   const mockContainer = { id: 'container-1' };
+  type MockDockerStream = {
+    on: (event: string, handler: (...args: unknown[]) => void) => MockDockerStream;
+    write: () => void;
+    end: () => void;
+    destroy: () => void;
+  };
+  const execStreamDestroy = vi.fn();
+  const execStream: MockDockerStream = {
+    on: vi.fn((_event: string, _handler: (...args: unknown[]) => void): MockDockerStream => execStream),
+    write: vi.fn(),
+    end: vi.fn(),
+    destroy: execStreamDestroy,
+  };
   const containerExec = vi.fn(async () => ({
-    start: vi.fn(async () => ({
-      on: vi.fn(),
-      write: vi.fn(),
-      end: vi.fn(),
-      destroy: vi.fn(),
-    })),
+    start: vi.fn(async () => execStream),
     inspect: vi.fn(async () => ({ ExitCode: 0 })),
   }));
   const containerKill = vi.fn(async () => undefined);
@@ -16,6 +24,7 @@ const { createContainer, containerExec, containerKill } = vi.hoisted(() => {
     createContainer: vi.fn(async () => mockContainer),
     containerExec,
     containerKill,
+    execStreamDestroy,
   };
 });
 
@@ -133,26 +142,16 @@ describe('DockerProvider sandbox options', () => {
   it('kills the runtime container when an exec command times out', async () => {
     vi.useFakeTimers();
     try {
-      const streamHandlers = new Map<string, (...args: unknown[]) => void>();
-      const stream = {
-        on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-          streamHandlers.set(event, handler);
-          return stream;
-        }),
-        destroy: vi.fn(),
-      };
-      containerExec.mockResolvedValueOnce({
-        start: vi.fn(async () => stream),
-        inspect: vi.fn(async () => ({ ExitCode: 0 })),
-      });
       const { DockerProvider } = await import('./docker');
       const provider = new DockerProvider();
 
-      const result = provider.exec('container-1', ['sleep', '120'], { timeoutMs: 1000 });
+      const result = expect(
+        provider.exec('container-1', ['sleep', '120'], { timeoutMs: 1000 }),
+      ).rejects.toThrow('Command execution timed out after 1 seconds');
       await vi.advanceTimersByTimeAsync(1000);
 
-      await expect(result).rejects.toThrow('Command execution timed out after 1 seconds');
-      expect(stream.destroy).toHaveBeenCalled();
+      await result;
+      expect(execStreamDestroy).toHaveBeenCalled();
       expect(containerKill).toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
