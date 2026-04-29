@@ -65,40 +65,48 @@ export class MemoryService {
   async searchMemory(
     userId: string,
     query: string,
-    options?: { limit?: number; type?: string; workspaceId?: string },
+    options?: {
+      limit?: number;
+      type?: string;
+      workspaceId?: string;
+      minSimilarity?: number;
+    },
   ) {
     const queryEmbedding = await this.embeddings.generate(query);
-    const limit = options?.limit || 5;
+    const limit = options?.limit ?? 5;
+    const minSimilarity = options?.minSimilarity;
 
     // Formatting embedding vector array as string for raw SQL execution
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
 
-    // Constructing dynamic SQL query
-    let conditions = [sql`user_id = ${userId}`];
-
-    if (options?.type) {
-      conditions.push(sql`type = ${options.type}`);
-    }
-
-    if (options?.workspaceId) {
-      conditions.push(sql`workspace_id = ${options.workspaceId}`);
-    }
-
+    // Tenant scoping: user_id filter is mandatory; type/workspace narrow further.
+    const conditions = [sql`user_id = ${userId}`];
+    if (options?.type) conditions.push(sql`type = ${options.type}`);
+    if (options?.workspaceId) conditions.push(sql`workspace_id = ${options.workspaceId}`);
     const whereClause = sql.join(conditions, sql` AND `);
 
-    // L2 distance via pgvector `<->`. Both embedding providers emit
-    // L2-normalized vectors, so L2 ranking is monotonic with cosine ranking.
-    // The 0010 migration adds an HNSW index on (embedding vector_l2_ops).
+    // Ranking uses pgvector L2 distance (`<->`) so the HNSW index from
+    // migration 0010 (`vector_l2_ops`) is used. Both embedding providers
+    // emit L2-normalized vectors, so for unit-length a, b:
+    //   ||a - b||^2 = 2 - 2 * cos(a, b)
+    //   => cos(a, b) = 1 - ||a - b||^2 / 2
+    // We expose that as `similarity` (range [-1, 1], higher is better).
     const results = await db.execute(sql`
       SELECT id, user_id, workspace_id, type, content, metadata, created_at, updated_at,
-             1 - (embedding <-> ${embeddingStr}::vector) as similarity
+             1 - power(embedding <-> ${embeddingStr}::vector, 2) / 2 AS similarity
       FROM memory_entries
       WHERE ${whereClause}
       ORDER BY embedding <-> ${embeddingStr}::vector
       LIMIT ${limit}
     `);
 
-    return (results as any).rows || results;
+    const rows: any[] = (results as any).rows ?? (results as any) ?? [];
+    if (typeof minSimilarity === 'number') {
+      return rows.filter(
+        (row) => typeof row.similarity === 'number' && row.similarity >= minSimilarity,
+      );
+    }
+    return rows;
   }
 
   async updateMemory(

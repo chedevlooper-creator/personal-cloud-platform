@@ -46,6 +46,33 @@ search. HNSW is used because it works on empty tables, unlike IVFFlat
 L2-normalized vectors, so L2 ranking matches cosine ranking — the
 index's `vector_l2_ops` opclass aligns with the runtime `<->` operator.
 
+## Retrieval semantics
+
+`POST /api/memory/search` body:
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `query` | required | Embedded once per request. |
+| `limit` | `5` (max `50`) | `LIMIT` applied in SQL. |
+| `type` | none | Optional `type = ?` filter. |
+| `workspaceId` | none | Optional `workspace_id = ?` filter. |
+| `minSimilarity` | none | Drops results with `similarity` below the floor. |
+
+- **Tenant scope**: `user_id = ?` is always applied; `type` and
+  `workspaceId` narrow further. Drizzle parameters are bound, never
+  concatenated.
+- **Ordering**: `ORDER BY embedding <-> $vec::vector` (L2 distance,
+  ascending). The HNSW index handles this operator on any table size.
+- **Similarity score**: returned as `similarity` per row. Because both
+  providers emit unit-length vectors,
+  `similarity = 1 - ||a − b||² / 2` which equals true cosine similarity
+  in `[-1, 1]` (higher is better).
+- **Threshold**: `minSimilarity` filters rows after the SQL `LIMIT`. To
+  avoid silently empty results pick a value calibrated against your
+  embedding provider — `0.2` is reasonable for OpenAI
+  `text-embedding-3-small`; the local hash fallback emits much lower
+  scores and a threshold may not be useful there.
+
 ## Environment
 
 | Variable | Purpose |

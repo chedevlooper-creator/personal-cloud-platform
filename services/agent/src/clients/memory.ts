@@ -35,7 +35,12 @@ export class MemoryClient {
   async search(
     userId: string,
     query: string,
-    options: { limit?: number; type?: string; workspaceId?: string } = {},
+    options: {
+      limit?: number;
+      type?: string;
+      workspaceId?: string;
+      minSimilarity?: number;
+    } = {},
   ): Promise<MemoryEntry[]> {
     const result = await internalRequest<{ results: MemoryEntry[] }>(env.MEMORY_SERVICE_URL, {
       userId,

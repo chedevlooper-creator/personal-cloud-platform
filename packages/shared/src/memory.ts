@@ -9,9 +9,15 @@ export const addMemorySchema = z.object({
 
 export const searchMemorySchema = z.object({
   query: z.string().min(1),
-  limit: z.number().optional().default(5),
+  limit: z.number().int().min(1).max(50).optional().default(5),
   type: z.string().optional(),
   workspaceId: z.string().uuid().optional(),
+  /**
+   * Optional cosine-similarity floor in [-1, 1]. Results with `similarity`
+   * below this value are dropped. Vectors are L2-normalized, so similarity
+   * is computed as `1 - ||a - b||^2 / 2` from pgvector's L2 distance.
+   */
+  minSimilarity: z.number().min(-1).max(1).optional(),
 });
 
 export const updateMemorySchema = z.object({

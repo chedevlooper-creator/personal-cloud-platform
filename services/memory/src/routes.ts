@@ -61,9 +61,14 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
 
-      const { query, limit, type, workspaceId } = request.body;
-      const results = await memoryService.searchMemory(userId, query, { limit, type, workspaceId });
-      
+      const { query, limit, type, workspaceId, minSimilarity } = request.body;
+      const results = await memoryService.searchMemory(userId, query, {
+        limit,
+        type,
+        workspaceId,
+        minSimilarity,
+      });
+
       return { results };
     }
   );
