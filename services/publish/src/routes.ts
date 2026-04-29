@@ -8,7 +8,7 @@ import {
   updateHostedServiceSchema,
   hostedServiceResponseSchema,
 } from '@pcp/shared';
-import { validateSessionUserId } from '@pcp/db/src/session';
+import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 function sendUnauthorized(reply: FastifyReply) {
@@ -19,7 +19,7 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
   const publishService = new PublishService();
 
   async function getAuthenticatedUserId(request: FastifyRequest): Promise<string | null> {
-    return validateSessionUserId(request.cookies.sessionId);
+    return resolveAuthenticatedUserId(request);
   }
 
   app.post(

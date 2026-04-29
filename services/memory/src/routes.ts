@@ -5,28 +5,16 @@ import { MemoryService } from './service';
 import { z } from 'zod';
 import { env } from './env';
 import type { FastifyRequest } from 'fastify';
+import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
 export async function setupMemoryRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const memoryService = new MemoryService(fastify.log);
 
   async function getAuthenticatedUserId(request: FastifyRequest): Promise<string | null> {
-    const auth = request.headers['authorization'];
-    if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
-      const token = auth.slice('Bearer '.length).trim();
-      const headerUserId = request.headers['x-user-id'];
-      if (
-        token &&
-        token === env.INTERNAL_SERVICE_TOKEN &&
-        typeof headerUserId === 'string' &&
-        headerUserId.length > 0
-      ) {
-        return memoryService.verifyUserExists(headerUserId);
-      }
-    }
-    const sessionId = request.cookies.sessionId;
-    if (!sessionId) return null;
-    return memoryService.validateUserFromCookie(sessionId);
+    return resolveAuthenticatedUserId(request, {
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
   }
 
   server.post(

@@ -3,7 +3,7 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { browserSessionSchema, navigateSchema, clickSchema, fillSchema } from '@pcp/shared';
 import { BrowserService, type BrowserSessionInfo } from './service';
-import { validateSessionCookie, verifyUserExists } from './auth';
+import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 import { env } from './env';
 
 const AUTH_BYPASS = env.AUTH_BYPASS;
@@ -24,20 +24,9 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
 
   async function authUser(request: FastifyRequest): Promise<string | null> {
     if (AUTH_BYPASS) return 'local-dev-user';
-    const auth = request.headers['authorization'];
-    if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
-      const token = auth.slice('Bearer '.length).trim();
-      const headerUserId = request.headers['x-user-id'];
-      if (
-        token &&
-        token === env.INTERNAL_SERVICE_TOKEN &&
-        typeof headerUserId === 'string' &&
-        headerUserId.length > 0
-      ) {
-        return verifyUserExists(headerUserId);
-      }
-    }
-    return validateSessionCookie(request.cookies.sessionId ?? '');
+    return resolveAuthenticatedUserId(request, {
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
   }
 
   function handle(err: any, reply: any, fallback = 'Internal error') {

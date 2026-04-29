@@ -15,29 +15,16 @@ import { setupSnapshotRoutes } from './routes/snapshots';
 import { setupDatasetsRoutes } from './routes/datasets';
 import { env } from './env';
 import type { FastifyRequest } from 'fastify';
+import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
 export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const workspaceService = new WorkspaceService(fastify.log);
 
   async function getAuthenticatedUserId(request: FastifyRequest): Promise<string | null> {
-    const auth = request.headers['authorization'];
-    if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
-      const token = auth.slice('Bearer '.length).trim();
-      const headerUserId = request.headers['x-user-id'];
-      if (
-        token &&
-        token === env.INTERNAL_SERVICE_TOKEN &&
-        typeof headerUserId === 'string' &&
-        headerUserId.length > 0
-      ) {
-        // Defence-in-depth: confirm the user id actually exists before trusting it.
-        return workspaceService.verifyUserExists(headerUserId);
-      }
-    }
-    const sessionId = request.cookies.sessionId;
-    if (!sessionId) return null;
-    return workspaceService.validateUserFromCookie(sessionId);
+    return resolveAuthenticatedUserId(request, {
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
   }
 
   // Register sub-routes
