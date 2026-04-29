@@ -95,8 +95,11 @@ export function useTerminal({ runtimeId, onCommandBlocked }: UseTerminalOptions)
 
     const connect = () => {
       if (cancelledRef.current) return;
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/runtimes/${runtimeId}/terminal`;
+      const httpBase =
+        process.env.NEXT_PUBLIC_RUNTIME_API_URL || 'http://localhost:3003/api';
+      // Convert http(s) base to ws(s) WebSocket URL targeting runtime service.
+      const wsBase = httpBase.replace(/^http/i, 'ws');
+      const wsUrl = `${wsBase}/runtimes/${runtimeId}/terminal`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 

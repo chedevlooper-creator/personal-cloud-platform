@@ -19,7 +19,7 @@ type WorkspacesResponse = { workspaces: Workspace[] };
 type Dataset = {
   id: string;
   name: string;
-  format: string;
+  sourceType: string;
   rowCount: number | null;
   sizeBytes: number | null;
   createdAt: string;
@@ -31,9 +31,17 @@ type Snapshot = {
   id: string;
   workspaceId: string;
   status: string;
-  sizeBytes: number | null;
+  sizeBytes: number | string | null;
   createdAt: string;
 };
+
+type SnapshotsResponse = { snapshots: Snapshot[] };
+
+function parseBytes(value: number | string | null | undefined): number {
+  if (value == null) return 0;
+  const n = typeof value === 'string' ? Number(value) : value;
+  return Number.isFinite(n) ? n : 0;
+}
 
 export default function SpacePage() {
   const results = useQueries({
@@ -61,8 +69,10 @@ export default function SpacePage() {
   const snapshotResults = useQueries({
     queries: workspaces.map((w) => ({
       queryKey: ['space', 'snapshots', w.id],
-      queryFn: async () =>
-        (await workspaceApi.get(`/workspaces/${w.id}/snapshots`)).data as Snapshot[],
+      queryFn: async () => {
+        const res = await workspaceApi.get(`/workspaces/${w.id}/snapshots`);
+        return ((res.data?.snapshots ?? res.data ?? []) as Snapshot[]);
+      },
       retry: false,
     })),
   });
@@ -72,8 +82,8 @@ export default function SpacePage() {
 
   const totalWorkspaceUsed = workspaces.reduce((s, w) => s + (w.storageUsed ?? 0), 0);
   const totalWorkspaceQuota = workspaces.reduce((s, w) => s + (w.storageLimit ?? 0), 0);
-  const totalDatasetBytes = datasets.reduce((s, d) => s + (d.sizeBytes ?? 0), 0);
-  const totalSnapshotBytes = allSnapshots.reduce((s, sn) => s + (sn.sizeBytes ?? 0), 0);
+  const totalDatasetBytes = datasets.reduce((s, d) => s + parseBytes(d.sizeBytes), 0);
+  const totalSnapshotBytes = allSnapshots.reduce((s, sn) => s + parseBytes(sn.sizeBytes), 0);
   const grandTotal = totalWorkspaceUsed + totalDatasetBytes + totalSnapshotBytes;
 
   const breakdown = grandTotal > 0
@@ -217,12 +227,12 @@ export default function SpacePage() {
                   <div className="min-w-0">
                     <div className="truncate font-medium text-foreground">{d.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {d.format.toUpperCase()}
+                      {d.sourceType?.toUpperCase() ?? 'DATASET'}
                       {d.rowCount != null ? ` · ${d.rowCount.toLocaleString()} rows` : ''}
                     </div>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {formatBytes(d.sizeBytes ?? 0)}
+                    {formatBytes(parseBytes(d.sizeBytes))}
                   </span>
                 </li>
               ))}
@@ -268,7 +278,7 @@ export default function SpacePage() {
                         </div>
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {formatBytes(sn.sizeBytes ?? 0)}
+                        {formatBytes(parseBytes(sn.sizeBytes))}
                       </span>
                     </li>
                   );

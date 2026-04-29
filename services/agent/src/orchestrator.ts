@@ -405,12 +405,14 @@ export class AgentOrchestrator {
     const task = await db.query.tasks.findFirst({
       where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)),
     });
-    if (!task || task.status !== 'pending') return;
+    if (!task || (task.status !== 'pending' && task.status !== 'executing')) return;
 
-    await db
-      .update(tasks)
-      .set({ status: 'executing' })
-      .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+    if (task.status !== 'executing') {
+      await db
+        .update(tasks)
+        .set({ status: 'executing' })
+        .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+    }
     this.emitTaskUpdate(taskId, { ...task, status: 'executing' });
 
     const systemPrompt = await this.buildSystemPrompt(

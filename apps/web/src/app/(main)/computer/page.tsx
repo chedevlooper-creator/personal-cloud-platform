@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import {
   ArrowRight,
   Boxes,
@@ -34,7 +34,7 @@ type HostedService = {
   id: string;
   name: string;
   status: string;
-  url?: string | null;
+  publicUrl?: string | null;
   updatedAt: string;
 };
 
@@ -43,13 +43,15 @@ type BrowserSession = {
   url?: string;
   title?: string;
   createdAt: string;
-  lastActiveAt: string;
+  lastUsedAt: string;
 };
 
 type Automation = {
   id: string;
-  name: string;
-  schedule: string;
+  title: string;
+  scheduleType: string;
+  cronExpression?: string | null;
+  intervalSeconds?: number | null;
   enabled: boolean;
   lastRunAt: string | null;
 };
@@ -92,15 +94,30 @@ export default function ComputerPage() {
     retry: false,
   });
 
-  const servicesQuery = useQuery({
-    queryKey: ['computer', 'hosted-services'],
-    queryFn: async () => (await publishApi.get('/hosted-services')).data as HostedService[],
-    retry: false,
+  const workspaces = workspacesQuery.data?.workspaces ?? [];
+
+  // Hosted services are scoped per-workspace; fetch in parallel.
+  const servicesResults = useQueries({
+    queries: workspaces.map((w) => ({
+      queryKey: ['computer', 'hosted-services', w.id],
+      queryFn: async () => {
+        const res = await publishApi.get('/hosted-services', {
+          params: { workspaceId: w.id },
+        });
+        return (Array.isArray(res.data) ? res.data : (res.data?.services ?? [])) as HostedService[];
+      },
+      retry: false,
+    })),
   });
+  const servicesLoading = servicesResults.some((r) => r.isLoading);
+  const services = servicesResults.flatMap((r) => r.data ?? []);
 
   const browserQuery = useQuery({
     queryKey: ['computer', 'browser-sessions'],
-    queryFn: async () => (await browserApi.get('/browser/sessions')).data as BrowserSession[],
+    queryFn: async () => {
+      const res = await browserApi.get('/browser/sessions');
+      return (res.data?.sessions ?? res.data ?? []) as BrowserSession[];
+    },
     retry: false,
   });
 
@@ -113,9 +130,7 @@ export default function ComputerPage() {
     retry: false,
   });
 
-  const workspaces = workspacesQuery.data?.workspaces ?? [];
-  const services = servicesQuery.data ?? [];
-  const browserSessions = browserQuery.data ?? [];
+  const browserSessions = Array.isArray(browserQuery.data) ? browserQuery.data : [];
   const automations = Array.isArray(automationsQuery.data) ? automationsQuery.data : [];
 
   const runningServices = services.filter((s) => s.status === 'running').length;
@@ -204,7 +219,7 @@ export default function ComputerPage() {
               Manage →
             </Link>
           </div>
-          {servicesQuery.isLoading ? (
+          {servicesLoading ? (
             <div className="p-4 text-sm text-muted-foreground">Loading…</div>
           ) : services.length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">No services deployed yet.</div>
@@ -214,14 +229,14 @@ export default function ComputerPage() {
                 <li key={svc.id} className="flex items-center justify-between px-4 py-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-foreground">{svc.name}</div>
-                    {svc.url ? (
+                    {svc.publicUrl ? (
                       <a
-                        href={svc.url}
+                        href={svc.publicUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="truncate text-xs text-muted-foreground hover:text-foreground"
                       >
-                        {svc.url}
+                        {svc.publicUrl}
                       </a>
                     ) : null}
                   </div>
@@ -265,7 +280,7 @@ export default function ComputerPage() {
                     {s.title || s.url || s.id}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Last active {formatDate(s.lastActiveAt)}
+                    Last active {formatDate(s.lastUsedAt)}
                   </div>
                 </li>
               ))}
@@ -295,8 +310,14 @@ export default function ComputerPage() {
               {automations.slice(0, 5).map((a) => (
                 <li key={a.id} className="flex items-center justify-between px-4 py-3 text-sm">
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-foreground">{a.name}</div>
-                    <div className="text-xs text-muted-foreground">{a.schedule}</div>
+                    <div className="truncate font-medium text-foreground">{a.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.scheduleType === 'cron'
+                        ? (a.cronExpression ?? 'cron')
+                        : a.scheduleType === 'interval'
+                          ? `every ${a.intervalSeconds ?? '?'}s`
+                          : a.scheduleType}
+                    </div>
                   </div>
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${

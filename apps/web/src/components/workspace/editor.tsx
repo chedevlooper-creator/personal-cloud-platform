@@ -60,9 +60,10 @@ export default function WorkspaceEditor() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!currentWorkspaceId || !selectedFile || editedContent === null) return;
-      await workspaceApi.put(`/workspaces/${currentWorkspaceId}/files/content`, {
+      await workspaceApi.post(`/workspaces/${currentWorkspaceId}/files/write`, {
         path: selectedFile,
         content: editedContent,
+        mimeType: 'text/plain',
       });
     },
     onSuccess: () => {

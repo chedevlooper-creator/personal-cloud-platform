@@ -11,6 +11,7 @@ export const createTaskSchema = z.object({
 export const taskResponseSchema = z.object({
   id: z.string().uuid(),
   workspaceId: z.string().uuid(),
+  conversationId: z.string().uuid().nullable().optional(),
   status: z.string(),
   input: z.string(),
   output: z.string().nullable(),

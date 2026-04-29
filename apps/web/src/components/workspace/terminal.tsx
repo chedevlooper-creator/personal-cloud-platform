@@ -59,7 +59,7 @@ export default function WorkspaceTerminal({ workspaceId }: { workspaceId: string
     mutationFn: async () => {
       const res = await runtimeApi.post('/runtimes', {
         workspaceId,
-        image: 'ubuntu:latest', // Default image
+        image: 'node:20-alpine', // Must match runtime allowlist
         options: {},
       });
       const runtime = res.data;
