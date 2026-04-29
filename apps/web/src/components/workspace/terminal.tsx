@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, TerminalSquare, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, TerminalSquare, AlertTriangle, Loader2, X } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,15 +21,15 @@ function TerminalTab({ runtimeId, isActive, onBlocked }: { runtimeId: string; is
 
   const badgeStyle =
     connectionState === 'connected'
-      ? 'bg-emerald-500/20 text-emerald-300'
+      ? 'bg-success/15 text-success'
       : connectionState === 'connecting'
-        ? 'bg-zinc-500/20 text-zinc-300'
+        ? 'bg-muted text-muted-foreground'
         : connectionState === 'reconnecting'
-          ? 'bg-amber-500/20 text-amber-300'
-          : 'bg-red-500/20 text-red-300';
+          ? 'bg-warning/15 text-warning-foreground dark:text-warning'
+          : 'bg-destructive/15 text-destructive';
 
   return (
-    <div className={`flex-1 p-2 bg-[#1e1e1e] relative ${isActive ? 'block' : 'hidden'}`}>
+    <div className={`flex-1 p-2 bg-background relative ${isActive ? 'block' : 'hidden'}`}>
       <div
         className={`absolute top-2 right-3 z-10 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${badgeStyle}`}
         role="status"
@@ -38,9 +38,9 @@ function TerminalTab({ runtimeId, isActive, onBlocked }: { runtimeId: string; is
         {connectionState}
       </div>
       {connectionState !== 'connected' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e1e]/80 z-10">
-          <Loader2 className="animate-spin text-zinc-400 mr-2" />
-          <span className="text-zinc-400">
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+          <Loader2 className="motion-safe:animate-spin text-muted-foreground mr-2" />
+          <span className="text-muted-foreground">
             {connectionState === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
           </span>
         </div>
@@ -81,76 +81,112 @@ export default function WorkspaceTerminal({ workspaceId }: { workspaceId: string
     setBlockedCommand(cmd);
   };
 
+  const closeTab = (idToClose: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTabs((prev) => {
+      const filtered = prev.filter((t) => t.id !== idToClose);
+      if (activeTabId === idToClose) {
+        setActiveTabId(filtered.length > 0 ? filtered[filtered.length - 1].id : null);
+      }
+      return filtered;
+    });
+    // Optional: Stop the runtime backend when closing the tab
+    // runtimeApi.post(`/runtimes/${idToClose}/stop`).catch(console.error);
+  };
+
   return (
     <div className="flex h-full w-full flex-col relative">
-      <div className="flex h-10 items-center bg-[#252526] border-b border-[#333333]">
-        <div className="flex-1 flex overflow-x-auto">
+      <div className="flex h-10 items-center bg-card border-b border-border">
+        <div className="flex-1 flex overflow-x-auto scrollbar-none">
           {tabs.map((tab) => (
-            <button
+            <div
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
-              className={`flex items-center px-4 h-full border-r border-[#333333] text-xs transition-colors ${
-                activeTabId === tab.id ? 'bg-[#1e1e1e] text-blue-400 border-t-2 border-t-blue-500' : 'text-zinc-400 hover:bg-[#2d2d2d]'
+              className={`group flex cursor-pointer items-center justify-between border-r border-border px-3 text-xs transition-colors h-full ${
+                activeTabId === tab.id
+                  ? 'bg-background text-primary border-t-2 border-t-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
             >
-              <TerminalSquare className="mr-2 h-3 w-3" />
-              {tab.name}
-            </button>
+              <div className="flex items-center">
+                <TerminalSquare className={`mr-2 h-3.5 w-3.5 ${activeTabId === tab.id ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                <span>{tab.name}</span>
+              </div>
+              <button
+                type="button"
+                aria-label={`Close ${tab.name}`}
+                className={`ml-2 flex h-5 w-5 items-center justify-center rounded-sm hover:bg-destructive/10 hover:text-destructive ${
+                  activeTabId === tab.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+                onClick={(e) => closeTab(tab.id, e)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
           ))}
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-zinc-400 hover:text-white mr-2"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground mr-2"
           onClick={() => createRuntimeMutation.mutate()}
           disabled={createRuntimeMutation.isPending}
           aria-label="New terminal session"
           title="New terminal session"
         >
-          {createRuntimeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {createRuntimeMutation.isPending ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" /> : <Plus className="h-4 w-4" />}
         </Button>
       </div>
 
       {tabs.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center bg-[#1e1e1e] text-zinc-500">
-          <TerminalSquare className="h-12 w-12 mb-4 opacity-50" />
-          <p>No active terminal sessions.</p>
-          <Button 
-            className="mt-4 bg-blue-600 hover:bg-blue-500"
+        <div className="flex-1 flex flex-col items-center justify-center bg-background text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50 mb-4 shadow-sm">
+            <TerminalSquare className="h-8 w-8 text-muted-foreground/70" />
+          </div>
+          <p className="text-sm font-medium">No active terminal sessions</p>
+          <p className="text-xs mt-1 text-muted-foreground/60 text-center max-w-[250px]">
+            Start a new session to run commands and manage your workspace environment.
+          </p>
+          <Button
+            className="mt-6 shadow-sm transition-all active:scale-[0.98]"
             onClick={() => createRuntimeMutation.mutate()}
             disabled={createRuntimeMutation.isPending}
           >
-            {createRuntimeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {createRuntimeMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 motion-safe:animate-spin" />
+            ) : (
+              <Plus className="mr-2 h-4 w-4" />
+            )}
             Start Terminal Session
           </Button>
         </div>
       ) : (
         tabs.map((tab) => (
-          <TerminalTab 
-            key={tab.id} 
-            runtimeId={tab.id} 
-            isActive={activeTabId === tab.id} 
+          <TerminalTab
+            key={tab.id}
+            runtimeId={tab.id}
+            isActive={activeTabId === tab.id}
             onBlocked={handleBlocked}
           />
         ))
       )}
 
       <AlertDialog open={!!blockedCommand} onOpenChange={() => setBlockedCommand(null)}>
-        <AlertDialogContent className="bg-[#2d2d2d] border-[#444] text-zinc-200">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center text-red-400">
+            <AlertDialogTitle className="flex items-center text-destructive">
               <AlertTriangle className="mr-2 h-5 w-5" />
               Command Blocked
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-zinc-400">
+            <AlertDialogDescription className="text-muted-foreground">
               The command you attempted to run violates our security policy and has been blocked.
-              <div className="mt-2 p-2 bg-black rounded font-mono text-sm text-red-300">
+              <div className="mt-2 p-2 rounded bg-muted font-mono text-sm text-destructive">
                 {blockedCommand}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction className="bg-blue-600 hover:bg-blue-500 text-white">I Understand</AlertDialogAction>
+            <AlertDialogAction>I Understand</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

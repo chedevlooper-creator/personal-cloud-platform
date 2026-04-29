@@ -152,56 +152,22 @@ export function ChatHome() {
   };
 
   return (
-    <div className="relative flex min-h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#1D1E21_0%,#18191C_100%)] px-4 pb-4 pt-8 text-[#F0F0F0] sm:px-8 lg:px-12">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
+      {/* Decorative background elements */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-40 -top-56 h-[900px] w-[900px] rounded-full bg-[radial-gradient(circle,#3FB6E0_0%,transparent_68%)] opacity-[0.10] blur-3xl"
+        className="pointer-events-none absolute -left-40 -top-56 h-[900px] w-[900px] rounded-full bg-[radial-gradient(circle,var(--primary)_0%,transparent_68%)] opacity-[0.05] blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-48 -top-72 h-[1000px] w-[1000px] rounded-full bg-[radial-gradient(circle,#B85CFF_0%,transparent_68%)] opacity-[0.12] blur-3xl"
+        className="pointer-events-none absolute -right-48 -top-72 hidden h-[1000px] w-[1000px] rounded-full bg-[radial-gradient(circle,var(--accent)_0%,transparent_68%)] opacity-[0.08] blur-3xl sm:block animate-aurora"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-[-280px] left-[22%] h-[560px] w-[820px] rounded-full bg-[radial-gradient(circle,#F5A524_0%,transparent_70%)] opacity-[0.09] blur-3xl"
+        className="pointer-events-none absolute bottom-[-280px] left-[22%] h-[560px] w-[820px] rounded-full bg-[radial-gradient(circle,var(--ring)_0%,transparent_70%)] opacity-[0.06] blur-3xl animate-aurora-slow"
       />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-52 -left-48 h-[600px] w-[760px] rounded-full bg-[radial-gradient(circle,#7CD992_0%,transparent_70%)] opacity-[0.08] blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -left-32 -top-56 h-[1400px] w-96 -rotate-[22deg] rounded-full bg-[linear-gradient(90deg,transparent,#3FB6E0,transparent)] opacity-[0.07] blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-32 -top-72 h-[1400px] w-80 rotate-[18deg] rounded-full bg-[linear-gradient(90deg,transparent,#B85CFF,transparent)] opacity-[0.06] blur-3xl"
-      />
-      <DottedBackground className="opacity-45" />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[13%] top-[10%] h-0.5 w-0.5 rounded-full bg-white shadow-[0_0_14px_4px_rgba(122,184,255,0.65)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[43%] top-[16%] h-1 w-1 rounded-full bg-[#FFE7B3] shadow-[0_0_18px_5px_rgba(245,165,36,0.55)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-[22%] top-[11%] h-0.5 w-0.5 rounded-full bg-white shadow-[0_0_14px_4px_rgba(184,92,255,0.55)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-[15%] bottom-[18%] h-1 w-1 rounded-full bg-[#FFE7B3] shadow-[0_0_16px_4px_rgba(245,165,36,0.5)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[2%] top-[25%] h-px w-40 rotate-[12deg] bg-gradient-to-r from-transparent to-[#A8E0FF] opacity-45"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-[12%] bottom-[28%] h-px w-44 rotate-[14deg] bg-gradient-to-r from-transparent to-[#E0BCFF] opacity-45"
-      />
+      
+      <DottedBackground className="opacity-30" />
       <input ref={fileInputRef} type="file" multiple className="hidden" aria-label="Upload files" />
       <div
         className={`relative z-10 mx-auto flex w-[calc(100vw-3rem)] min-w-0 max-w-full flex-1 flex-col pb-20 pt-8 sm:w-full sm:max-w-[760px] ${

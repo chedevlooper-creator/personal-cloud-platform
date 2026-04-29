@@ -160,18 +160,24 @@ export default function WorkspaceEditor() {
       )}
 
       {/* Editor */}
-      <div className="relative flex-1">
+      <div className="relative flex-1 bg-background">
         {!selectedFile ? (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-sm text-center">
-              <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+              <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">Select a file</p>
               <p className="mt-1 text-xs text-muted-foreground">Use the explorer to open files.</p>
             </div>
           </div>
         ) : isLoading ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            Loading...
+          <div className="flex h-full flex-col space-y-2 p-6 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300">
+            <div className="h-4 w-1/3 animate-pulse rounded bg-muted"></div>
+            <div className="h-4 w-1/4 animate-pulse rounded bg-muted"></div>
+            <div className="h-4 w-1/2 animate-pulse rounded bg-muted"></div>
+            <div className="h-4 w-2/5 animate-pulse rounded bg-muted"></div>
+            <div className="h-4 w-1/3 animate-pulse rounded bg-muted"></div>
+            <div className="h-4 w-3/4 animate-pulse rounded bg-muted"></div>
+            <div className="h-4 w-1/2 animate-pulse rounded bg-muted"></div>
           </div>
         ) : isError ? (
           <PreviewError
@@ -223,7 +229,7 @@ function PreviewError({
   return (
     <div className="flex h-full items-center justify-center p-8">
       <div className="max-w-md rounded-xl border border-border bg-card p-6">
-        <AlertCircle className="mb-3 h-6 w-6 text-amber-500" />
+        <AlertCircle className="mb-3 h-6 w-6 text-warning" />
         <h2 className="font-semibold text-foreground">{title}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">

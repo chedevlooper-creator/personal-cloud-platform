@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, CheckCheck } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Bell, Check, CheckCheck, CheckCircle2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -92,7 +92,7 @@ export function NotificationBell() {
           >
             <Bell className="h-4 w-4" />
             {unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-medium text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-info px-1 text-[9px] font-medium text-info-foreground">
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
@@ -121,14 +121,30 @@ export function NotificationBell() {
             </div>
           ) : (
             items.map((n) => {
-              const dotClass =
+              const SeverityIcon =
                 n.severity === 'error'
-                  ? 'bg-red-500'
+                  ? AlertCircle
                   : n.severity === 'success'
-                    ? 'bg-green-500'
+                    ? CheckCircle2
                     : n.severity === 'warning'
-                      ? 'bg-yellow-500'
-                      : 'bg-blue-500';
+                      ? AlertTriangle
+                      : Info;
+              const severityClass =
+                n.severity === 'error'
+                  ? 'text-destructive'
+                  : n.severity === 'success'
+                    ? 'text-success'
+                    : n.severity === 'warning'
+                      ? 'text-warning dark:text-warning'
+                      : 'text-info';
+              const severityLabel =
+                n.severity === 'error'
+                  ? 'Error'
+                  : n.severity === 'success'
+                    ? 'Success'
+                    : n.severity === 'warning'
+                      ? 'Warning'
+                      : 'Info';
               return (
                 <div
                   key={n.id}
@@ -137,7 +153,10 @@ export function NotificationBell() {
                     !n.readAt && 'bg-muted/30',
                   )}
                 >
-                  <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', dotClass)} />
+                  <SeverityIcon
+                    className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', severityClass)}
+                    aria-label={severityLabel}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-xs font-medium text-foreground">{n.title}</p>

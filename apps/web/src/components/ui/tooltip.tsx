@@ -12,7 +12,7 @@ interface TooltipProps {
   delay?: number;
 }
 
-export function Tooltip({ content, side = 'top', children, className, delay = 300 }: TooltipProps) {
+export function Tooltip({ content, side = 'top', children, className, delay = 500 }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

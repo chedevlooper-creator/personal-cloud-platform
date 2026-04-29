@@ -139,7 +139,7 @@ export default function ChannelsPage() {
           <li>
             Find your numeric chat id (e.g. via <code className="font-mono">@userinfobot</code>).
           </li>
-          <li>Paste it below and link it to your CloudMind account.</li>
+          <li>Aşağıya yapıştırıp Zihinbulut hesabınıza bağlayın.</li>
         </ol>
 
         <form

@@ -1,6 +1,12 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { z } from 'zod';
+import * as dotenv from 'dotenv';
+import path from 'path';
+
+// Load .env from workspace root
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
 import * as schema from './schema';
 
 // Environment variable validation with Zod

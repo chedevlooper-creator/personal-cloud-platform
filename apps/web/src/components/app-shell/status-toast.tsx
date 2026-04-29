@@ -7,16 +7,20 @@ export function StatusToast({ isThinking, onStop }: { isThinking: boolean; onSto
   if (!isThinking) return null;
 
   return (
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-gradient-to-r from-zinc-950/80 via-zinc-900/70 to-zinc-950/80 px-4 py-2.5 text-sm text-zinc-200 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] backdrop-blur-sm animate-in fade-in slide-in-from-top-1 duration-200">
+    <div
+      role="status"
+      aria-live="polite"
+      className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/80 px-4 py-2.5 text-sm text-foreground shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)] backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200"
+    >
       <div className="flex items-center gap-3">
         <div className="relative flex h-2 w-2 items-center justify-center">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400/60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-300" />
+          <span className="absolute inline-flex h-full w-full rounded-full bg-primary/60 motion-safe:animate-ping" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
         </div>
-        <span className="text-[13px] font-medium tracking-tight text-zinc-200">
+        <span className="text-[13px] font-medium tracking-tight text-foreground">
           Reasoning
         </span>
-        <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+        <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
           Esc to cancel
         </span>
       </div>
@@ -25,7 +29,7 @@ export function StatusToast({ isThinking, onStop }: { isThinking: boolean; onSto
         size="sm"
         variant="outline"
         onClick={onStop}
-        className="h-7 gap-1.5 border-white/10 bg-white/[0.03] px-2.5 text-[12px] font-medium text-zinc-200 hover:bg-white/[0.06] hover:text-white"
+        className="h-7 gap-1.5 px-2.5 text-xs font-medium"
       >
         <Square className="h-3 w-3" />
         Stop

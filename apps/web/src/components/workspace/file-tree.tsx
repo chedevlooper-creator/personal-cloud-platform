@@ -192,7 +192,13 @@ function TreeBranch({ workspaceId, path, level }: { workspaceId: string; path: s
   };
 
   if (isLoading) {
-    return <div className={cn('py-1 pr-2 text-xs text-muted-foreground', indentClass(level))}>Loading...</div>;
+    return (
+      <div className={cn('py-1 pr-2 text-xs text-muted-foreground flex flex-col gap-2', indentClass(level))}>
+        <div className="h-5 w-2/3 animate-pulse rounded bg-muted"></div>
+        <div className="h-5 w-1/2 animate-pulse rounded bg-muted"></div>
+        <div className="h-5 w-3/4 animate-pulse rounded bg-muted"></div>
+      </div>
+    );
   }
 
   if (isError) {
@@ -232,9 +238,9 @@ function TreeBranch({ workspaceId, path, level }: { workspaceId: string; path: s
                         <ChevronRight className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
                       )}
                       {isExpanded ? (
-                        <FolderOpen className="mr-1.5 h-4 w-4 text-blue-500" />
+                        <FolderOpen className="mr-1.5 h-4 w-4 text-primary" />
                       ) : (
-                        <Folder className="mr-1.5 h-4 w-4 text-blue-500" />
+                        <Folder className="mr-1.5 h-4 w-4 text-primary" />
                       )}
                     </>
                   ) : (

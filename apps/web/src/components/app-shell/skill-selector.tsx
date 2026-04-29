@@ -50,7 +50,7 @@ export function SkillSelector() {
             size="sm"
             title={`Active skills: ${activeCount}`}
             aria-label="Select active skills"
-            className="rounded-full border-zinc-700 bg-zinc-900/70 text-zinc-200 hover:bg-zinc-800 dark:border-zinc-700"
+            className="rounded-full"
           >
             <Sparkles className="mr-1.5 h-4 w-4" />
             <span className="max-w-[140px] truncate text-xs">{label}</span>

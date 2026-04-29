@@ -55,7 +55,7 @@ export function PersonaSelector({ compact }: { compact?: boolean }) {
             title={`Active persona: ${currentName}`}
             aria-label="Select assistant persona"
             className={cn(
-              'rounded-full border-[#66686F] bg-[#202126] text-[#F2F2F2] hover:bg-[#27282E] dark:border-[#66686F]',
+              'rounded-full border-border bg-muted/50 text-foreground hover:bg-muted transition-all active:scale-[0.98]',
               compact && 'h-7 w-7 px-0',
             )}
           >

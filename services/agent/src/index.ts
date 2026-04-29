@@ -3,6 +3,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import multipart from '@fastify/multipart';
 import {
   createApiErrorHandler,
   createCorsOptions,
@@ -48,6 +49,14 @@ server.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 server.register(cookie, {
   secret: env.COOKIE_SECRET,
   hook: 'onRequest',
+});
+
+server.register(multipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 5,
+    fields: 4,
+  },
 });
 
 server.get('/health', async () => {

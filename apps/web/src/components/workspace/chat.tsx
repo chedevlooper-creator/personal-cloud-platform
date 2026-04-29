@@ -201,54 +201,61 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#252526]">
-      <div className="flex h-10 items-center justify-between border-b border-[#333333] px-4 font-semibold uppercase tracking-wider text-zinc-400">
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex h-10 items-center justify-between border-b border-border px-4 font-semibold uppercase tracking-wider text-muted-foreground">
         <span>Agent Chat</span>
-        <Bot className="h-5 w-5 text-blue-400" />
+        <Bot className="h-5 w-5 text-primary" />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {isLoadingMessages && !messages.length ? (
-          <div className="flex justify-center text-zinc-500 py-4 animate-in fade-in duration-200">
-            <Loader2 className="animate-spin h-5 w-5" />
+          <div className="flex h-full items-center justify-center text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+            <Loader2 className="motion-safe:animate-spin h-6 w-6 opacity-50" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-zinc-500 animate-in fade-in zoom-in-95 duration-300">
-            <Bot className="mb-2 h-10 w-10 text-zinc-600" />
-            <p>How can I help you today?</p>
+          <div className="flex h-full flex-col items-center justify-center text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50 mb-4 shadow-sm">
+              <Bot className="h-8 w-8 text-muted-foreground/70" />
+            </div>
+            <p className="text-sm font-medium">How can I help you today?</p>
+            <p className="text-xs mt-1 text-muted-foreground/60 text-center max-w-[200px]">
+              Ask me to write code, run commands, or edit files in your workspace.
+            </p>
           </div>
         ) : null}
 
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex flex-col max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+            className={`flex flex-col max-w-[85%] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 ${
               msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'
             }`}
           >
             <div
-              className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap transition-colors ${
-                msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-[#37373d] text-zinc-200'
+              className={`rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap transition-colors shadow-sm ${
+                msg.role === 'user'
+                  ? 'bg-primary text-primary-foreground rounded-br-sm'
+                  : 'bg-muted text-foreground border border-border/50 rounded-bl-sm'
               }`}
             >
               {msg.content ||
                 (msg.toolCalls?.length ? (
                   ''
                 ) : (
-                  <span className="italic text-zinc-400">Processing...</span>
+                  <span className="italic text-muted-foreground">Processing...</span>
                 ))}
 
               {/* Tool Calls Rendering */}
               {msg.toolCalls && msg.toolCalls.length > 0 && (
-                <div className="mt-2 space-y-2 border-t border-[#4c4c4c] pt-2">
-                  <p className="text-xs font-semibold uppercase text-zinc-400">Tool Calls</p>
+                <div className="mt-2 space-y-2 border-t border-border pt-2">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Tool Calls</p>
                   {msg.toolCalls.map((tc, idx) => (
                     <div
                       key={idx}
-                      className="rounded bg-[#2d2d2d] p-2 text-xs font-mono text-blue-300"
+                      className="rounded bg-background p-2 text-xs font-mono text-info"
                     >
                       <div>{tc.name}</div>
-                      <div className="text-zinc-400">{JSON.stringify(tc.args, null, 2)}</div>
+                      <div className="text-muted-foreground">{JSON.stringify(tc.args, null, 2)}</div>
                     </div>
                   ))}
 
@@ -258,7 +265,7 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
                       <Button
                         size="sm"
                         variant="default"
-                        className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500"
+                        className="h-7 text-xs"
                         onClick={() =>
                           approvalMutation.mutate({ taskId: msg.taskId, decision: 'approve' })
                         }
@@ -286,25 +293,25 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
                 </div>
               )}
             </div>
-            <div className="mt-1 flex items-center space-x-1 text-[10px] text-zinc-500">
+            <div className="mt-1 flex items-center space-x-1 text-[10px] text-muted-foreground">
               <span>{msg.role === 'user' ? 'You' : 'Agent'}</span>
               {msg.taskStatus === 'executing' && (
-                <Loader2 className="ml-1 h-3 w-3 animate-spin text-blue-400" />
+                <Loader2 className="ml-1 h-3 w-3 motion-safe:animate-spin text-primary" />
               )}
-              {msg.taskStatus === 'failed' && <span className="text-red-400">Failed</span>}
+              {msg.taskStatus === 'failed' && <span className="text-destructive">Failed</span>}
             </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-[#333333] p-3">
+      <div className="border-t border-border p-3">
         {attachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-200">
+          <div className="mb-2 flex flex-wrap gap-1.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
             {attachments.map((a, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center gap-1 rounded-full bg-blue-600/20 px-2 py-1 text-[11px] text-blue-200 border border-blue-500/30"
+                className="inline-flex items-center gap-1 rounded-full bg-info/10 px-2 py-1 text-[11px] text-info border border-info/30"
                 title={a.path}
               >
                 <Paperclip className="h-3 w-3" />
@@ -312,7 +319,7 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
                 <button
                   type="button"
                   onClick={() => removeAttachment(idx)}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-blue-500/30 transition-colors"
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-info/20 transition-colors"
                   aria-label={`Remove ${a.name}`}
                 >
                   <X className="h-3 w-3" />
@@ -335,12 +342,12 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
             variant="ghost"
             onClick={handleFilePick}
             disabled={isUploading || sendMutation.isPending}
-            className="h-9 w-9 text-zinc-400 hover:text-zinc-100 hover:bg-[#3c3c3c] transition-colors"
+            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             aria-label="Attach files"
             title="Attach files to message"
           >
             {isUploading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Paperclip className="h-4 w-4" />
             )}
@@ -350,17 +357,18 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask agent to do something..."
             disabled={sendMutation.isPending}
-            className="h-9 flex-1 bg-[#3c3c3c] border-none text-zinc-200 placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-blue-500 transition-shadow"
+            aria-label="Message agent"
+            className="h-9 flex-1 bg-input border-none text-foreground placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-primary transition-shadow"
           />
           <Button
             type="submit"
             size="icon"
-            className="h-9 w-9 bg-blue-600 hover:bg-blue-500 transition-colors"
+            className="h-9 w-9"
             disabled={(!input.trim() && attachments.length === 0) || sendMutation.isPending}
             aria-label={sendMutation.isPending ? 'Sending message' : 'Send message'}
           >
             {sendMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
             )}

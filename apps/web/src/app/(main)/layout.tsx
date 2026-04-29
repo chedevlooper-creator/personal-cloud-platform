@@ -9,9 +9,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const { data: user } = useUser();
 
   return (
-    <>
+    <div className="bg-background text-foreground min-h-dvh">
       <AppShell user={user ?? undefined}>{children}</AppShell>
       <Toaster richColors />
-    </>
+    </div>
   );
 }

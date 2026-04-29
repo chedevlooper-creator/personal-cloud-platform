@@ -1,22 +1,24 @@
 import type { Metadata, Viewport } from "next";
 import type React from "react";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const inter = Inter({
+const geistSans = Geist({
   variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const geistMono = Geist_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "CloudMind OS",
-  description: "Your personal AI cloud computer — files, chat, terminal, automations, and hosting in one workspace",
+  title: "Zihinbulut",
+  description: "Kişisel AI bulut bilgisayarınız — dosyalar, sohbet, terminal, otomasyonlar ve hosting tek çalışma alanında.",
 };
 
 export const viewport: Viewport = {
@@ -32,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`}
       >
         <a href="#main-content" className="skip-link">
           Skip to main content

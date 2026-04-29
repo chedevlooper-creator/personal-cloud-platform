@@ -14,7 +14,7 @@ export function AppShell({ children, user }: { children: React.ReactNode; user?:
 
   return (
     <KeyboardShortcutProvider>
-      <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
+      <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
         <Sidebar
           user={user}
           collapsed={collapsed}

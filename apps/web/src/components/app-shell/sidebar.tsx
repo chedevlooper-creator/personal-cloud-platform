@@ -19,6 +19,7 @@ import {
   Sparkles,
   SquareTerminal,
   X,
+  BrainCircuit,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,12 @@ const moreItems = [
 
 const secondaryItems = [{ label: 'Settings', href: '/settings', icon: Settings }];
 
+function isActive(pathname: string, href: string) {
+  if (href === '/dashboard' && pathname === '/dashboard') return true;
+  if (href !== '/dashboard' && pathname.startsWith(href)) return true;
+  return false;
+}
+
 export function Sidebar({
   user,
   collapsed,
@@ -65,15 +72,20 @@ export function Sidebar({
   const sidebarContent = (
     <aside
       className={cn(
-        'relative flex h-full flex-col overflow-hidden border-r border-[#494A4D] bg-[#252523] text-[#F0F0F0] transition-[width] duration-200',
-        collapsed ? 'w-[56px]' : 'w-[200px]',
+        'relative flex h-full flex-col overflow-hidden border-r border-border bg-sidebar text-sidebar-foreground transition-[width] duration-200',
+        collapsed ? 'w-[56px]' : 'w-[220px]',
       )}
     >
-      <div className="flex h-12 items-center justify-between px-2.5">
+      <div className="flex h-14 items-center justify-between px-3 border-b border-border/50">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center text-xl font-bold text-[#F4F4F4]">
-            ♞
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
+            <BrainCircuit className="h-4 w-4" aria-hidden="true" />
           </div>
+          {!collapsed && (
+            <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+              Zihinbulut
+            </span>
+          )}
         </div>
         <Button
           type="button"
@@ -81,7 +93,7 @@ export function Sidebar({
           variant="ghost"
           title="Close menu"
           aria-label="Close menu"
-          className="text-[#A8A8A8] hover:bg-[#303134] hover:text-[#F0F0F0] md:hidden"
+          className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground md:hidden"
           onClick={() => onMobileOpenChange(false)}
         >
           <X className="h-4 w-4" />
@@ -104,7 +116,7 @@ export function Sidebar({
                     type="button"
                     title="Search files"
                     aria-label="Search files"
-                    className="rounded-md p-1 text-[#A8A8A8] hover:bg-[#303134] hover:text-[#F0F0F0]"
+                    className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                     onClick={(event) => {
                       event.preventDefault();
                       window.dispatchEvent(new Event('app:open-command-palette'));
@@ -126,7 +138,7 @@ export function Sidebar({
             aria-expanded={moreOpen}
             aria-controls="sidebar-more-section"
             className={cn(
-              'flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-[15px] text-[#A8A8A8] transition-colors hover:bg-[#303134] hover:text-[#F0F0F0]',
+              'group flex h-7 w-full items-center gap-1.5 rounded-md px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-sidebar-foreground',
               collapsed && 'mx-auto w-8 justify-center px-0',
             )}
             onClick={() => setMoreOpen((value) => !value)}
@@ -134,11 +146,16 @@ export function Sidebar({
             {collapsed ? (
               <MoreHorizontal className="h-[17px] w-[17px]" />
             ) : (
-              <ChevronDown
-                className={cn('h-[17px] w-[17px] transition-transform', !moreOpen && '-rotate-90')}
-              />
+              <>
+                <span>More</span>
+                <ChevronDown
+                  className={cn(
+                    'h-3 w-3 transition-transform',
+                    !moreOpen && '-rotate-90',
+                  )}
+                />
+              </>
             )}
-            {!collapsed && <span>More</span>}
           </button>
           {moreOpen && (
             <div id="sidebar-more-section" className="mt-0.5 space-y-0.5">
@@ -157,7 +174,7 @@ export function Sidebar({
           )}
         </div>
 
-        <div className="mt-3 border-t border-[#303134] pt-2 space-y-0.5">
+        <div className="mt-3 border-t border-border/50 pt-2 space-y-0.5">
           {secondaryItems.map((item) => (
             <SidebarItem
               key={item.label}
@@ -171,14 +188,14 @@ export function Sidebar({
         </div>
       </nav>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#1E1F1F]/95 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-sidebar to-transparent" />
 
-      <div className="relative z-10 border-t border-[#303134] p-1.5">
+      <div className="relative z-10 border-t border-border/50 p-2 bg-sidebar">
         {!collapsed && (
-          <div className="mb-2 rounded-lg border border-[#3C3D40] bg-[#191A1B] px-2 py-2 text-[11px] text-[#A8A8A8]">
+          <div className="mb-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2 py-2 text-[11px] text-muted-foreground">
             <div className="flex items-center justify-between gap-2">
               <span>Share Zo, earn rewards</span>
-              <span aria-hidden="true">×</span>
+              <X className="h-3 w-3" aria-hidden="true" />
             </div>
           </div>
         )}
@@ -203,9 +220,4 @@ export function Sidebar({
       )}
     </>
   );
-}
-
-function isActive(pathname: string, href: string) {
-  if (href === '/dashboard') return pathname === '/dashboard';
-  return pathname === href || pathname.startsWith(`${href}/`);
 }

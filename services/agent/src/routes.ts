@@ -13,6 +13,7 @@ import {
 import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
 import { z } from 'zod';
+import { extractAttachment, buildAttachmentContext, type ExtractedAttachment } from './attachments';
 
 export async function setupAgentRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -31,9 +32,8 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     '/agent/chat',
     {
       schema: {
-        body: z.object({
-          input: z.string().min(1).max(12000),
-        }),
+        consumes: ['application/json', 'multipart/form-data'],
+        body: z.object({ input: z.string().min(1).max(12000) }).nullish(),
         response: {
           200: z.object({
             content: z.string(),
@@ -44,6 +44,16 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
                 totalTokens: z.number(),
               })
               .optional(),
+            attachments: z
+              .array(
+                z.object({
+                  filename: z.string(),
+                  bytes: z.number(),
+                  truncated: z.boolean(),
+                  ocrUsed: z.boolean().optional(),
+                }),
+              )
+              .optional(),
           }),
         },
       },
@@ -52,10 +62,70 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
-      const response = await orchestrator.chat(request.body.input, userId);
+      const contentType = request.headers['content-type'] || '';
+      let userInput: string;
+      const extracted: ExtractedAttachment[] = [];
+
+      if (contentType.includes('multipart/form-data')) {
+        try {
+          const parts = (request as unknown as { parts: () => AsyncIterable<unknown> }).parts();
+          let inputField = '';
+          for await (const part of parts as AsyncIterable<{
+            type: 'field' | 'file';
+            fieldname: string;
+            value?: unknown;
+            filename?: string;
+            mimetype?: string;
+            toBuffer?: () => Promise<Buffer>;
+          }>) {
+            if (part.type === 'field' && part.fieldname === 'input') {
+              inputField = String(part.value ?? '');
+            } else if (part.type === 'file' && part.toBuffer && part.filename) {
+              const buffer = await part.toBuffer();
+              try {
+                const att = await extractAttachment(
+                  part.filename,
+                  part.mimetype || 'application/octet-stream',
+                  buffer,
+                );
+                extracted.push(att);
+              } catch (err) {
+                return sendApiError(
+                  reply,
+                  400,
+                  'INVALID_ATTACHMENT',
+                  err instanceof Error ? err.message : 'Failed to read attachment',
+                );
+              }
+            }
+          }
+          if (!inputField || inputField.length > 12000) {
+            return sendApiError(reply, 400, 'INVALID_INPUT', 'input is required (max 12000 chars)');
+          }
+          userInput = inputField;
+        } catch (err) {
+          return sendApiError(
+            reply,
+            400,
+            'INVALID_MULTIPART',
+            err instanceof Error ? err.message : 'Invalid multipart payload',
+          );
+        }
+      } else {
+        userInput = (request.body as { input: string }).input;
+      }
+
+      const prompt = extracted.length > 0 ? `${buildAttachmentContext(extracted)}${userInput}` : userInput;
+      const response = await orchestrator.chat(prompt, userId);
       return {
         content: response.content || '',
         usage: response.usage,
+        attachments: extracted.map((a) => ({
+          filename: a.filename,
+          bytes: a.bytes,
+          truncated: a.truncated,
+          ocrUsed: a.ocrUsed,
+        })),
       };
     },
   );

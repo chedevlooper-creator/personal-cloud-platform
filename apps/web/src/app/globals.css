@@ -27,6 +27,12 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -65,6 +71,13 @@
   --accent: oklch(0.955 0.005 240);
   --accent-foreground: oklch(0.25 0.01 250);
   --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.62 0.16 155);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.74 0.16 75);
+  --warning-foreground: oklch(0.18 0.01 250);
+  --info: oklch(0.55 0.15 240);
+  --info-foreground: oklch(0.99 0 0);
   --border: oklch(0.91 0.005 250);
   --input: oklch(0.91 0.005 250);
   --ring: oklch(0.55 0.15 240);
@@ -101,6 +114,13 @@
   --accent: oklch(0.22 0.01 260);
   --accent-foreground: oklch(0.93 0.005 240);
   --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.7 0.18 155);
+  --success-foreground: oklch(0.13 0.008 260);
+  --warning: oklch(0.78 0.18 75);
+  --warning-foreground: oklch(0.13 0.008 260);
+  --info: oklch(0.65 0.16 240);
+  --info-foreground: oklch(0.13 0.008 260);
   --border: oklch(0.25 0.01 260);
   --input: oklch(0.25 0.01 260);
   --ring: oklch(0.65 0.16 240);
@@ -166,4 +186,35 @@
 }
 .skip-link:focus {
   top: 1rem;
+}
+
+/* ===== Custom motion: aurora drift, slow pulse, shimmer ===== */
+@keyframes aurora-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(40px, -20px, 0) scale(1.05); }
+  66% { transform: translate3d(-30px, 30px, 0) scale(0.97); }
+}
+@keyframes slow-pulse {
+  0%, 100% { opacity: var(--tw-pulse-from, 0.45); }
+  50% { opacity: var(--tw-pulse-to, 0.85); }
+}
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-aurora { animation: aurora-drift 22s ease-in-out infinite; }
+  .animate-aurora-slow { animation: aurora-drift 32s ease-in-out infinite; }
+  .animate-slow-pulse { animation: slow-pulse 6s ease-in-out infinite; }
+  .animate-twinkle { animation: star-twinkle 4s ease-in-out infinite; }
+  .animate-twinkle-slow { animation: star-twinkle 6s ease-in-out infinite 1s; }
+}
+
+/* Improve typographic rhythm with quality features */
+:root, html, body {
+  font-feature-settings: "cv11", "ss01", "ss03", "cv05";
+  font-variation-settings: normal;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

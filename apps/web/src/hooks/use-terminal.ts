@@ -106,7 +106,7 @@ export function useTerminal({ runtimeId, onCommandBlocked }: UseTerminalOptions)
       ws.onopen = () => {
         attemptsRef.current = 0;
         setConnectionState('connected');
-        term.writeln('\r\n\x1b[32m--- Connected to CloudMind Terminal ---\x1b[0m\r\n');
+        term.writeln('\r\n\x1b[32m--- Zihinbulut Terminal\'e bağlandı ---\x1b[0m\r\n');
       };
 
       ws.onmessage = (event) => {

@@ -29,7 +29,7 @@ export function ChatMessages({
   return (
     <div
       ref={scrollRef}
-      className="mb-5 max-h-[58vh] min-h-[200px] space-y-6 overflow-y-auto rounded-2xl border border-white/[0.05] bg-zinc-950/30 p-6 backdrop-blur-sm scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
+      className="mb-5 max-h-[58vh] min-h-[200px] space-y-6 overflow-y-auto rounded-2xl border border-border/60 bg-card/40 p-6 backdrop-blur-sm"
     >
       {messages.map((message) => (
         <MessageBubble key={message.id} message={message} />
@@ -57,23 +57,22 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div
       className={cn(
-        'group flex w-full gap-3 animate-in fade-in slide-in-from-bottom-1 duration-300',
+        'group flex w-full gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-300',
         isUser ? 'justify-end' : 'justify-start',
       )}
     >
       {!isUser && (
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-900/80 ring-1 ring-white/[0.07] text-zinc-300">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground ring-1 ring-border/60">
           <Sparkles className="h-3.5 w-3.5" />
         </div>
       )}
       <div className={cn('flex max-w-[78%] flex-col', isUser ? 'items-end' : 'items-start')}>
         <div
           className={cn(
-            'relative break-words rounded-2xl px-4 py-2.5 text-[14px] leading-[1.7] tracking-[-0.005em]',
-            'font-[\'Inter\',\'-apple-system\',\'BlinkMacSystemFont\',\'Segoe_UI\',sans-serif]',
+            'relative break-words rounded-2xl px-4 py-2.5 text-sm leading-[1.7] tracking-[-0.005em]',
             isUser
-              ? 'rounded-tr-md bg-zinc-100 text-zinc-900'
-              : 'rounded-tl-md bg-zinc-900/70 text-zinc-100 ring-1 ring-white/[0.06]',
+              ? 'rounded-tr-md bg-primary text-primary-foreground'
+              : 'rounded-tl-md bg-card text-foreground ring-1 ring-border/60',
           )}
         >
           {message.content ? (
@@ -83,21 +82,21 @@ function MessageBubble({ message }: { message: ChatMessage }) {
               <Markdown text={message.content} />
             )
           ) : (
-            <span className="inline-flex items-center gap-1 text-zinc-500">
-              <span className="h-1 w-1 animate-pulse rounded-full bg-zinc-500" />
-              <span className="h-1 w-1 animate-pulse rounded-full bg-zinc-500 [animation-delay:140ms]" />
-              <span className="h-1 w-1 animate-pulse rounded-full bg-zinc-500 [animation-delay:280ms]" />
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-pulse" />
+              <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-pulse [animation-delay:140ms]" />
+              <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-pulse [animation-delay:280ms]" />
             </span>
           )}
           {message.streaming && message.content && (
-            <span className="ml-0.5 inline-block h-3.5 w-[1.5px] translate-y-[2px] animate-pulse bg-zinc-400/80" />
+            <span className="ml-0.5 inline-block h-3.5 w-[1.5px] translate-y-[2px] bg-foreground/80 motion-safe:animate-pulse" />
           )}
         </div>
         {!isUser && message.content && !message.streaming && (
           <button
             type="button"
             onClick={copy}
-            className="mt-1 flex items-center gap-1 px-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500 opacity-0 transition-opacity hover:text-zinc-200 group-hover:opacity-100"
+            className="mt-1 flex items-center gap-1 px-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
             aria-label="Copy message"
           >
             {copied ? (
@@ -113,7 +112,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         )}
       </div>
       {isUser && (
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-900 ring-1 ring-white/10">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground ring-1 ring-border/40">
           <User className="h-3.5 w-3.5" />
         </div>
       )}
@@ -123,15 +122,15 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 function TypingIndicator() {
   return (
-    <div className="flex items-start gap-3 animate-in fade-in duration-200">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-900/80 ring-1 ring-white/[0.07]">
-        <Sparkles className="h-3.5 w-3.5 text-zinc-400" />
+    <div className="flex items-start gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-border/60">
+        <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
-      <div className="rounded-xl rounded-tl-sm bg-zinc-900/60 px-4 py-3 ring-1 ring-white/[0.05]">
+      <div className="rounded-xl rounded-tl-sm bg-card px-4 py-3 ring-1 ring-border/60" role="status" aria-live="polite" aria-label="Agent is typing">
         <div className="flex items-center gap-1.5">
-          <span className="h-1 w-1 animate-bounce rounded-full bg-zinc-400/80" />
-          <span className="h-1 w-1 animate-bounce rounded-full bg-zinc-400/80 [animation-delay:140ms]" />
-          <span className="h-1 w-1 animate-bounce rounded-full bg-zinc-400/80 [animation-delay:280ms]" />
+          <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-bounce" />
+          <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-bounce [animation-delay:140ms]" />
+          <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-bounce [animation-delay:280ms]" />
         </div>
       </div>
     </div>

@@ -185,7 +185,7 @@ function renderInline(text: string): React.ReactNode {
       nodes.push(
         <code
           key={key++}
-          className="rounded bg-zinc-800/80 px-1 py-[1px] font-mono text-[12.5px] text-zinc-100 ring-1 ring-white/[0.04]"
+          className="rounded bg-muted px-1 py-[1px] font-mono text-[12.5px] text-foreground ring-1 ring-border/50"
         >
           {after.slice(0, close)}
         </code>,
@@ -199,7 +199,7 @@ function renderInline(text: string): React.ReactNode {
         break;
       }
       nodes.push(
-        <strong key={key++} className="font-semibold text-zinc-50">
+        <strong key={key++} className="font-semibold text-foreground">
           {renderInline(after.slice(0, close))}
         </strong>,
       );
@@ -212,7 +212,7 @@ function renderInline(text: string): React.ReactNode {
         break;
       }
       nodes.push(
-        <em key={key++} className="italic text-zinc-200">
+        <em key={key++} className="italic text-foreground">
           {renderInline(after.slice(0, close))}
         </em>,
       );

@@ -2,13 +2,13 @@ import { cn } from '@/lib/utils';
 
 const variants = {
   default: 'bg-muted text-muted-foreground',
-  success: 'bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/15',
-  warning: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
+  success: 'bg-success/10 text-success',
+  warning: 'bg-warning/15 text-warning-foreground dark:bg-warning/20 dark:text-warning',
   error: 'bg-destructive/10 text-destructive',
-  info: 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400',
-  running: 'bg-emerald-500/10 text-emerald-500',
-  stopped: 'bg-zinc-500/10 text-zinc-500',
-  pending: 'bg-amber-500/10 text-amber-500',
+  info: 'bg-info/10 text-info dark:bg-info/15',
+  running: 'bg-success/10 text-success',
+  stopped: 'bg-muted text-muted-foreground',
+  pending: 'bg-warning/15 text-warning-foreground dark:bg-warning/20 dark:text-warning',
 } as const;
 
 interface StatusBadgeProps {
@@ -30,13 +30,13 @@ export function StatusBadge({ variant = 'default', children, className, dot = fa
       {dot && (
         <span className={cn(
           'h-1.5 w-1.5 rounded-full',
-          variant === 'running' && 'bg-emerald-500 animate-pulse',
-          variant === 'stopped' && 'bg-zinc-500',
+          variant === 'running' && 'bg-success motion-safe:animate-pulse',
+          variant === 'stopped' && 'bg-muted-foreground',
           variant === 'error' && 'bg-destructive',
-          variant === 'pending' && 'bg-amber-500',
-          variant === 'success' && 'bg-emerald-500',
-          variant === 'warning' && 'bg-amber-500',
-          variant === 'info' && 'bg-blue-500',
+          variant === 'pending' && 'bg-warning',
+          variant === 'success' && 'bg-success',
+          variant === 'warning' && 'bg-warning',
+          variant === 'info' && 'bg-info',
           variant === 'default' && 'bg-muted-foreground',
         )} />
       )}

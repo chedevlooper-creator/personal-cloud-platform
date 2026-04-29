@@ -178,14 +178,14 @@ export default function TerminalPage() {
       {/* Terminal Output */}
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto bg-[#0d1117] p-4 font-mono text-sm"
+        className="min-h-0 flex-1 overflow-auto bg-background p-4 font-mono text-sm border-t border-border/50"
         onClick={() => inputRef.current?.focus()}
       >
         {activeSession && activeSession.lines.length === 0 && (
-          <div className="text-zinc-500">
-            CloudMind OS Terminal — workspace sandbox
+          <div className="text-muted-foreground/70 mb-4">
+            Zihinbulut Terminal — çalışma alanı sandbox'ı
             <br />
-            Type a command to get started.
+            Başlamak için bir komut yazın.
           </div>
         )}
         {activeSession?.lines.map((line) => (
@@ -193,10 +193,10 @@ export default function TerminalPage() {
             key={line.id}
             className={cn(
               'whitespace-pre-wrap py-0.5',
-              line.type === 'input' && 'text-emerald-400',
-              line.type === 'output' && 'text-zinc-300',
-              line.type === 'error' && 'text-red-400',
-              line.type === 'blocked' && 'text-amber-400'
+              line.type === 'input' && 'text-primary',
+              line.type === 'output' && 'text-foreground',
+              line.type === 'error' && 'text-destructive',
+              line.type === 'blocked' && 'text-warning'
             )}
           >
             {line.text}
@@ -204,20 +204,24 @@ export default function TerminalPage() {
         ))}
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="mt-1 flex items-center gap-1">
-          <span className="text-emerald-400">$</span>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="flex-1 border-none bg-transparent text-zinc-100 outline-none placeholder:text-zinc-600"
-            placeholder="Type a command..."
-            autoFocus
-            spellCheck={false}
-            aria-label="Terminal input"
-          />
-        </form>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-primary">$</span>
+          <form onSubmit={handleSubmit} className="flex-1">
+            <input
+              ref={inputRef}
+              type="text"
+              className="w-full bg-transparent font-mono text-foreground outline-none placeholder:text-muted-foreground/40"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a command..."
+              autoFocus
+              spellCheck={false}
+              autoComplete="off"
+              aria-label="Terminal input"
+            />
+          </form>
+        </div>
       </div>
 
       {/* Delete Confirmation */}

@@ -25,42 +25,42 @@ export function WorkspaceShell({ workspaceId }: { workspaceId: string }) {
   }, [setCurrentWorkspaceId, setOpenFiles, setSelectedFile, setSelectedItem, workspaceId]);
 
   return (
-    <div className="flex h-full w-full flex-col bg-[#1e1e1e] text-[#cccccc]">
-      <div className="flex h-10 items-center justify-between border-b border-[#333333] bg-[#252526] px-4 text-sm shadow-sm">
+    <div className="flex h-full w-full flex-col bg-background text-foreground">
+      <header className="flex h-10 items-center justify-between border-b border-border bg-card px-4 text-sm shadow-sm">
         <div className="flex items-center space-x-4">
-          <span className="font-semibold text-[#cccccc]">Workspace: {workspaceId}</span>
+          <h1 className="font-semibold text-foreground">Workspace: {workspaceId}</h1>
         </div>
-      </div>
+      </header>
 
       <div className="flex-1 overflow-hidden">
         <ResizablePanelGroup orientation="horizontal">
-          <ResizablePanel defaultSize={22} minSize={14} maxSize={34} className="bg-[#252526]">
+          <ResizablePanel defaultSize={22} minSize={14} maxSize={34} className="bg-card">
             <FileTree workspaceId={workspaceId} />
           </ResizablePanel>
 
-          <ResizableHandle className="bg-[#333333] hover:bg-[#007acc] active:bg-[#007acc]" />
+          <ResizableHandle className="bg-border hover:bg-primary active:bg-primary" />
 
           <ResizablePanel defaultSize={58}>
             <ResizablePanelGroup orientation="vertical">
               <ResizablePanel defaultSize={70} minSize={30}>
-                <div className="h-full bg-[#1e1e1e]">
+                <div className="h-full bg-background">
                   <Editor />
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle className="bg-[#333333] hover:bg-[#007acc] active:bg-[#007acc]" />
+              <ResizableHandle className="bg-border hover:bg-primary active:bg-primary" />
 
               <ResizablePanel defaultSize={30} minSize={10}>
-                <div className="h-full bg-[#1e1e1e]">
+                <div className="h-full bg-background">
                   <Terminal workspaceId={workspaceId} />
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>
           </ResizablePanel>
 
-          <ResizableHandle className="bg-[#333333] hover:bg-[#007acc] active:bg-[#007acc]" />
+          <ResizableHandle className="bg-border hover:bg-primary active:bg-primary" />
 
-          <ResizablePanel defaultSize={20} minSize={15} maxSize={35} className="bg-[#252526]">
+          <ResizablePanel defaultSize={20} minSize={15} maxSize={35} className="bg-card">
             <Chat workspaceId={workspaceId} />
           </ResizablePanel>
         </ResizablePanelGroup>

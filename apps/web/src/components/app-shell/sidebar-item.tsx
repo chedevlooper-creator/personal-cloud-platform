@@ -26,20 +26,32 @@ export function SidebarItem({
     <Link
       href={href}
       title={collapsed ? label : undefined}
+      aria-current={active ? 'page' : undefined}
       className={cn(
-        'group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group relative flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active
-          ? 'border border-[#606166] bg-[#151615] text-[#F2F2F2]'
-          : 'text-[#A8A8A8] hover:bg-[#303134] hover:text-[#F2F2F2]',
-        collapsed ? 'mx-auto h-8 w-8 justify-center px-0' : 'h-8 text-[15px] font-normal',
+          ? 'bg-sidebar-accent text-sidebar-foreground shadow-[inset_0_1px_0_0_hsl(var(--border)/0.4)]'
+          : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
+        collapsed ? 'mx-auto h-8 w-8 justify-center px-0' : 'h-8 text-[13px]',
       )}
     >
-      <Icon className="h-[17px] w-[17px] shrink-0" />
+      {active && !collapsed && (
+        <span
+          aria-hidden="true"
+          className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-sidebar-primary"
+        />
+      )}
+      <Icon
+        className={cn(
+          'h-[17px] w-[17px] shrink-0 transition-colors',
+          active ? 'text-sidebar-primary' : 'text-muted-foreground group-hover:text-foreground',
+        )}
+      />
       {!collapsed && (
         <>
           <span className="min-w-0 flex-1 truncate">{label}</span>
           {badge && (
-            <span className="rounded-full bg-[#4C4C4C] px-1.5 py-0.5 text-[9px] font-normal text-[#BEBEBE]">
+            <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
               {badge}
             </span>
           )}
