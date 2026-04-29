@@ -5,6 +5,7 @@ import cookie from '@fastify/cookie';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import {
   createApiErrorHandler,
+  createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
 } from '@pcp/shared';
@@ -73,8 +74,7 @@ app.addHook('onRequest', (request, reply, done) => {
 
 app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 app.register(cors, {
-  origin: true,
-  credentials: true,
+  ...createCorsOptions(env.NODE_ENV),
 });
 app.register(cookie);
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Plus, Pencil, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, Plus, Pencil, Sparkles, Trash2, Download, Check, Library } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,7 @@ const empty: FormState = {
 export default function SkillsPage() {
   const qc = useQueryClient();
   const [editor, setEditor] = useState<FormState | null>(null);
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['skills'],
@@ -51,6 +52,36 @@ export default function SkillsPage() {
     retry: false,
   });
   const skills = data ?? [];
+
+  const { data: catalogData, isLoading: catalogLoading } = useQuery({
+    queryKey: ['skills-catalog'],
+    queryFn: async () => {
+      const res = await agentApi.get('/skills/catalog');
+      return (res.data?.skills ?? []) as Array<{
+        slug: string;
+        name: string;
+        description: string;
+        category: string;
+        triggers: string[];
+        bodyMarkdown: string;
+        installed: boolean;
+      }>;
+    },
+    enabled: showCatalog,
+    retry: false,
+  });
+
+  const installPreset = useMutation({
+    mutationFn: async (slug: string) => {
+      await agentApi.post('/skills/install', { slug });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skills'] });
+      qc.invalidateQueries({ queryKey: ['skills-catalog'] });
+      toast.success('Skill installed.');
+    },
+    onError: (e) => toastApiError(e, 'Could not install skill.'),
+  });
 
   const save = useMutation({
     mutationFn: async (form: FormState) => {
@@ -119,11 +150,80 @@ export default function SkillsPage() {
             </p>
           </div>
         </div>
-        <Button size="sm" onClick={() => setEditor({ ...empty })}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" /> New skill
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowCatalog((v) => !v)}>
+            <Library className="mr-1.5 h-3.5 w-3.5" />
+            {showCatalog ? 'Hide catalog' : 'Browse catalog'}
+          </Button>
+          <Button size="sm" onClick={() => setEditor({ ...empty })}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> New skill
+          </Button>
+        </div>
       </header>
       <div className="mx-auto max-w-4xl">
+
+      {showCatalog && (
+        <section className="mb-6 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="mb-3 flex items-center gap-2">
+            <Library className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Skill catalog
+            </h2>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {catalogData?.length ?? 0} presets
+            </span>
+          </div>
+          {catalogLoading ? (
+            <p className="text-sm text-muted-foreground">Loading catalog...</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {(catalogData ?? []).map((c) => (
+                <div
+                  key={c.slug}
+                  className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-foreground">{c.name}</h3>
+                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                          {c.category}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                        {c.description}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={c.installed ? 'outline' : 'default'}
+                      disabled={c.installed || installPreset.isPending}
+                      onClick={() => installPreset.mutate(c.slug)}
+                      className="shrink-0"
+                    >
+                      {c.installed ? (
+                        <>
+                          <Check className="mr-1 h-3.5 w-3.5" /> Installed
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-1 h-3.5 w-3.5" /> Install
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {c.triggers.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Triggers: {c.triggers.slice(0, 4).join(', ')}
+                      {c.triggers.length > 4 && '…'}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {editor && (
         <form

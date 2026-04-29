@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { LLMProvider, Message, ToolDefinition, LLMResponse } from './types';
+import { withRetry } from './withRetry';
 
 function toOpenAIRole(role: Message['role']): 'system' | 'user' | 'assistant' {
   return role;
@@ -16,6 +17,14 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
+    return withRetry(() => this._generate(messages, tools), {
+      label: 'OpenAIProvider',
+      maxRetries: 3,
+      baseDelayMs: 1000,
+    });
+  }
+
+  private async _generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
     const formattedMessages = messages.map(m => ({
       role: toOpenAIRole(m.role),
       content: m.content,

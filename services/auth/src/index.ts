@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import {
   createApiErrorHandler,
+  createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
 } from '@pcp/shared';
@@ -42,8 +43,7 @@ server.addHook('onRequest', (request, reply, done) => {
 
 // Register plugins
 server.register(cors, {
-  origin: true, // Configured for development
-  credentials: true,
+  ...createCorsOptions(env.NODE_ENV),
 });
 
 server.register(rateLimit, {

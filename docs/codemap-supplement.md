@@ -241,3 +241,200 @@ BYOK Credential Security Flow
 - **Browser service** Trace 9'da: `isSafeNavigationUrl()` DNS resolution + IP tabanlı SSRF defense, codemap'te hiç yer almamıştı.
 - **Tenant Isolation** Trace 10: Cross-service birleşik görünüm, tek bir servis trace'inde yakalanamayan patterns.
 - **BYOK Deep Dive** Trace 11: Sadece decrypt anı değil, encryption key lifecycle, log redaction, ve rotation gap değerlendiriliyor.
+- **Error Handling** Trace 12: LLM API exception handling, tool execution try/catch, automation dead-letter pattern ve Telegram async ACK gap.
+- **Transaction Boundaries** Trace 13: Multi-system (DB + S3 + Docker) atomicity eksiklikleri ve best-effort cleanup patterns.
+- **Real-time Updates** Trace 14: Agent task SSE streaming, EventEmitter bridge, snapshot/live dual mode.
+
+---
+
+## Trace 12: Error Handling & Retry Patterns
+
+**Description:** Agent service — LLM API hata yönetimi, tool execution exception handling, automation queue failure recovery, ve Telegram webhook async ACK pattern.
+
+```text
+Error Handling & Retry Flow
+├── LLM Provider Layer
+│   └── llm.generate(messages, tools) — OpenAI/Anthropic SDK call <-- 12a
+│       ├── OpenAIProvider.chat.completions.create() ← no try/catch ← GAP <-- 12b
+│       │   └── openai.ts:34 — throws on network/429/5xx → uncaught in runAgentLoop
+│       ├── AnthropicProvider.messages.create() ← no try/catch ← GAP <-- 12c
+│       │   └── anthropic.ts:52 — throws on network/429/5xx → uncaught in runAgentLoop
+│       └── provider.ts:47 — developmentProviderKey() fallback (dev key leak risk) <-- 12d
+│
+├── Agent ReAct Loop Error Handling
+│   └── runAgentLoop() for (i < maxIterations) <-- 12e
+│       ├── Task cancelled check — graceful exit (currentTask.status === 'cancelled') <-- 12f
+│       │   └── orchestrator.ts:452-455
+│       ├── Tool execution try/catch — recoverable error pattern <-- 12g
+│       │   └── orchestrator.ts:545-570
+│       │   ├── registry.execute() throws → catch(error) <-- orchestrator.ts:558
+│       │   ├── toolOutputStr = `Error executing tool: ${error.message}` <-- 12h
+│       │   ├── completeToolCall(status: 'failed', error) <-- orchestrator.ts:560
+│       │   ├── emitAudit('TOOL_EXECUTE', ok: false) <-- orchestrator.ts:564
+│       │   └── Observation step inserted with error text ← loop continues ← 12i
+│       └── Exceeded max iterations — deterministic failure <-- 12j
+│           └── orchestrator.ts:622-636 — status 'failed', cleanupTaskEmitter
+│
+├── Automation Queue Failure Recovery
+│   └── BullMQ Worker processor catch block <-- 12k
+│       └── automation/queue.ts:86-119
+│       ├── Error caught → logger.error({ runId, error }) <-- 12l
+│       ├── DB update automationRuns → status: 'failed', error: message <-- queue.ts:91
+│       ├── dispatchAutomationRunNotification(status: 'failed') ← in-app/email/webhook <-- 12m
+│       └── worker.on('failed') → extra dead-letter logging ← queue.ts:125-126 ← 12n
+│
+└── Telegram Channel Async ACK Pattern (non-blocking inbound)
+    └── POST /channels/telegram/webhook ← ACK immediately, work async <-- 12o
+        └── routes/channels.ts:235-248
+        ├── reply.send({ ok: true }) — 200 response to Telegram <-- 12p
+        └── void handleIncoming(...).catch(...) — fire-and-forget <-- 12q
+            └── Prevents Telegram retry storms on slow agent loops
+```
+
+**Location ID: 12a** — LLM generation entry in ReAct loop. Path: `services/agent/src/orchestrator.ts:457`  
+**Location ID: 12b** — OpenAI SDK call without retry wrapper. Path: `services/agent/src/llm/openai.ts:34`  
+**Location ID: 12c** — Anthropic SDK call without retry wrapper. Path: `services/agent/src/llm/anthropic.ts:52`  
+**Location ID: 12d** — Development provider key fallback (risk). Path: `services/agent/src/llm/provider.ts:47`  
+**Location ID: 12e** — ReAct loop start. Path: `services/agent/src/orchestrator.ts:450`  
+**Location ID: 12f** — Graceful cancellation check. Path: `services/agent/src/orchestrator.ts:452`  
+**Location ID: 12g** — Tool execution error recovery block. Path: `services/agent/src/orchestrator.ts:545`  
+**Location ID: 12h** — Error converted to observation text. Path: `services/agent/src/orchestrator.ts:559`  
+**Location ID: 12i** — Loop continues after tool error. Path: `services/agent/src/orchestrator.ts:570`  
+**Location ID: 12j** — Max iteration failure path. Path: `services/agent/src/orchestrator.ts:622`  
+**Location ID: 12k** — Automation worker error catch. Path: `services/agent/src/automation/queue.ts:86`  
+**Location ID: 12l** — Structured error logging with runId. Path: `services/agent/src/automation/queue.ts:87`  
+**Location ID: 12m** — Failed-run user notification. Path: `services/agent/src/automation/queue.ts:103`  
+**Location ID: 12n** — Dead-letter worker listener. Path: `services/agent/src/automation/queue.ts:125`  
+**Location ID: 12o** — Telegram webhook handler. Path: `services/agent/src/routes/channels.ts:232`  
+**Location ID: 12p** — Immediate ACK to prevent Telegram retries. Path: `services/agent/src/routes/channels.ts:250`  
+**Location ID: 12q** — Async fire-and-forget processing. Path: `services/agent/src/routes/channels.ts:236`
+
+---
+
+## Trace 13: Transaction Boundaries — Multi-System Atomicity Gaps
+
+**Description:** Birden fazla external system (DB + S3 + Docker) kullanan operasyonlardaki atomicity eksiklikleri ve compensating action patterns.
+
+```text
+Transaction Boundary Analysis
+├── Workspace File Upload (Best-effort, no rollback)
+│   └── service.createFile() — workspace/service.ts <-- 13a
+│       ├── assertSafePath() + assertWorkspaceOwned() ← read-only guards <-- 13b
+│       ├── S3 Upload (Upload SDK) ← async, no DB transaction wrapper ← 13c
+│       │   └── service.ts:250 — new Upload().done()
+│       ├── DB insert workspace_files ← AFTER S3 success ← 13d
+│       │   └── service.ts:280
+│       ├── DB update workspace quota ← AFTER file insert ← 13e
+│       │   └── service.ts:295
+│       └── GAP: S3 succeeds but DB insert fails → orphan S3 object ← 13f
+│
+├── Runtime Creation (Two-phase, no rollback on Docker failure)
+│   └── createRuntime() — runtime/service.ts <-- 13g
+│       ├── DB insert runtimes (status: 'pending') ← Phase 1 ← 13h
+│       │   └── service.ts:57-64
+│       ├── mkdir workspace host path (filesystem) ← Phase 2 ← 13i
+│       │   └── service.ts:70
+│       ├── Docker createContainer + start ← Phase 3 ← 13j
+│       │   └── service.ts:72-75
+│       ├── DB update runtimes (containerId, status: 'running') ← Phase 4 ← 13k
+│       │   └── service.ts:84-86
+│       ├── DB insert runtimeEvents (type: 'create') ← Phase 5 ← 13l
+│       │   └── service.ts:89-91
+│       └── GAP: Docker start fails after DB pending insert → zombie record ← 13m
+│
+├── Publish Service Start (Async background, eventual consistency)
+│   └── startService() — publish/service.ts <-- 13n
+│       ├── DB update status → 'starting' (synchronous) ← 13o
+│       │   └── service.ts:116-119
+│       └── runContainer() — fire-and-forget background ← 13p
+│           ├── Docker createContainer + start ← async, may fail silently ← 13q
+│           └── DB update status → 'running' or 'crashed' ← eventual ← 13r
+│               └── service.ts:222-247
+│
+└── Agent Task Creation (Multi-table, no cross-table transaction)
+    └── orchestrator.createTask() — agent/orchestrator.ts <-- 13s
+        ├── DB insert tasks ← 13t
+        │   └── orchestrator.ts:213
+        ├── DB insert taskSteps (system prompt as step) ← 13u
+        │   └── orchestrator.ts:230
+        └── GAP: task insert succeeds but step insert fails → orphan task with no steps ← 13v
+```
+
+**Location ID: 13a** — File upload entry. Path: `services/workspace/src/service.ts:230`  
+**Location ID: 13b** — Pre-flight validation. Path: `services/workspace/src/service.ts:240`  
+**Location ID: 13c** — S3 upload without transaction wrapper. Path: `services/workspace/src/service.ts:250`  
+**Location ID: 13d** — File metadata DB insert. Path: `services/workspace/src/service.ts:280`  
+**Location ID: 13e** — Storage quota update. Path: `services/workspace/src/service.ts:295`  
+**Location ID: 13f** — Orphan S3 object gap. Path: `N/A — compensating action missing`  
+**Location ID: 13g** — Runtime creation entry. Path: `services/runtime/src/service.ts:53`  
+**Location ID: 13h** — Phase 1: pending DB record. Path: `services/runtime/src/service.ts:57`  
+**Location ID: 13i** — Phase 2: host path creation. Path: `services/runtime/src/service.ts:70`  
+**Location ID: 13j** — Phase 3: Docker container start. Path: `services/runtime/src/service.ts:72`  
+**Location ID: 13k** — Phase 4: container ID persistence. Path: `services/runtime/src/service.ts:84`  
+**Location ID: 13l** — Phase 5: event log insert. Path: `services/runtime/src/service.ts:89`  
+**Location ID: 13m** — Zombie record gap. Path: `N/A — cleanup cron missing`  
+**Location ID: 13n** — Publish start entry. Path: `services/publish/src/service.ts:107`  
+**Location ID: 13o** — Synchronous status update. Path: `services/publish/src/service.ts:116`  
+**Location ID: 13p** — Async container runner. Path: `services/publish/src/service.ts:122`  
+**Location ID: 13q** — Silent Docker failure. Path: `services/publish/src/service.ts:154`  
+**Location ID: 13r** — Eventual status resolution. Path: `services/publish/src/service.ts:222`  
+**Location ID: 13s** — Task creation entry. Path: `services/agent/src/orchestrator.ts:204`  
+**Location ID: 13t** — Task insert. Path: `services/agent/src/orchestrator.ts:213`  
+**Location ID: 13u** — Initial step insert. Path: `services/agent/src/orchestrator.ts:230`  
+**Location ID: 13v** — Orphan task gap. Path: `N/A — transaction wrapper missing`
+
+---
+
+## Trace 14: Real-time SSE Client Updates — Agent Task Streaming
+
+**Description:** Agent orchestrator'dan frontend'e Server-Sent Events (SSE) ile task status/step canlı akışı. EventEmitter bridge, snapshot/live dual mode, ve cleanup patterns.
+
+```text
+Real-time Task Event Streaming Flow
+├── Backend: AgentOrchestrator EventEmitter Bridge
+│   └── subscribeToTask(taskId) — creates EventEmitter per task <-- 14a
+│       └── orchestrator.ts:95-99
+│   ├── emitTaskUpdate(taskId, data) — 'task' event <-- 14b
+│   │   └── orchestrator.ts:102-104
+│   ├── emitTaskStep(taskId, data) — 'step' event <-- 14c
+│   │   └── orchestrator.ts:106-108
+│   └── cleanupTaskEmitter(taskId) — removes listeners on completion/failure <-- 14d
+│       └── orchestrator.ts:110-116
+│
+├── Backend: SSE Endpoint (/agent/tasks/:id/events)
+│   └── GET /agent/tasks/:id/events — Server-Sent Events <-- 14e
+│       └── agent/routes.ts:220-277
+│       ├── Headers: Content-Type: text/event-stream, no-cache, keep-alive <-- 14f
+│       │   └── routes.ts:235-237
+│       ├── Snapshot mode (?snapshot=true) ← historical replay <-- 14g
+│       │   ├── Fetch current task state → sendEvent('task', task) ← routes.ts:245-247
+│       │   └── Replay all existing steps → sendEvent('step', step) ← routes.ts:249-251
+│       └── Live mode (default) ← real-time subscription <-- 14h
+│           ├── emitter.on('task', onTask) ← routes.ts:270
+│           ├── emitter.on('step', onStep) ← routes.ts:271
+│           └── onTask detects terminal status → cleanup() ← auto listener removal ← 14i
+│               └── routes.ts:263-264
+│
+└── Frontend: Consumption Patterns
+    └── (Web) useTaskStream hook (inferred) ← connects to SSE, hydrates Zustand store
+    └── (Terminal) use-terminal.ts:99 — WebSocket for runtime PTY ← separate protocol
+```
+
+**Event Timeline during a Task Execution:**
+1. **task** `{ status: 'executing' }` — loop starts (`orchestrator.ts:417`)
+2. **step** `{ type: 'thought', content: '...' }` — each LLM response (`orchestrator.ts:473`)
+3. **step** `{ type: 'action', toolName: '...' }` — tool call recorded (`orchestrator.ts:508`)
+4. **step** `{ type: 'observation', toolOutput: '...' }` — tool result/error (`orchestrator.ts:581`)
+5. **task** `{ status: 'waiting_approval' }` — approval gate hit (`orchestrator.ts:532`)
+6. **task** `{ status: 'completed', output: '...' }` — success (`orchestrator.ts:609`)
+7. **task** `{ status: 'failed', output: '...' }` — max iterations or unhandled exception (`orchestrator.ts:630`)
+
+**Location ID: 14a** — EventEmitter subscription manager. Path: `services/agent/src/orchestrator.ts:95`  
+**Location ID: 14b** — Task status event emission. Path: `services/agent/src/orchestrator.ts:102`  
+**Location ID: 14c** — Step event emission. Path: `services/agent/src/orchestrator.ts:106`  
+**Location ID: 14d** — Emitter cleanup on terminal state. Path: `services/agent/src/orchestrator.ts:110`  
+**Location ID: 14e** — SSE endpoint handler. Path: `services/agent/src/routes.ts:220`  
+**Location ID: 14f** — SSE HTTP headers. Path: `services/agent/src/routes.ts:235`  
+**Location ID: 14g** — Snapshot replay mode. Path: `services/agent/src/routes.ts:244`  
+**Location ID: 14h** — Live event subscription. Path: `services/agent/src/routes.ts:257`  
+**Location ID: 14i** — Auto-cleanup on terminal event. Path: `services/agent/src/routes.ts:263`

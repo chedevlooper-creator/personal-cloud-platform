@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import {
   createApiErrorHandler,
+  createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
 } from '@pcp/shared';
@@ -38,7 +39,7 @@ server.addHook('onRequest', (request, reply, done) => {
   done();
 });
 
-server.register(cors, { origin: true, credentials: true });
+server.register(cors, createCorsOptions(env.NODE_ENV));
 server.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 server.register(cookie, { secret: env.COOKIE_SECRET, hook: 'onRequest' });
 

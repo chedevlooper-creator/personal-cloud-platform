@@ -80,6 +80,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - pcp-network
+      - pcp-publish
 
   mailhog:
     image: mailhog/mailhog:latest
@@ -98,4 +99,6 @@ volumes:
 
 networks:
   pcp-network:
+    driver: bridge
+  pcp-publish:
     driver: bridge

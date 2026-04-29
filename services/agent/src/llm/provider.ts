@@ -45,5 +45,11 @@ function normalizeProviderName(value: string | undefined): LLMProviderName {
 }
 
 function developmentProviderKey(provider: LLMProviderName): string {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `Missing required LLM API key for provider "${provider}" in production. ` +
+        `Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or MINIMAX_TOKEN_PLAN_API_KEY.`,
+    );
+  }
   return `dev-${provider}-api-key`;
 }

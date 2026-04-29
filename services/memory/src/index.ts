@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import {
   createApiErrorHandler,
+  createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
 } from '@pcp/shared';
@@ -38,8 +39,7 @@ server.addHook('onRequest', (request, reply, done) => {
 });
 
 server.register(cors, {
-  origin: true,
-  credentials: true,
+  ...createCorsOptions(env.NODE_ENV),
 });
 
 server.register(cookie, {

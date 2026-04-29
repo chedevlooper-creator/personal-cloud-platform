@@ -223,7 +223,7 @@ describe('PublishService security boundaries', () => {
           'pcp.hostedServiceId': SERVICE_ID,
         }),
         HostConfig: expect.objectContaining({
-          NetworkMode: 'pcp_network',
+          NetworkMode: 'pcp-publish',
           Binds: [`/tmp/workspaces/${USER_ID}/${WORKSPACE_ID}:/workspace:ro`],
           Memory: 512 * 1024 * 1024,
           MemorySwap: 512 * 1024 * 1024,
@@ -268,6 +268,30 @@ describe('PublishService security boundaries', () => {
     } finally {
       restoreEnvValue('PUBLISH_SECCOMP_PROFILE', originalSeccompProfile);
       restoreEnvValue('PUBLISH_APPARMOR_PROFILE', originalAppArmorProfile);
+      vi.resetModules();
+    }
+  });
+
+  it('uses the configured publish-only Docker network for hosted containers', async () => {
+    const originalNetwork = process.env.PUBLISH_DOCKER_NETWORK;
+    process.env.PUBLISH_DOCKER_NETWORK = 'custom-publish-network';
+    vi.resetModules();
+
+    try {
+      const { PublishService } = await import('./service');
+      const service = new PublishService();
+
+      await service.startService(SERVICE_ID, USER_ID);
+
+      expect(createContainer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          HostConfig: expect.objectContaining({
+            NetworkMode: 'custom-publish-network',
+          }),
+        }),
+      );
+    } finally {
+      restoreEnvValue('PUBLISH_DOCKER_NETWORK', originalNetwork);
       vi.resetModules();
     }
   });

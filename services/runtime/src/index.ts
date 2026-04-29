@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import {
   createApiErrorHandler,
+  createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
 } from '@pcp/shared';
@@ -40,8 +41,7 @@ server.addHook('onRequest', (request, reply, done) => {
 });
 
 server.register(cors, {
-  origin: true,
-  credentials: true,
+  ...createCorsOptions(env.NODE_ENV),
 });
 
 server.register(rateLimit, { max: 100, timeWindow: '1 minute' });

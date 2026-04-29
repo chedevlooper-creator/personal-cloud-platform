@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { LLMProvider, Message, ToolDefinition, LLMResponse, ToolCall } from './types';
+import { withRetry } from './withRetry';
 
 type AnthropicAuthMode = 'api-key' | 'bearer';
 
@@ -36,6 +37,14 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
+    return withRetry(() => this._generate(messages, tools), {
+      label: 'AnthropicProvider',
+      maxRetries: 3,
+      baseDelayMs: 1000,
+    });
+  }
+
+  private async _generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
     const formattedMessages = messages.filter(m => m.role !== 'system').map(m => ({
       role: toAnthropicRole(m.role),
       content: m.content,

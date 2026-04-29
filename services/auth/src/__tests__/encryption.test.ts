@@ -66,6 +66,14 @@ describe('AES-256-GCM Encryption', () => {
     expect(decryptOAuthToken(encryptedToken)).toBe(token);
   });
 
+  it('should handle long OAuth tokens without truncation', () => {
+    const token = 'token.'.repeat(400);
+    const encryptedToken = encryptOAuthToken(token);
+
+    expect(encryptedToken.length).toBeGreaterThan(1024);
+    expect(decryptOAuthToken(encryptedToken)).toBe(token);
+  });
+
   it('should reject malformed encrypted OAuth tokens', () => {
     expect(() => decryptOAuthToken('plaintext-token')).toThrow('Invalid encrypted OAuth token format');
   });

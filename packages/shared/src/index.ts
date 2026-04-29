@@ -15,3 +15,4 @@ export * from './browser';
 export * from './errors';
 export * from './env-helpers';
 export * from './observability';
+export * from './cors';

@@ -9,6 +9,7 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z.string().optional(),
   PUBLISH_SECCOMP_PROFILE: z.string().optional(),
   PUBLISH_APPARMOR_PROFILE: z.string().optional(),
+  PUBLISH_DOCKER_NETWORK: z.string().default('pcp-publish'),
 });
 
 const parsed = envSchema.parse(process.env);
@@ -21,6 +22,7 @@ export const env = {
   ENCRYPTION_KEY: resolveEncryptionKey(parsed.ENCRYPTION_KEY),
   PUBLISH_SECCOMP_PROFILE: parsed.PUBLISH_SECCOMP_PROFILE,
   PUBLISH_APPARMOR_PROFILE: parsed.PUBLISH_APPARMOR_PROFILE,
+  PUBLISH_DOCKER_NETWORK: parsed.PUBLISH_DOCKER_NETWORK,
 };
 
 function resolveEncryptionKey(value: string | undefined): string {
