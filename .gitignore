@@ -49,3 +49,15 @@ selam.zip
 
 # Browser service runtime artifacts (profiles, cookies, cache).
 services/browser/data/
+
+# Local agent/session tooling artifacts (Claude Code, OpenCode, pi-agent, etc.)
+.claude/
+.claude-plugin/
+.opencode/
+sessions/
+statuses/
+labels/
+views.json
+events.jsonl
+config.json
+
