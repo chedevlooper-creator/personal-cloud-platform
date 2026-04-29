@@ -12,10 +12,9 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 Phase: 4 of 5 (Agent Durability, Approval, And Memory)
 Plan: 0 of 3 in current phase
-Status: Phase 3 complete; ready to plan and execute Phase 4
-Last activity: 2026-04-29 - 03-03 completed: hosted env secret regression
-coverage, configurable Docker security profile wiring, and shell-wrapped sudo
-command blocking are in place with tests.
+Status: Phase 4 planned; ready to execute 04-01
+Last activity: 2026-04-29 - Phase 4 planned: approval/recovery, streaming
+telemetry, and memory retrieval slices are ready.
 
 Progress: [######----] 64%
 
@@ -40,8 +39,8 @@ Progress: [######----] 64%
 **Recent Trend:**
 
 - Last 5 plans: 02-02, 02-03, 03-01, 03-02, 03-03
-- Trend: Phase 3 sandbox hardening completed; Phase 4 agent durability and
-  approval hardening next.
+- Trend: Phase 3 sandbox hardening completed; Phase 4 approval and recovery
+  hardening ready to execute.
 
 ## Accumulated Context
 
@@ -75,6 +74,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-29 03:20 +03:00
-Stopped at: Phase 3 complete; plan Phase 4 next.
-Resume file: .planning/ROADMAP.md
+Last session: 2026-04-29 03:35 +03:00
+Stopped at: Phase 4 planned; execute 04-01 next.
+Resume file: .planning/phases/04-agent-durability-approval-and-memory/04-01-PLAN.md
