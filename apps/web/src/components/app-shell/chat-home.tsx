@@ -107,6 +107,11 @@ export function ChatHome() {
         { id: assistantId, role: 'assistant', content: '', streaming: true },
       ]);
       const tokens = content.split(/(\s+)/);
+      // Reveal speed: shorter delay + larger chunks for snappier feel,
+      // with the chunk size scaled to the response length so very long
+      // responses don't feel laggy.
+      const stepSize = Math.max(2, Math.min(8, Math.ceil(tokens.length / 120)));
+      const intervalMs = 12;
       let i = 0;
       clearStreamTimer();
       intervalRef.current = setInterval(() => {
@@ -114,8 +119,8 @@ export function ChatHome() {
           clearStreamTimer();
           return;
         }
-        const chunk = tokens.slice(0, i + 2).join('');
-        i += 2;
+        const chunk = tokens.slice(0, i + stepSize).join('');
+        i += stepSize;
         setMessages((current) =>
           current.map((m) => (m.id === assistantId ? { ...m, content: chunk } : m)),
         );
@@ -127,7 +132,7 @@ export function ChatHome() {
             ),
           );
         }
-      }, 24);
+      }, intervalMs);
     } catch (error) {
       const content = controller.signal.aborted
         ? 'Generation stopped.'

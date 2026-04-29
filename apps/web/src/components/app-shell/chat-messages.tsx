@@ -3,6 +3,7 @@
 import { Check, Copy, Sparkles, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { Markdown } from '@/components/app-shell/markdown';
 
 export type ChatMessage = {
   id: string;
@@ -56,30 +57,32 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div
       className={cn(
-        'group flex w-full items-start gap-3 animate-in fade-in slide-in-from-bottom-1 duration-500',
-        isUser ? 'flex-row-reverse' : 'flex-row',
+        'group flex w-full gap-3 animate-in fade-in slide-in-from-bottom-1 duration-300',
+        isUser ? 'justify-end' : 'justify-start',
       )}
     >
-      <div
-        className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md ring-1',
-          isUser
-            ? 'bg-zinc-800/80 ring-white/10 text-zinc-300'
-            : 'bg-zinc-900/80 ring-white/[0.07] text-zinc-300',
-        )}
-      >
-        {isUser ? <User className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-      </div>
-      <div className={cn('flex max-w-[82%] flex-col', isUser ? 'items-end' : 'items-start')}>
+      {!isUser && (
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-900/80 ring-1 ring-white/[0.07] text-zinc-300">
+          <Sparkles className="h-3.5 w-3.5" />
+        </div>
+      )}
+      <div className={cn('flex max-w-[78%] flex-col', isUser ? 'items-end' : 'items-start')}>
         <div
           className={cn(
-            'relative whitespace-pre-wrap break-words rounded-xl px-4 py-2.5 text-[14px] leading-[1.65]',
+            'relative break-words rounded-2xl px-4 py-2.5 text-[14px] leading-[1.7] tracking-[-0.005em]',
+            'font-[\'Inter\',\'-apple-system\',\'BlinkMacSystemFont\',\'Segoe_UI\',sans-serif]',
             isUser
-              ? 'rounded-tr-sm bg-zinc-800/70 text-zinc-100 ring-1 ring-white/[0.06]'
-              : 'rounded-tl-sm bg-zinc-900/60 text-zinc-100 ring-1 ring-white/[0.05]',
+              ? 'rounded-tr-md bg-zinc-100 text-zinc-900'
+              : 'rounded-tl-md bg-zinc-900/70 text-zinc-100 ring-1 ring-white/[0.06]',
           )}
         >
-          {message.content || (
+          {message.content ? (
+            isUser ? (
+              <span className="whitespace-pre-wrap">{message.content}</span>
+            ) : (
+              <Markdown text={message.content} />
+            )
+          ) : (
             <span className="inline-flex items-center gap-1 text-zinc-500">
               <span className="h-1 w-1 animate-pulse rounded-full bg-zinc-500" />
               <span className="h-1 w-1 animate-pulse rounded-full bg-zinc-500 [animation-delay:140ms]" />
@@ -94,7 +97,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <button
             type="button"
             onClick={copy}
-            className="mt-1 flex items-center gap-1 px-1 text-[10px] uppercase tracking-wider text-zinc-500 opacity-0 transition-opacity hover:text-zinc-200 group-hover:opacity-100"
+            className="mt-1 flex items-center gap-1 px-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500 opacity-0 transition-opacity hover:text-zinc-200 group-hover:opacity-100"
             aria-label="Copy message"
           >
             {copied ? (
@@ -109,6 +112,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           </button>
         )}
       </div>
+      {isUser && (
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-900 ring-1 ring-white/10">
+          <User className="h-3.5 w-3.5" />
+        </div>
+      )}
     </div>
   );
 }
