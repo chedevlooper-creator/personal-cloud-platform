@@ -119,6 +119,19 @@ describe('RuntimeService workspace ownership', () => {
     expect(options.workspacePath).not.toContain('..');
   });
 
+  it('rejects unapproved runtime images before inserting or creating containers', async () => {
+    const { RuntimeService } = await import('./service');
+    mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
+    const service = new RuntimeService(logger);
+
+    await expect(
+      service.createRuntime(USER_ID, WORKSPACE_ID, 'busybox:latest', {}),
+    ).rejects.toThrow('Runtime image is not allowed');
+
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(providerCreate).not.toHaveBeenCalled();
+  });
+
   it('scopes runtime status updates by runtime id and authenticated user', async () => {
     const { RuntimeService } = await import('./service');
     const { runtimes } = await import('@pcp/db/src/schema');

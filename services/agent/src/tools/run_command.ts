@@ -4,15 +4,32 @@ import { ToolDefinition } from '../llm/types';
 
 const MAX_OUTPUT_BYTES = 32 * 1024;
 
+export const RUN_COMMAND_POLICY = {
+  approvalRequired: true,
+  timeoutMs: 60_000,
+  network: 'disabled',
+  outputLimitBytes: MAX_OUTPUT_BYTES,
+  blockedCategories: ['destructive root deletion', 'privilege escalation', 'fork bomb'],
+} as const;
+
 function trim(value: string): string {
   if (value.length <= MAX_OUTPUT_BYTES) return value;
   return `${value.slice(0, MAX_OUTPUT_BYTES)}\n[truncated: ${value.length - MAX_OUTPUT_BYTES} more bytes]`;
 }
 
+function formatPolicyDescription(): string {
+  return [
+    'Approval required',
+    `${RUN_COMMAND_POLICY.timeoutMs / 1000}s timeout`,
+    `network ${RUN_COMMAND_POLICY.network}`,
+    `output truncated to ${RUN_COMMAND_POLICY.outputLimitBytes / 1024}KB`,
+    `blocked: ${RUN_COMMAND_POLICY.blockedCategories.join(', ')}`,
+  ].join('; ');
+}
+
 export class RunCommandTool implements Tool<{ command: string }, string> {
   name = 'run_command';
-  description =
-    'Run a shell command inside the workspace runtime container (sh -c). Limited to 60s, no network. Output is truncated to 32KB.';
+  description = `Run a shell command inside the workspace runtime container (sh -c). ${formatPolicyDescription()}.`;
   requiresApproval = true;
   schema = z.object({
     command: z.string().min(1).describe('Shell command to run, e.g. "node -v"'),

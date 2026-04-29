@@ -50,9 +50,14 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
       `Privileged: false`, `Init: true`, `OomKillDisable: false`, and
       `MemorySwap` capped to memory.
 - [ ] **SBOX-02**: Runtime and publish workloads use seccomp/AppArmor or an
-      equivalent hardened profile plus an image allow-list for untrusted execution.
+      equivalent hardened profile plus an image allow-list for untrusted
+      execution. Phase 3 plan 03-02 added runtime and publish image allow-list
+      enforcement; hardened profile wiring remains.
 - [ ] **SBOX-03**: Terminal and `run_command` tool execution surfaces policy
       decisions, resource limits, and approval requirements before side effects.
+      Phase 3 plan 03-02 added structured `run_command` policy metadata for
+      approval, timeout, network, output truncation, and blocked command
+      categories.
 - [ ] **SBOX-04**: Hosted-service environment variables remain encrypted at rest,
       masked in client responses, and decrypted only for container launch.
 
@@ -127,8 +132,8 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 | SEC-04      | Phase 2 | Complete |
 | TST-01      | Phase 2 | Partial  |
 | SBOX-01     | Phase 3 | Partial  |
-| SBOX-02     | Phase 3 | Pending  |
-| SBOX-03     | Phase 3 | Pending  |
+| SBOX-02     | Phase 3 | Partial  |
+| SBOX-03     | Phase 3 | Partial  |
 | SBOX-04     | Phase 3 | Pending  |
 | AGT-01      | Phase 4 | Pending  |
 | AGT-02      | Phase 4 | Pending  |
@@ -149,4 +154,4 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 ---
 
 _Requirements defined: 2026-04-28_
-_Last updated: 2026-04-29 after Phase 3 plan 03-01 execution_
+_Last updated: 2026-04-29 after Phase 3 plan 03-02 execution_

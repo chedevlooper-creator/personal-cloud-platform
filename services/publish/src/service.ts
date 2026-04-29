@@ -3,6 +3,7 @@ import { hostedServices, hostedServiceLogs, workspaces, auditLogs } from '@pcp/d
 import { eq, desc, and, isNull } from 'drizzle-orm';
 import Docker from 'dockerode';
 import { encryptEnvVars, decryptEnvVars, redactEnvVars } from './encryption';
+import { resolvePublishImage } from './policy';
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/;
@@ -155,11 +156,11 @@ export class PublishService {
       const workspaceVolume = `/tmp/workspaces/${service.userId}/${service.workspaceId}`;
 
       // In MVP, we just use node alpine or nginx depending on kind
-      let image = 'node:20-alpine';
+      let image = resolvePublishImage(service.kind as 'static' | 'vite' | 'node');
       let cmd: string[] = [];
 
       if (service.kind === 'static') {
-        image = 'nginxinc/nginx-unprivileged:alpine';
+        image = resolvePublishImage('static');
       } else if (service.startCommand) {
         cmd = ['sh', '-c', normalizeStartCommand(service.startCommand) || ''];
       } else if (service.kind === 'node') {

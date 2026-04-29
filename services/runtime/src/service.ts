@@ -11,6 +11,11 @@ import { DockerProvider } from './provider/docker';
 import { RuntimeProvider } from './provider/types';
 import { env } from './env';
 import { WorkspaceClient } from './workspaceClient';
+import {
+  assertRuntimeCommandAllowed,
+  assertRuntimeImageAllowed,
+  RUNTIME_COMMAND_POLICY,
+} from './policy';
 
 const SYNC_IGNORE_DIRS = new Set(['node_modules', '.git', '.cache', 'dist', '.next', '.venv']);
 const SYNC_BACK_MAX_BYTES = 512 * 1024;
@@ -47,6 +52,7 @@ export class RuntimeService {
 
   async createRuntime(userId: string, workspaceId: string, image: string, options: any) {
     await this.assertWorkspaceOwned(workspaceId, userId);
+    assertRuntimeImageAllowed(image);
 
     const [runtime] = await db
       .insert(runtimes)
@@ -143,11 +149,7 @@ export class RuntimeService {
       throw new Error('Runtime not running or container not found');
     }
 
-    const commandStr = command.join(' ');
-    const blockedPatterns = [/rm\s+-rf\s+\//, /^sudo\b/, /:\(\)\{\s*:\|:&\s*\};:/];
-    if (blockedPatterns.some((pattern) => pattern.test(commandStr))) {
-      throw new Error('Command blocked by security policy');
-    }
+    assertRuntimeCommandAllowed(command);
 
     // Sync workspace files into the host-mounted directory so the container sees
     // the latest content. Failures here are logged but non-fatal.
@@ -157,7 +159,10 @@ export class RuntimeService {
     const execPromise = this.provider.exec(runtime.containerId, command);
     const timeoutPromise = new Promise<{ stdout: string; stderr: string; exitCode: number }>(
       (_, reject) => {
-        setTimeout(() => reject(new Error('Command execution timed out after 60 seconds')), 60000);
+        setTimeout(
+          () => reject(new Error('Command execution timed out after 60 seconds')),
+          RUNTIME_COMMAND_POLICY.timeoutMs,
+        );
       },
     );
 
