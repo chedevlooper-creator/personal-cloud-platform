@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { createApiErrorResponse, type ApiErrorCode } from '@pcp/shared';
+import { createApiErrorHandler } from '@pcp/shared';
 import { publishRoutes } from './routes';
 import { env } from './env';
 import { startHealthDaemon } from './health';
@@ -58,20 +58,7 @@ const app = Fastify({
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
 
-app.setErrorHandler((error, request, reply) => {
-  const statusCode = resolveStatusCode(error.statusCode);
-  const code = resolveErrorCode(statusCode, Boolean(error.validation));
-  const message =
-    statusCode >= 500 ? 'Internal server error' : error.message || defaultErrorMessage(code);
-  const correlationId = request.id;
-
-  request.log[statusCode >= 500 ? 'error' : 'warn'](
-    { err: error, correlationId },
-    'request failed',
-  );
-
-  reply.code(statusCode).send(createApiErrorResponse(code, message, correlationId));
-});
+app.setErrorHandler(createApiErrorHandler());
 
 app.addHook('onRequest', (request, reply, done) => {
   reply.header('x-correlation-id', request.id);
@@ -116,31 +103,6 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     app.log.error({ err, signal }, 'shutdown failed');
     process.exit(1);
   }
-}
-
-function resolveStatusCode(statusCode: number | undefined): number {
-  if (!statusCode || statusCode < 400 || statusCode > 599) return 500;
-  return statusCode;
-}
-
-function resolveErrorCode(statusCode: number, isValidationError: boolean): ApiErrorCode {
-  if (isValidationError) return 'VALIDATION_ERROR';
-  if (statusCode === 400) return 'BAD_REQUEST';
-  if (statusCode === 401) return 'UNAUTHORIZED';
-  if (statusCode === 403) return 'FORBIDDEN';
-  if (statusCode === 404) return 'NOT_FOUND';
-  if (statusCode === 409) return 'CONFLICT';
-  return 'INTERNAL_ERROR';
-}
-
-function defaultErrorMessage(code: ApiErrorCode): string {
-  if (code === 'VALIDATION_ERROR') return 'Validation failed';
-  if (code === 'UNAUTHORIZED') return 'Unauthorized';
-  if (code === 'FORBIDDEN') return 'Forbidden';
-  if (code === 'NOT_FOUND') return 'Not found';
-  if (code === 'CONFLICT') return 'Conflict';
-  if (code === 'BAD_REQUEST') return 'Bad request';
-  return 'Internal server error';
 }
 
 if (require.main === module) {

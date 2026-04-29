@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import { createApiErrorHandler } from '@pcp/shared';
 import { setupMemoryRoutes } from './routes';
 import { env } from './env';
 
@@ -22,6 +23,13 @@ const server = Fastify({
 
 server.setValidatorCompiler(validatorCompiler);
 server.setSerializerCompiler(serializerCompiler);
+
+server.setErrorHandler(createApiErrorHandler());
+
+server.addHook('onRequest', (request, reply, done) => {
+  reply.header('x-correlation-id', request.id);
+  done();
+});
 
 server.register(cors, {
   origin: true,

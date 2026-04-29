@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
+import { createApiErrorHandler } from '@pcp/shared';
 import { setupRuntimeRoutes } from './routes';
 import { env } from './env';
 
@@ -24,6 +25,13 @@ const server = Fastify({
 
 server.setValidatorCompiler(validatorCompiler);
 server.setSerializerCompiler(serializerCompiler);
+
+server.setErrorHandler(createApiErrorHandler());
+
+server.addHook('onRequest', (request, reply, done) => {
+  reply.header('x-correlation-id', request.id);
+  done();
+});
 
 server.register(cors, {
   origin: true,
