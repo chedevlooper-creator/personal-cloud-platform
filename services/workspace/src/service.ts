@@ -13,7 +13,7 @@ import {
   verifyUserExists as verifySharedUserExists,
 } from '@pcp/db/src/session';
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import { PassThrough } from 'node:stream';
+import { Transform } from 'node:stream';
 import type { Readable } from 'node:stream';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { env } from './env';
@@ -431,17 +431,6 @@ export class WorkspaceService {
     const normalizedPath = this.normalizeFilePath(path);
     const storageKey = this.getStorageKey(userId, workspaceId, normalizedPath);
 
-    // Tee the upload through a PassThrough so we can count bytes exactly as they
-    // flow to S3, regardless of whether the source stream exposes a byte count.
-    let size = 0;
-    const counter = new PassThrough();
-    counter.on('data', (chunk: Buffer | string) => {
-      size += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
-    });
-    stream.pipe(counter);
-
-    await this.storage.putStream(storageKey, counter, mimeType);
-
     const parts = normalizedPath.split('/').filter(Boolean);
     parts.pop();
     const parentPath = parts.length > 0 ? '/' + parts.join('/') : null;
@@ -454,6 +443,13 @@ export class WorkspaceService {
         isNull(workspaceFiles.deletedAt),
       ),
     });
+
+    const previousSize = existing ? Number(existing.size || 0) : 0;
+    const maxBytes = Math.max(0, workspace.storageLimit - workspace.storageUsed + previousSize);
+    const upload = this.createQuotaLimitedStream(stream, maxBytes);
+
+    await this.storage.putStream(storageKey, upload.stream, mimeType);
+    const size = upload.getSize();
 
     let file;
     if (existing) {
@@ -490,12 +486,32 @@ export class WorkspaceService {
     await db
       .update(workspaces)
       .set({
-        storageUsed: workspace.storageUsed + size,
+        storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
         updatedAt: new Date(),
       })
       .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return file;
+  }
+
+  private createQuotaLimitedStream(
+    stream: NodeJS.ReadableStream,
+    maxBytes: number,
+  ): { stream: NodeJS.ReadableStream; getSize: () => number } {
+    let size = 0;
+    const counter = new Transform({
+      transform(chunk: Buffer | string, _encoding, callback) {
+        const bytes = typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
+        size += bytes;
+        if (size > maxBytes) {
+          callback(new WorkspaceError('Storage quota exceeded', 413));
+          return;
+        }
+        callback(null, chunk);
+      },
+    });
+
+    return { stream: stream.pipe(counter), getSize: () => size };
   }
 
   async createDirectory(

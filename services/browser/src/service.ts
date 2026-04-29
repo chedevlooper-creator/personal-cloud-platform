@@ -1,6 +1,8 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { env } from './env';
 
 /**
@@ -68,6 +70,11 @@ export class BrowserService {
       viewport: { width: 1280, height: 800 },
       acceptDownloads: false,
     });
+    await context.route('**/*', async (route: any) => {
+      const requestUrl = route.request().url();
+      if (await isSafeNavigationUrl(requestUrl)) return route.continue();
+      return route.abort('blockedbyclient');
+    });
     const page = (await context.pages())[0] ?? (await context.newPage());
 
     const id = randomUUID();
@@ -88,7 +95,9 @@ export class BrowserService {
 
   async navigate(userId: string, sessionId: string, url: string): Promise<BrowserSessionInfo> {
     const s = this.requireSession(userId, sessionId);
-    if (!isSafeUrl(url)) throw httpErr(400, 'URL must be http(s) and not point at a private network.');
+    if (!(await isSafeNavigationUrl(url))) {
+      throw httpErr(400, 'URL must be http(s) and not point at a private network.');
+    }
     await s.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     s.url = s.page.url();
     s.title = await s.page.title().catch(() => '');
@@ -236,9 +245,70 @@ export function isSafeUrl(url: string): boolean {
   ) {
     return false;
   }
-  // Block obvious private IPv4 ranges (best-effort; not a full SSRF firewall).
-  if (/^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host)) return false;
-  // IPv6 loopback / link-local / ULA
-  if (host === '::1' || host === '::' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return false;
+  if (isPrivateAddress(host)) return false;
   return true;
+}
+
+export async function isSafeNavigationUrl(url: string): Promise<boolean> {
+  if (!isSafeUrl(url)) return false;
+
+  const { hostname } = new URL(url);
+  let host = hostname.toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  if (isIP(host)) return true;
+
+  try {
+    const addresses = await lookup(host, { all: true, verbatim: true });
+    return addresses.length > 0 && addresses.every(({ address }) => !isPrivateAddress(address));
+  } catch {
+    return false;
+  }
+}
+
+function isPrivateAddress(host: string): boolean {
+  const normalized = host.toLowerCase();
+  const ipv4 = parseIpv4(normalized);
+  if (ipv4) {
+    const [a, b] = ipv4;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true;
+    return false;
+  }
+
+  const ipv6 = normalized.startsWith('::ffff:') ? normalized.slice(7) : normalized;
+  const mappedIpv4 = parseIpv4(ipv6) ?? parseIpv4MappedHex(ipv6);
+  if (mappedIpv4) return isPrivateAddress(mappedIpv4.join('.'));
+
+  return (
+    normalized === '::1' ||
+    normalized === '::' ||
+    normalized.startsWith('fe80:') ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd')
+  );
+}
+
+function parseIpv4MappedHex(host: string): [number, number, number, number] | null {
+  const match = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(host);
+  if (!match) return null;
+  const high = Number.parseInt(match[1] ?? '', 16);
+  const low = Number.parseInt(match[2] ?? '', 16);
+  if (!Number.isInteger(high) || !Number.isInteger(low) || high > 0xffff || low > 0xffff) {
+    return null;
+  }
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff];
+}
+
+function parseIpv4(host: string): [number, number, number, number] | null {
+  const parts = host.split('.');
+  if (parts.length !== 4) return null;
+  const octets = parts.map((part) => Number(part));
+  if (octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  const [a, b, c, d] = octets;
+  if (a === undefined || b === undefined || c === undefined || d === undefined) return null;
+  return [a, b, c, d];
 }

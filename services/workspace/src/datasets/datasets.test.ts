@@ -68,6 +68,24 @@ describe('DatasetsService.assertReadOnly (via query path)', () => {
     );
   });
 
+  it('rejects DuckDB file-reading functions in user SQL', async () => {
+    const { DatasetsService } = await import('./service');
+    const svc = new DatasetsService();
+    const fileReads = [
+      "SELECT * FROM read_csv_auto('/etc/passwd')",
+      "SELECT * FROM read_json('/tmp/data.json')",
+      "SELECT * FROM parquet_scan('/tmp/data.parquet')",
+      "SELECT * FROM glob('/workspace/*')",
+      "SELECT * FROM sniff_csv('/tmp/data.csv')",
+    ];
+
+    for (const sql of fileReads) {
+      await expect(svc.query({ userId: 'u', sql })).rejects.toThrow(
+        /File-reading SQL functions/i,
+      );
+    }
+  });
+
   it('sanitizes table names', async () => {
     const { sanitizeTableName } = await import('./driver');
     expect(sanitizeTableName('Hello World!')).toBe('hello_world');

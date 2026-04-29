@@ -28,6 +28,9 @@ const { mockDb, updateReturning, deleteWhere, insertReturning, automationQueue }
         automationRuns: {
           findMany: vi.fn(),
         },
+        workspaces: {
+          findFirst: vi.fn(),
+        },
       },
       update: vi.fn(() => ({
         set: vi.fn(() => ({
@@ -96,6 +99,7 @@ describe('automation route tenant scope', () => {
     mockDb.query.automations.findFirst.mockResolvedValue(automation());
     mockDb.query.automations.findMany.mockResolvedValue([automation()]);
     mockDb.query.automationRuns.findMany.mockResolvedValue([]);
+    mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
     updateReturning.mockResolvedValue([automation()]);
     deleteWhere.mockResolvedValue(undefined);
     insertReturning.mockResolvedValue([
@@ -182,6 +186,44 @@ describe('automation route tenant scope', () => {
         workspaceId: WORKSPACE_ID,
       }),
     );
+
+    await app.close();
+  });
+
+  it('does not enqueue a manual run for an automation with an unowned workspace', async () => {
+    const app = await buildApp();
+    mockDb.query.workspaces.findFirst.mockResolvedValueOnce(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/automations/${AUTOMATION_ID}/run`,
+      headers: { cookie: 'sessionId=session-1' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(automationQueue.add).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects automation creation for an unowned workspace', async () => {
+    const app = await buildApp();
+    mockDb.query.workspaces.findFirst.mockResolvedValueOnce(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/automations',
+      headers: { cookie: 'sessionId=session-1' },
+      payload: {
+        workspaceId: WORKSPACE_ID,
+        title: 'Bad workspace',
+        prompt: 'Summarize',
+        scheduleType: 'manual',
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(insertReturning).not.toHaveBeenCalled();
 
     await app.close();
   });

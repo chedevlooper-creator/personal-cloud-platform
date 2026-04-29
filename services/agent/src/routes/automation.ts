@@ -1,9 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { db } from '@pcp/db/src/client';
-import { automations, automationRuns } from '@pcp/db/src/schema';
+import { automations, automationRuns, workspaces } from '@pcp/db/src/schema';
 import { validateSessionUserId } from '@pcp/db/src/session';
-import { and, eq, desc } from 'drizzle-orm';
+import { and, eq, desc, isNull } from 'drizzle-orm';
 import { createAutomationSchema, updateAutomationSchema, sendApiError } from '@pcp/shared';
 import { automationQueue } from '../automation/queue';
 import { automationRepeatKey, computeNextRunAt, resolveSchedule } from '../automation/schedule';
@@ -17,6 +17,18 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     return validateSessionUserId(sessionId);
   }
 
+  async function assertWorkspaceOwned(workspaceId: string | undefined | null, userId: string) {
+    if (!workspaceId) return true;
+    const workspace = await db.query.workspaces.findFirst({
+      where: and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.userId, userId),
+        isNull(workspaces.deletedAt),
+      ),
+    });
+    return Boolean(workspace);
+  }
+
   server.get(
     '/automations',
     {
@@ -28,6 +40,10 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const { workspaceId } = request.query;
+
+      if (!(await assertWorkspaceOwned(workspaceId, userId))) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+      }
 
       const items = await db.query.automations.findMany({
         where: workspaceId
@@ -48,6 +64,10 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+
+      if (!(await assertWorkspaceOwned(request.body.workspaceId, userId))) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+      }
 
       const nextRunAt = computeNextRunAt(request.body);
 
@@ -96,6 +116,10 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { id } = request.params;
+
+      if (!(await assertWorkspaceOwned(request.body.workspaceId, userId))) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+      }
 
       const nextRunAt = computeNextRunAt({
         scheduleType: request.body.scheduleType ?? 'manual',
@@ -184,6 +208,12 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       });
 
       if (!automation) return sendApiError(reply, 404, 'NOT_FOUND', 'Not found');
+      if (!automation.workspaceId) {
+        return sendApiError(reply, 400, 'BAD_REQUEST', 'Automation missing workspace');
+      }
+      if (!(await assertWorkspaceOwned(automation.workspaceId, userId))) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+      }
 
       // Create a run record
       const [run] = await db
@@ -283,6 +313,9 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       }
       if (!automation.workspaceId) {
         return sendApiError(reply, 400, 'BAD_REQUEST', 'Automation missing workspace');
+      }
+      if (!(await assertWorkspaceOwned(automation.workspaceId, automation.userId))) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
       }
 
       const [run] = await db

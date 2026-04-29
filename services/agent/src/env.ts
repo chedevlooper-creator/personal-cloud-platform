@@ -31,7 +31,7 @@ const envSchema = z.object({
   RUNTIME_SERVICE_URL: z.string().url().default('http://localhost:3003'),
   MEMORY_SERVICE_URL: z.string().url().default('http://localhost:3005'),
   BROWSER_SERVICE_URL: z.string().url().default('http://localhost:3007'),
-  RUNTIME_DEFAULT_IMAGE: z.string().default('node:20-bookworm-slim'),
+  RUNTIME_DEFAULT_IMAGE: z.string().default('node:20-alpine'),
   WEB_SEARCH_PROVIDER: z.enum(['none', 'brave', 'tavily', 'serpapi']).default('none'),
   WEB_SEARCH_API_KEY: z.string().optional(),
   WEB_FETCH_MAX_BYTES: z.coerce.number().int().positive().default(200_000),

@@ -79,6 +79,8 @@ export class DockerProvider implements RuntimeProvider {
     const container = this.docker.getContainer(id);
     const exec = await container.exec({
       Cmd: command,
+      User: '1000:1000',
+      WorkingDir: '/workspace',
       AttachStdout: true,
       AttachStderr: true,
     });
@@ -124,11 +126,18 @@ export class DockerProvider implements RuntimeProvider {
 
   async attach(id: string): Promise<NodeJS.ReadWriteStream> {
     const container = this.docker.getContainer(id);
-    const stream = await container.attach({
+    const exec = await container.exec({
+      Cmd: ['/bin/sh'],
+      User: '1000:1000',
+      WorkingDir: '/workspace',
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: true,
+    });
+    const stream = await exec.start({
       stream: true,
       stdin: true,
-      stdout: true,
-      stderr: true,
     });
     return stream;
   }

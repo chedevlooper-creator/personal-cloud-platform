@@ -45,7 +45,7 @@ const { mockDb, insertedValues, updateCalls } = vi.hoisted(() => {
           where: vi.fn((predicate: unknown) => {
             call.where = predicate;
             return {
-              returning: vi.fn(async () => []),
+              returning: vi.fn(async () => ('size' in value && 'storageKey' in value ? [makeFile(value)] : [])),
               execute: vi.fn(async () => undefined),
             };
           }),
@@ -425,7 +425,7 @@ describe('WorkspaceService', () => {
     const workspaceService = new WorkspaceService(logger, storage);
     mockDb.query.workspaceFiles.findFirst.mockResolvedValue(undefined);
 
-    const payload = 'hello upload — π';
+    const payload = 'hello upload';
     const expectedSize = Buffer.byteLength(payload, 'utf8');
     const source = Readable.from([Buffer.from(payload, 'utf8')]);
 
@@ -447,6 +447,70 @@ describe('WorkspaceService', () => {
       }),
     );
     await expect(storage.getText('user-1/workspace-1/upload.txt')).resolves.toBe(payload);
+  });
+
+  it('rejects uploads that would exceed quota before writing object storage', async () => {
+    const storage = new MemoryStorage();
+    const workspaceService = new WorkspaceService(logger, storage);
+    mockDb.query.workspaces.findFirst.mockResolvedValueOnce({
+      ...workspace,
+      storageUsed: 9,
+      storageLimit: 10,
+    });
+    mockDb.query.workspaceFiles.findFirst.mockResolvedValue(undefined);
+
+    await expect(
+      workspaceService.uploadFile(
+        'workspace-1',
+        'user-1',
+        '/too-large.txt',
+        'too-large.txt',
+        'text/plain',
+        Readable.from(['xx']),
+      ),
+    ).rejects.toMatchObject({ statusCode: 413 });
+
+    expect(storage.objects.size).toBe(0);
+    expect(insertedValues).not.toContainEqual(expect.objectContaining({ path: '/too-large.txt' }));
+  });
+
+  it('accounts upload replacements as a storage delta', async () => {
+    const { workspaces } = await import('@pcp/db/src/schema');
+    const storage = new MemoryStorage();
+    const workspaceService = new WorkspaceService(logger, storage);
+    mockDb.query.workspaces.findFirst.mockResolvedValueOnce({
+      ...workspace,
+      storageUsed: 100,
+      storageLimit: 110,
+    });
+    mockDb.query.workspaceFiles.findFirst.mockResolvedValue({
+      id: 'file-existing',
+      workspaceId: 'workspace-1',
+      path: '/upload.txt',
+      name: 'upload.txt',
+      mimeType: 'text/plain',
+      size: '95',
+      storageKey: 'user-1/workspace-1/upload.txt',
+      isDirectory: '0',
+      parentPath: null,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    });
+
+    await workspaceService.uploadFile(
+      'workspace-1',
+      'user-1',
+      '/upload.txt',
+      'upload.txt',
+      'text/plain',
+      Readable.from(['replacement']),
+    );
+
+    const metadataUpdate = updateCalls.find(
+      (call) => call.table === workspaces && 'storageUsed' in call.set,
+    );
+    expect(metadataUpdate?.set.storageUsed).toBe(16);
   });
 });
 

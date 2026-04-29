@@ -3,11 +3,25 @@ import pino from 'pino';
 
 // Capture the underlying sql object that the service hands to db.execute so we
 // can inspect tenant filters (user_id / workspace_id / type) without a real DB.
-const executeMock = vi.fn();
+const { executeMock, insertMock, workspaceFindFirstMock } = vi.hoisted(() => ({
+  executeMock: vi.fn(),
+  insertMock: vi.fn(() => ({
+    values: vi.fn(() => ({
+      returning: vi.fn(async () => [{ id: 'memory-1' }]),
+    })),
+  })),
+  workspaceFindFirstMock: vi.fn(),
+}));
 
 vi.mock('@pcp/db/src/client', () => ({
   db: {
     execute: (...args: any[]) => executeMock(...args),
+    insert: insertMock,
+    query: {
+      workspaces: {
+        findFirst: workspaceFindFirstMock,
+      },
+    },
   },
 }));
 
@@ -62,6 +76,8 @@ const logger = pino({ level: 'silent' });
 describe('MemoryService', () => {
   beforeEach(() => {
     executeMock.mockReset();
+    insertMock.mockClear();
+    workspaceFindFirstMock.mockReset();
   });
 
   it('initializes successfully', async () => {
@@ -75,6 +91,10 @@ describe('MemoryService', () => {
     const service = new MemoryService(logger);
 
     executeMock.mockResolvedValue({ rows: [] });
+    workspaceFindFirstMock.mockResolvedValueOnce({
+      id: '22222222-2222-2222-2222-222222222222',
+      userId: '11111111-1111-1111-1111-111111111111',
+    });
 
     const userId = '11111111-1111-1111-1111-111111111111';
     const workspaceId = '22222222-2222-2222-2222-222222222222';
@@ -142,5 +162,24 @@ describe('MemoryService', () => {
 
     const result = await service.searchMemory('user-1', 'q');
     expect(result).toHaveLength(2);
+  });
+
+  it('rejects scoped memory operations when the workspace is not owned', async () => {
+    const { db } = await import('@pcp/db/src/client');
+    const { MemoryService } = await import('./service');
+    const service = new MemoryService(logger);
+    vi.mocked(db.query.workspaces.findFirst).mockResolvedValueOnce(undefined);
+
+    await expect(
+      service.addMemory(
+        'user-1',
+        'long-term',
+        'secret',
+        {},
+        '22222222-2222-2222-2222-222222222222',
+      ),
+    ).rejects.toThrow('Workspace not found');
+
+    expect(db.insert).not.toHaveBeenCalled();
   });
 });

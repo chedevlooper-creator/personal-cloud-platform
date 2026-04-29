@@ -2,8 +2,8 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { db } from '@pcp/db/src/client';
-import { channelLinks, auditLogs } from '@pcp/db/src/schema';
-import { and, eq } from 'drizzle-orm';
+import { channelLinks, auditLogs, workspaces } from '@pcp/db/src/schema';
+import { and, eq, isNull } from 'drizzle-orm';
 import {
   channelLinkResponseSchema,
   createChannelLinkSchema,
@@ -42,6 +42,18 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     return orchestrator.validateUserFromCookie(sessionId);
   }
 
+  async function assertWorkspaceOwned(workspaceId: string | null | undefined, userId: string) {
+    if (!workspaceId) return true;
+    const workspace = await db.query.workspaces.findFirst({
+      where: and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.userId, userId),
+        isNull(workspaces.deletedAt),
+      ),
+    });
+    return Boolean(workspace);
+  }
+
   // List my channel links
   server.get(
     '/channels/links',
@@ -67,6 +79,10 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+
+      if (!(await assertWorkspaceOwned(request.body.workspaceId, userId))) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+      }
 
       const existing = await db.query.channelLinks.findFirst({
         where: and(
@@ -114,6 +130,9 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      if (!(await assertWorkspaceOwned(request.body.workspaceId, userId))) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+      }
       const patch: Record<string, unknown> = { updatedAt: new Date() };
       if (request.body.label !== undefined) patch.label = request.body.label;
       if (request.body.workspaceId !== undefined) patch.workspaceId = request.body.workspaceId;

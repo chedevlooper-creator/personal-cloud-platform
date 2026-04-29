@@ -63,6 +63,22 @@ export async function handleIncoming(
       return;
     }
     workspaceId = ws.id;
+  } else {
+    const ws = await db.query.workspaces.findFirst({
+      where: and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.userId, link.userId),
+        isNull(workspaces.deletedAt),
+      ),
+    });
+    if (!ws) {
+      logger.warn({ linkId: link.id, userId: link.userId, workspaceId }, 'Channel link workspace not found');
+      await adapter.sendReply(
+        msg.externalThreadId,
+        'Bu kanalın workspace bağlantısı geçersiz. Web arayüzünden bağlantıyı güncelleyin.',
+      );
+      return;
+    }
   }
 
   // Find existing conversation for this thread.

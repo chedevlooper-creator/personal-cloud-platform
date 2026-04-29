@@ -113,7 +113,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       schema: {
         body: z.object({
           workspaceId: z.string().uuid(),
-          image: z.string().default('node:20-bookworm-slim'),
+          image: z.string().default('node:20-alpine'),
           options: z
             .object({
               cpu: z.number().optional(),

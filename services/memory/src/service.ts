@@ -1,10 +1,10 @@
 import { db } from '@pcp/db/src/client';
-import { memoryEntries } from '@pcp/db/src/schema';
+import { memoryEntries, workspaces } from '@pcp/db/src/schema';
 import {
   validateSessionUserId,
   verifyUserExists as verifySharedUserExists,
 } from '@pcp/db/src/session';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { EmbeddingProvider } from './embeddings/types';
 import { OpenAIEmbeddingProvider } from './embeddings/openai';
 import { LocalHashEmbeddingProvider } from './embeddings/local';
@@ -25,6 +25,16 @@ type MemorySearchRow = {
 type SqlRowsResult<T> = {
   rows?: T[];
 };
+
+export class MemoryError extends Error {
+  constructor(
+    message: string,
+    public statusCode = 400,
+  ) {
+    super(message);
+    this.name = 'MemoryError';
+  }
+}
 
 export class MemoryService {
   private embeddings: EmbeddingProvider;
@@ -61,6 +71,7 @@ export class MemoryService {
     metadata?: any,
     workspaceId?: string,
   ) {
+    await this.assertWorkspaceOwned(userId, workspaceId);
     const embedding = await this.embeddings.generate(content);
 
     const [memory] = await db
@@ -88,6 +99,7 @@ export class MemoryService {
       minSimilarity?: number;
     },
   ) {
+    await this.assertWorkspaceOwned(userId, options?.workspaceId);
     const queryEmbedding = await this.embeddings.generate(query);
     const limit = options?.limit ?? 5;
     const minSimilarity = options?.minSimilarity;
@@ -124,6 +136,18 @@ export class MemoryService {
       );
     }
     return rows;
+  }
+
+  private async assertWorkspaceOwned(userId: string, workspaceId?: string): Promise<void> {
+    if (!workspaceId) return;
+    const workspace = await db.query.workspaces.findFirst({
+      where: and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.userId, userId),
+        isNull(workspaces.deletedAt),
+      ),
+    });
+    if (!workspace) throw new MemoryError('Workspace not found', 404);
   }
 
   async updateMemory(

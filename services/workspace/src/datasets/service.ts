@@ -22,6 +22,8 @@ export interface QueryOptions {
 
 const DEFAULT_ROW_LIMIT = 1000;
 const MAX_ROW_LIMIT = 10000;
+const FILE_READING_FUNCTION_PATTERN =
+  /\b(?:read_(?:csv|csv_auto|json|json_auto|ndjson|parquet|text)|parquet_scan|glob|sniff_csv)\s*\(/i;
 
 export class DatasetsService {
   private dataDir: string;
@@ -195,6 +197,11 @@ export class DatasetsService {
     if (!cleaned) throw Object.assign(new Error('Empty SQL'), { statusCode: 400 });
     if (/;\s*\S/.test(cleaned.replace(/;\s*$/, ''))) {
       throw Object.assign(new Error('Multiple statements are not allowed'), { statusCode: 400 });
+    }
+    if (FILE_READING_FUNCTION_PATTERN.test(cleaned)) {
+      throw Object.assign(new Error('File-reading SQL functions are not allowed'), {
+        statusCode: 400,
+      });
     }
     const banned = [
       'insert ',

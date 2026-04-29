@@ -1,8 +1,8 @@
 import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { db } from '@pcp/db/src/client';
-import { automations, automationRuns } from '@pcp/db/src/schema';
-import { eq } from 'drizzle-orm';
+import { automations, automationRuns, workspaces } from '@pcp/db/src/schema';
+import { and, eq, isNull } from 'drizzle-orm';
 import { AgentOrchestrator } from '../orchestrator';
 import { env } from '../env';
 import { dispatchAutomationRunNotification } from './notify';
@@ -137,6 +137,7 @@ async function resolveAutomationJobData(data: {
   prompt?: string;
 }) {
   if (data.runId && data.automationId && data.userId && data.workspaceId && data.prompt) {
+    await assertWorkspaceOwned(data.userId, data.workspaceId);
     return data as {
       runId: string;
       automationId: string;
@@ -162,6 +163,8 @@ async function resolveAutomationJobData(data: {
     throw new Error('Automation workspace is required to run');
   }
 
+  await assertWorkspaceOwned(automation.userId, automation.workspaceId);
+
   const [run] = await db
     .insert(automationRuns)
     .values({
@@ -183,4 +186,15 @@ async function resolveAutomationJobData(data: {
     workspaceId: automation.workspaceId,
     prompt: automation.prompt,
   };
+}
+
+async function assertWorkspaceOwned(userId: string, workspaceId: string): Promise<void> {
+  const workspace = await db.query.workspaces.findFirst({
+    where: and(
+      eq(workspaces.id, workspaceId),
+      eq(workspaces.userId, userId),
+      isNull(workspaces.deletedAt),
+    ),
+  });
+  if (!workspace) throw new Error('Automation workspace not found');
 }

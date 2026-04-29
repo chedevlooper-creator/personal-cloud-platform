@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSafeUrl } from './service';
+import { isSafeNavigationUrl, isSafeUrl } from './service';
 
 describe('isSafeUrl', () => {
   it('accepts plain http(s) public URLs', () => {
@@ -22,9 +22,17 @@ describe('isSafeUrl', () => {
 
   it('rejects private IPv4 ranges', () => {
     expect(isSafeUrl('http://10.0.0.1')).toBe(false);
+    expect(isSafeUrl('http://0.0.0.0')).toBe(false);
+    expect(isSafeUrl('http://100.64.0.1')).toBe(false);
     expect(isSafeUrl('http://192.168.1.1')).toBe(false);
     expect(isSafeUrl('http://172.16.0.1')).toBe(false);
     expect(isSafeUrl('http://172.31.0.1')).toBe(false);
+    expect(isSafeUrl('http://224.0.0.1')).toBe(false);
+  });
+
+  it('rejects IPv4-mapped IPv6 private addresses', () => {
+    expect(isSafeUrl('http://[::ffff:127.0.0.1]/')).toBe(false);
+    expect(isSafeUrl('http://[::ffff:10.0.0.1]/')).toBe(false);
   });
 
   it('accepts non-private 172 ranges', () => {
@@ -34,5 +42,9 @@ describe('isSafeUrl', () => {
   it('rejects garbage', () => {
     expect(isSafeUrl('not a url')).toBe(false);
     expect(isSafeUrl('')).toBe(false);
+  });
+
+  it('rejects hostnames that resolve to private addresses', async () => {
+    await expect(isSafeNavigationUrl('http://localhost')).resolves.toBe(false);
   });
 });

@@ -24,6 +24,9 @@ const BLOCKED_COMMANDS = [
   },
 ] as const;
 
+const MAX_COMMAND_ARGS = 64;
+const MAX_COMMAND_ARG_LENGTH = 4096;
+
 export const RUNTIME_COMMAND_POLICY = {
   timeoutMs: 60_000,
   network: 'disabled',
@@ -37,6 +40,14 @@ export function assertRuntimeImageAllowed(image: string): void {
 }
 
 export function assertRuntimeCommandAllowed(command: string[]): void {
+  if (command.length === 0 || command.length > MAX_COMMAND_ARGS) {
+    throw new Error('Command blocked by security policy');
+  }
+
+  if (command.some((arg) => arg.length === 0 || arg.length > MAX_COMMAND_ARG_LENGTH || /\0/.test(arg))) {
+    throw new Error('Command blocked by security policy');
+  }
+
   const commandStr = command.join(' ');
   if (BLOCKED_COMMANDS.some((rule) => rule.pattern.test(commandStr))) {
     throw new Error('Command blocked by security policy');

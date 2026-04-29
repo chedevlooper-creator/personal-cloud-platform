@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const createRuntimeSchema = z.object({
   workspaceId: z.string().uuid(),
-  image: z.string().default('node:18-alpine'),
+  image: z.string().default('node:20-alpine'),
   options: z.object({
     cpu: z.number().optional(),
     memory: z.number().optional(),

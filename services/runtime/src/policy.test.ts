@@ -23,6 +23,17 @@ describe('runtime sandbox policy', () => {
     expect(() => assertRuntimeCommandAllowed(['/bin/sh', '-c', 'npm test'])).not.toThrow();
   });
 
+  it('blocks malformed command argv before Docker exec', () => {
+    expect(() => assertRuntimeCommandAllowed([])).toThrow('Command blocked by security policy');
+    expect(() => assertRuntimeCommandAllowed([''])).toThrow('Command blocked by security policy');
+    expect(() => assertRuntimeCommandAllowed(['node', 'bad\0arg'])).toThrow(
+      'Command blocked by security policy',
+    );
+    expect(() => assertRuntimeCommandAllowed(Array.from({ length: 65 }, () => 'true'))).toThrow(
+      'Command blocked by security policy',
+    );
+  });
+
   it('builds Docker security options with configured hardened profiles', () => {
     expect(
       buildRuntimeSecurityOptions({

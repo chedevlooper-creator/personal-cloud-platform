@@ -16,6 +16,9 @@ const { mockDb, capturedWorker } = vi.hoisted(() => {
       automations: {
         findFirst: vi.fn(),
       },
+      workspaces: {
+        findFirst: vi.fn(),
+      },
     },
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
@@ -60,6 +63,12 @@ vi.mock('bullmq', () => ({
   ),
 }));
 
+vi.mock('drizzle-orm', () => ({
+  and: (...conditions: unknown[]) => ({ type: 'and', conditions }),
+  eq: (column: unknown, value: unknown) => ({ type: 'eq', column, value }),
+  isNull: (column: unknown) => ({ type: 'isNull', column }),
+}));
+
 describe('automation worker scheduled jobs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,6 +79,11 @@ describe('automation worker scheduled jobs', () => {
       workspaceId: WORKSPACE_ID,
       prompt: 'Summarize',
       enabled: true,
+    });
+    mockDb.query.workspaces.findFirst.mockResolvedValue({
+      id: WORKSPACE_ID,
+      userId: USER_ID,
+      deletedAt: null,
     });
   });
 
@@ -86,5 +100,44 @@ describe('automation worker scheduled jobs', () => {
     expect(mockDb.insert).toHaveBeenCalled();
     expect(orchestrator.createTask).toHaveBeenCalledWith(USER_ID, WORKSPACE_ID, 'Summarize');
     expect(mockDb.update).toHaveBeenCalled();
+  });
+
+  it('does not run scheduled automations for unowned workspaces', async () => {
+    const { setupAutomationWorker } = await import('./queue');
+    const orchestrator = {
+      createTask: vi.fn(async () => ({ id: TASK_ID })),
+    };
+    mockDb.query.workspaces.findFirst.mockResolvedValueOnce(null);
+
+    await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
+    await expect(capturedWorker.processor?.({ data: { automationId: AUTOMATION_ID } })).rejects.toThrow(
+      'Automation workspace not found',
+    );
+
+    expect(orchestrator.createTask).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('does not run queued jobs carrying an unowned workspace id', async () => {
+    const { setupAutomationWorker } = await import('./queue');
+    const orchestrator = {
+      createTask: vi.fn(async () => ({ id: TASK_ID })),
+    };
+    mockDb.query.workspaces.findFirst.mockResolvedValueOnce(null);
+
+    await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
+    await expect(
+      capturedWorker.processor?.({
+        data: {
+          runId: '550e8400-e29b-41d4-a716-446655440004',
+          automationId: AUTOMATION_ID,
+          userId: USER_ID,
+          workspaceId: WORKSPACE_ID,
+          prompt: 'Summarize',
+        },
+      }),
+    ).rejects.toThrow('Automation workspace not found');
+
+    expect(orchestrator.createTask).not.toHaveBeenCalled();
   });
 });
