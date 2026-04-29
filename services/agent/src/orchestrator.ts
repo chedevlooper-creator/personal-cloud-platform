@@ -13,6 +13,7 @@ import {
 } from '@pcp/db/src/schema';
 import { validateSessionUserId } from '@pcp/db/src/session';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { EventEmitter } from 'events';
 import { LLMProvider, Message } from './llm/types';
 import { createLLMProvider } from './llm/provider';
 import { resolveUserProvider } from './llm/credentials';
@@ -45,8 +46,8 @@ export class AgentOrchestrator {
   private llm: LLMProvider;
   private registry: ToolRegistry;
   private clients: { workspace: WorkspaceClient; runtime: RuntimeClient; memory: MemoryClient };
-  // Per-task cached runtime ids so multiple run_command calls in one loop reuse a runtime.
   private taskRuntimeIds = new Map<string, string>();
+  private taskEvents = new Map<string, EventEmitter>();
 
   constructor(private logger: any) {
     this.llm = createLLMProvider();
@@ -88,6 +89,29 @@ export class AgentOrchestrator {
   private rememberRuntimeId(taskId: string, ctx: ToolContext) {
     if (ctx.runtimeId) {
       this.taskRuntimeIds.set(taskId, ctx.runtimeId);
+    }
+  }
+
+  subscribeToTask(taskId: string): EventEmitter {
+    if (!this.taskEvents.has(taskId)) {
+      this.taskEvents.set(taskId, new EventEmitter());
+    }
+    return this.taskEvents.get(taskId)!;
+  }
+
+  private emitTaskUpdate(taskId: string, data: unknown): void {
+    this.taskEvents.get(taskId)?.emit('task', data);
+  }
+
+  private emitTaskStep(taskId: string, data: unknown): void {
+    this.taskEvents.get(taskId)?.emit('step', data);
+  }
+
+  private cleanupTaskEmitter(taskId: string): void {
+    const emitter = this.taskEvents.get(taskId);
+    if (emitter) {
+      emitter.removeAllListeners();
+      this.taskEvents.delete(taskId);
     }
   }
 
@@ -390,6 +414,7 @@ export class AgentOrchestrator {
       .update(tasks)
       .set({ status: 'executing' })
       .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+    this.emitTaskUpdate(taskId, { ...task, status: 'executing' });
 
     const systemPrompt = await this.buildSystemPrompt(
       userId,
@@ -412,10 +437,15 @@ export class AgentOrchestrator {
       return null;
     });
     const llm: LLMProvider = userProvider?.provider ?? this.llm;
+    const providerName = userProvider?.providerName ?? (llm as any).providerName ?? 'openai';
+    const modelName = userProvider?.model ?? (llm as any).modelName ?? 'gpt-4-turbo-preview';
 
     let stepNumber = 1;
     const maxIterations = 15;
     const tools = this.registry.getAllDefinitions();
+    const loopStartedAt = Date.now();
+    let iterations = 0;
+    const accumulatedUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     for (let i = 0; i < maxIterations; i++) {
       // Check if cancelled — always re-check with userId scope to prevent cross-tenant reads.
@@ -425,15 +455,22 @@ export class AgentOrchestrator {
       if (!currentTask || currentTask.status === 'cancelled') return;
 
       const response = await llm.generate(messages, tools);
+      iterations++;
+      if (response.usage) {
+        accumulatedUsage.promptTokens += response.usage.promptTokens;
+        accumulatedUsage.completionTokens += response.usage.completionTokens;
+        accumulatedUsage.totalTokens += response.usage.totalTokens;
+      }
 
       if (response.content) {
         messages.push({ role: 'assistant', content: response.content });
-        await db.insert(taskSteps).values({
+        const [step] = await db.insert(taskSteps).values({
           taskId,
           stepNumber: stepNumber++,
           type: 'thought',
           content: response.content,
-        });
+        }).returning();
+        this.emitTaskStep(taskId, step);
       }
 
       if (response.toolCalls && response.toolCalls.length > 0) {
@@ -458,13 +495,17 @@ export class AgentOrchestrator {
           .returning();
         if (!recordedToolCall) throw new Error('Failed to record tool call');
 
-        await db.insert(taskSteps).values({
-          taskId,
-          stepNumber: stepNumber++,
-          type: 'action',
-          toolName: toolCall.name,
-          toolInput: toolArgs,
-        });
+        const [actionStep] = await db
+          .insert(taskSteps)
+          .values({
+            taskId,
+            stepNumber: stepNumber++,
+            type: 'action',
+            toolName: toolCall.name,
+            toolInput: toolArgs,
+          })
+          .returning();
+        this.emitTaskStep(taskId, actionStep);
 
         if (requiresApproval) {
           const approval = await this.createApprovalRequest(
@@ -488,6 +529,7 @@ export class AgentOrchestrator {
             .update(tasks)
             .set({ status: 'waiting_approval', updatedAt: new Date() })
             .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+          this.emitTaskUpdate(taskId, { ...task, status: 'waiting_approval' });
           return; // Pause execution
         }
 
@@ -527,12 +569,16 @@ export class AgentOrchestrator {
           });
         }
 
-        await db.insert(taskSteps).values({
-          taskId,
-          stepNumber: stepNumber++,
-          type: 'observation',
-          toolOutput: toolOutputStr,
-        });
+        const [observationStep] = await db
+          .insert(taskSteps)
+          .values({
+            taskId,
+            stepNumber: stepNumber++,
+            type: 'observation',
+            toolOutput: toolOutputStr,
+          })
+          .returning();
+        this.emitTaskStep(taskId, observationStep);
 
         messages.push({
           role: 'user', // Observation
@@ -541,13 +587,32 @@ export class AgentOrchestrator {
         });
       } else {
         // No tool calls means the agent is done
+        const existingMeta =
+          task.metadata && typeof task.metadata === 'object' && !Array.isArray(task.metadata)
+            ? (task.metadata as Record<string, unknown>)
+            : {};
+        const agentRun = {
+          provider: providerName,
+          model: modelName,
+          iterations,
+          usage: accumulatedUsage,
+          latencyMs: Date.now() - loopStartedAt,
+        };
         await db
           .update(tasks)
           .set({
             status: 'completed',
             output: response.content,
+            metadata: { ...existingMeta, agentRun },
           })
           .where(eq(tasks.id, taskId));
+        this.emitTaskUpdate(taskId, {
+          ...task,
+          status: 'completed',
+          output: response.content,
+          metadata: { ...existingMeta, agentRun },
+        });
+        this.cleanupTaskEmitter(taskId);
         this.taskRuntimeIds.delete(taskId);
         await this.persistTaskMemory(userId, task.workspaceId, task.input, response.content ?? '');
         return;
@@ -562,6 +627,12 @@ export class AgentOrchestrator {
         output: 'Exceeded maximum iterations without completing the task.',
       })
       .where(eq(tasks.id, taskId));
+    this.emitTaskUpdate(taskId, {
+      ...task,
+      status: 'failed',
+      output: 'Exceeded maximum iterations without completing the task.',
+    });
+    this.cleanupTaskEmitter(taskId);
     this.taskRuntimeIds.delete(taskId);
   }
 

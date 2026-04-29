@@ -27,5 +27,7 @@ export interface LLMResponse {
 }
 
 export interface LLMProvider {
+  readonly providerName: string;
+  readonly modelName: string;
   generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse>;
 }

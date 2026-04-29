@@ -18,6 +18,7 @@ export function createLLMProvider(env: NodeJS.ProcessEnv = process.env): LLMProv
       env.MINIMAX_MODEL || DEFAULT_MINIMAX_MODEL,
       env.MINIMAX_BASE_URL || DEFAULT_MINIMAX_BASE_URL,
       'bearer',
+      'minimax',
     );
   }
 

@@ -2,12 +2,13 @@ import OpenAI from 'openai';
 import { LLMProvider, Message, ToolDefinition, LLMResponse } from './types';
 
 export class OpenAIProvider implements LLMProvider {
+  readonly providerName = 'openai';
+  readonly modelName: string;
   private client: OpenAI;
-  private model: string;
 
   constructor(apiKey: string, model: string = 'gpt-4-turbo-preview') {
     this.client = new OpenAI({ apiKey });
-    this.model = model;
+    this.modelName = model;
   }
 
   async generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
@@ -27,7 +28,7 @@ export class OpenAIProvider implements LLMProvider {
     }));
 
     const response = await this.client.chat.completions.create({
-      model: this.model,
+      model: this.modelName,
       messages: formattedMessages,
       tools: formattedTools,
       tool_choice: formattedTools ? 'auto' : 'none',

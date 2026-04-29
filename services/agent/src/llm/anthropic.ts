@@ -4,21 +4,24 @@ import { LLMProvider, Message, ToolDefinition, LLMResponse, ToolCall } from './t
 type AnthropicAuthMode = 'api-key' | 'bearer';
 
 export class AnthropicProvider implements LLMProvider {
+  readonly providerName: string;
+  readonly modelName: string;
   private client: Anthropic;
-  private model: string;
 
   constructor(
     apiKey: string,
     model: string = 'claude-3-opus-20240229',
     baseURL?: string,
-    authMode: AnthropicAuthMode = 'api-key'
+    authMode: AnthropicAuthMode = 'api-key',
+    providerNameParam = 'anthropic',
   ) {
     this.client = new Anthropic({
       apiKey: authMode === 'api-key' ? apiKey : null,
       authToken: authMode === 'bearer' ? apiKey : null,
       baseURL,
     });
-    this.model = model;
+    this.modelName = model;
+    this.providerName = providerNameParam;
   }
 
   async generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
@@ -36,7 +39,7 @@ export class AnthropicProvider implements LLMProvider {
     }));
 
     const response = await this.client.messages.create({
-      model: this.model,
+      model: this.modelName,
       max_tokens: 4096,
       system: systemMessage,
       messages: formattedMessages,

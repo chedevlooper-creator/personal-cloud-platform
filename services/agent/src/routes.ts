@@ -7,6 +7,7 @@ import {
   conversationResponseSchema,
   messageResponseSchema,
   toolApprovalSchema,
+  taskEventStreamQuerySchema,
 } from '@pcp/shared';
 import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
@@ -212,6 +213,69 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
       await orchestrator.deleteConversation(request.params.id, userId);
       return { success: true };
+    },
+  );
+
+  server.get(
+    '/agent/tasks/:id/events',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        querystring: taskEventStreamQuerySchema,
+      },
+    },
+    async (request, reply) => {
+      const userId = await getAuthenticatedUserId(request.cookies.sessionId);
+      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+
+      const { id } = request.params;
+      const { snapshot } = request.query;
+
+      reply.raw.setHeader('Content-Type', 'text/event-stream');
+      reply.raw.setHeader('Cache-Control', 'no-cache');
+      reply.raw.setHeader('Connection', 'keep-alive');
+      reply.raw.statusCode = 200;
+
+      const sendEvent = (event: string, data: unknown): void => {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      if (snapshot) {
+        const task = await orchestrator.getTask(id, userId);
+        if (task) {
+          sendEvent('task', task);
+          const steps = await orchestrator.getTaskSteps(id, userId);
+          for (const step of steps) {
+            sendEvent('step', step);
+          }
+        }
+        reply.raw.end();
+        return reply;
+      }
+
+      // Live push: subscribe to in-process task events
+      const emitter = orchestrator.subscribeToTask(id);
+
+      const onTask = (data: unknown): void => {
+        sendEvent('task', data);
+        const d = data as { status?: string };
+        if (d.status && ['completed', 'failed', 'cancelled'].includes(d.status)) {
+          cleanup();
+          reply.raw.end();
+        }
+      };
+      const onStep = (data: unknown): void => sendEvent('step', data);
+
+      emitter.on('task', onTask);
+      emitter.on('step', onStep);
+
+      function cleanup() {
+        emitter.off('task', onTask);
+        emitter.off('step', onStep);
+      }
+
+      request.raw.on('close', cleanup);
+      return reply;
     },
   );
 }
