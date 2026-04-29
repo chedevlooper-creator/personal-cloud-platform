@@ -6,7 +6,7 @@ import { AlertCircle, FileText, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
-import { workspaceApi, getApiErrorMessage } from '@/lib/api';
+import { workspaceApi, toastApiError} from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { useWorkspaceStore } from '@/store/workspace';
 import { cn } from '@/lib/utils';
@@ -71,7 +71,7 @@ export default function WorkspaceEditor() {
       setDraftContent(null);
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Failed to save file'));
+      toastApiError(err, 'Failed to save file');
     },
   });
 

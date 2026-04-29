@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { workspaceApi, apiEndpoints, getApiErrorMessage } from '@/lib/api';
+import { workspaceApi, apiEndpoints, toastApiError} from '@/lib/api';
 
 type Dataset = {
   id: string;
@@ -71,7 +71,7 @@ export default function DatasetsPage() {
         `Imported ${ds.rowCount.toLocaleString()} rows from ${ds.sourceFilename ?? ds.name}.`,
       );
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Import failed.')),
+    onError: (e) => toastApiError(e, 'Import failed.'),
   });
 
   const removeMut = useMutation({
@@ -86,7 +86,7 @@ export default function DatasetsPage() {
       }
       toast.success('Dataset removed.');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not remove dataset.')),
+    onError: (e) => toastApiError(e, 'Could not remove dataset.'),
   });
 
   const queryMut = useMutation({
@@ -95,7 +95,7 @@ export default function DatasetsPage() {
       return res.data as QueryResult;
     },
     onSuccess: (r) => setResult(r),
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Query failed.')),
+    onError: (e) => toastApiError(e, 'Query failed.'),
   });
 
   const previewMut = useMutation({
@@ -104,7 +104,7 @@ export default function DatasetsPage() {
       return res.data as QueryResult;
     },
     onSuccess: (r) => setResult(r),
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Preview failed.')),
+    onError: (e) => toastApiError(e, 'Preview failed.'),
   });
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -6,7 +6,7 @@ import { Globe, Plus, Trash2, ImageDown, FileText, Loader2, ArrowRight } from 'l
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { browserApi, getApiErrorMessage } from '@/lib/api';
+import { browserApi, toastApiError} from '@/lib/api';
 
 type Session = {
   id: string;
@@ -50,7 +50,7 @@ export default function BrowserPage() {
       setActiveId(s.id);
       toast.success('Session started.');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not start session.')),
+    onError: (e) => toastApiError(e, 'Could not start session.'),
   });
 
   const close = useMutation({
@@ -65,7 +65,7 @@ export default function BrowserPage() {
         setShotSrc(null);
       }
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not close session.')),
+    onError: (e) => toastApiError(e, 'Could not close session.'),
   });
 
   const navigate = useMutation({
@@ -76,7 +76,7 @@ export default function BrowserPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['browser-sessions'] });
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Navigate failed.')),
+    onError: (e) => toastApiError(e, 'Navigate failed.'),
   });
 
   const doExtract = useMutation({
@@ -85,7 +85,7 @@ export default function BrowserPage() {
       return res.data as ExtractResult;
     },
     onSuccess: (r) => setExtract(r),
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Extract failed.')),
+    onError: (e) => toastApiError(e, 'Extract failed.'),
   });
 
   const doShot = useMutation({
@@ -94,7 +94,7 @@ export default function BrowserPage() {
       return (res.data as { pngBase64: string }).pngBase64;
     },
     onSuccess: (b64) => setShotSrc(`data:image/png;base64,${b64}`),
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Screenshot failed.')),
+    onError: (e) => toastApiError(e, 'Screenshot failed.'),
   });
 
   return (

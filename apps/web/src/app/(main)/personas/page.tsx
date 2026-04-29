@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { agentApi, getApiErrorMessage } from '@/lib/api';
+import { agentApi, toastApiError} from '@/lib/api';
 
 type Persona = {
   id: string;
@@ -64,7 +64,7 @@ export default function PersonasPage() {
       toast.success(editor?.id ? 'Persona updated.' : 'Persona created.');
       setEditor(null);
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not save persona.')),
+    onError: (e) => toastApiError(e, 'Could not save persona.'),
   });
 
   const remove = useMutation({
@@ -75,7 +75,7 @@ export default function PersonasPage() {
       qc.invalidateQueries({ queryKey: ['personas'] });
       toast.success('Persona deleted.');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not delete persona.')),
+    onError: (e) => toastApiError(e, 'Could not delete persona.'),
   });
 
   return (

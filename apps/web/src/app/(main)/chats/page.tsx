@@ -19,7 +19,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { agentApi, getApiErrorMessage, workspaceApi } from '@/lib/api';
+import { agentApi, workspaceApi , toastApiError} from '@/lib/api';
 import { useUser } from '@/lib/auth';
 import { usePersonaStore } from '@/store/persona';
 import { useActiveSkillsStore } from '@/store/skills';
@@ -122,7 +122,7 @@ export default function ChatsPage() {
     },
     onError: (err) => {
       setIsStreaming(false);
-      toast.error(getApiErrorMessage(err, 'Failed to send message'));
+      toastApiError(err, 'Failed to send message');
     },
   });
 
@@ -340,7 +340,7 @@ export default function ChatsPage() {
             if (selectedConvoId === deleteTarget) setSelectedConvoId(null);
             toast.success('Conversation deleted');
           } catch (err) {
-            toast.error(getApiErrorMessage(err, 'Failed to delete'));
+            toastApiError(err, 'Failed to delete');
           }
         }}
       />

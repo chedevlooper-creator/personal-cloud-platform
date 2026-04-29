@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getApiErrorMessage, workspaceApi } from '@/lib/api';
+import {workspaceApi , toastApiError} from '@/lib/api';
 
 export type WorkspaceSummary = {
   id: string;
@@ -56,7 +56,7 @@ export function CreateWorkspaceDialog({ trigger, redirectOnCreate = true }: Crea
       }
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Could not create workspace.'));
+      toastApiError(error, 'Could not create workspace.');
     },
   });
 

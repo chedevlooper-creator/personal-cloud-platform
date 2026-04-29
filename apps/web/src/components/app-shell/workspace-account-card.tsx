@@ -2,7 +2,13 @@ import { ChevronDown } from 'lucide-react';
 import { AuthUser } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
-export function WorkspaceAccountCard({ user, collapsed }: { user?: AuthUser; collapsed?: boolean }) {
+export function WorkspaceAccountCard({
+  user,
+  collapsed,
+}: {
+  user?: AuthUser;
+  collapsed?: boolean;
+}) {
   const name = user?.name || user?.email?.split('@')[0] || 'workspace';
 
   if (collapsed) {
@@ -11,7 +17,7 @@ export function WorkspaceAccountCard({ user, collapsed }: { user?: AuthUser; col
         type="button"
         title="Account"
         aria-label="Account"
-        className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#656779] bg-[#454653] text-xs font-bold text-[#F0F0F0]"
       >
         {name.charAt(0).toUpperCase()}
       </button>
@@ -22,17 +28,14 @@ export function WorkspaceAccountCard({ user, collapsed }: { user?: AuthUser; col
     <button
       type="button"
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+        'flex h-9 w-full items-center gap-2.5 rounded-lg border border-[#44454A] bg-[#18191A] px-2.5 text-left transition-colors hover:bg-[#202126] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#606166]',
       )}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground">
-        {name.charAt(0).toUpperCase()}
+      <span className="flex shrink-0 items-center justify-center rounded-md border border-[#656779] bg-[#454653] px-2 py-1 text-[11px] font-bold text-[#F0F0F0]">
+        {name}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">{name}</span>
-        <span className="block truncate text-xs text-muted-foreground">Personal workspace</span>
-      </span>
-      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1" />
+      <ChevronDown className="h-3.5 w-3.5 shrink-0 rotate-90 text-[#A8A8A8]" />
     </button>
   );
 }

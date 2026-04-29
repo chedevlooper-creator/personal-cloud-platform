@@ -23,7 +23,7 @@ import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { WorkspaceSummary } from '@/components/workspace/create-workspace-dialog';
-import { getApiErrorMessage, publishApi, workspaceApi } from '@/lib/api';
+import {publishApi, workspaceApi , toastApiError} from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useUser } from '@/lib/auth';
 
@@ -110,7 +110,7 @@ export default function HostingPage() {
       setKind('static');
       setRootPath('/');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not create service.')),
+    onError: (e) => toastApiError(e, 'Could not create service.'),
   });
 
   const startService = useMutation({
@@ -121,7 +121,7 @@ export default function HostingPage() {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
       toast.success('Service starting...');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not start service.')),
+    onError: (e) => toastApiError(e, 'Could not start service.'),
   });
 
   const stopService = useMutation({
@@ -132,7 +132,7 @@ export default function HostingPage() {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
       toast.success('Service stopped.');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not stop service.')),
+    onError: (e) => toastApiError(e, 'Could not stop service.'),
   });
 
   const restartService = useMutation({
@@ -143,7 +143,7 @@ export default function HostingPage() {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
       toast.success('Service restarting...');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not restart service.')),
+    onError: (e) => toastApiError(e, 'Could not restart service.'),
   });
 
   const updateAutoRestart = useMutation({
@@ -153,7 +153,7 @@ export default function HostingPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not update service.')),
+    onError: (e) => toastApiError(e, 'Could not update service.'),
   });
 
   const deleteService = useMutation({
@@ -165,7 +165,7 @@ export default function HostingPage() {
       toast.success('Service deleted.');
       setDeleteTarget(null);
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not delete service.')),
+    onError: (e) => toastApiError(e, 'Could not delete service.'),
   });
 
   const canCreate = hostingReady && Boolean(defaultWorkspaceId && name.trim());

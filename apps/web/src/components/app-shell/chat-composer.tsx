@@ -29,19 +29,20 @@ export function ChatComposer({
   const canSend = value.trim().length > 0 && !isThinking;
 
   return (
-    <div className="w-[calc(100vw-3rem)] min-w-0 max-w-full sm:w-full sm:max-w-[1120px]">
+    <div className="w-[calc(100vw-3rem)] min-w-0 max-w-full sm:w-full sm:max-w-[700px]">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           if (canSend) onSubmit();
         }}
-        className="min-h-[168px] w-full min-w-0 max-w-full rounded-xl border border-zinc-700/80 bg-zinc-900/88 p-3 shadow-2xl shadow-black/30 ring-1 ring-white/[0.03] backdrop-blur dark:bg-zinc-900/88"
+        className="relative min-h-[116px] w-full min-w-0 max-w-full rounded-xl border border-[#404148] bg-[#16171A]/95 px-4 pb-1 pt-[19px] shadow-[0_20px_42px_rgba(0,0,0,0.53)] ring-1 ring-white/[0.03] backdrop-blur dark:bg-[#16171A]/95"
       >
+        <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-[#555761]/65" />
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="What can I do for you?"
-          className="h-24 w-full min-w-0 resize-none bg-transparent px-3 py-3 text-xl text-zinc-100 outline-none placeholder:text-zinc-500 sm:text-2xl"
+          className="h-[42px] w-full min-w-0 resize-none bg-transparent p-0 text-lg font-medium text-[#F0F0F0] outline-none placeholder:text-[#747B87]"
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && canSend) {
               event.preventDefault();
@@ -49,42 +50,47 @@ export function ChatComposer({
             }
           }}
         />
-        <div className="flex flex-col gap-3 border-t border-zinc-800 pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-            <PersonaSelector />
-            <ModelSelector />
+            <PersonaSelector compact />
+            <ModelSelector compact />
             <PlanBadge />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <Button
               type="button"
               variant="outline"
-              size="icon-lg"
+              size="icon-sm"
               title="Attach files (Cmd/Ctrl+U)"
               aria-label="Attach files"
               onClick={onUpload}
               disabled={isThinking}
-              className="rounded-full border-zinc-700 bg-zinc-900/70 text-zinc-200 hover:bg-zinc-800"
+              className="h-7 w-10 rounded-xl border-[#4B4C52] bg-[#202124] text-[#A7A9AD] hover:bg-[#27282E] hover:text-[#F0F0F0]"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-5 w-5" />
               <Paperclip className="sr-only" />
             </Button>
             <Button
               type="submit"
-              size="icon-lg"
+              size="icon-sm"
               title="Send message"
               aria-label="Send message"
               disabled={!canSend}
-              className="rounded-full bg-zinc-100 text-zinc-950 hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-500"
+              className="h-7 w-7 rounded-[9px] border border-[#3E465E] bg-[#25283A] text-[#9EA8CA] hover:bg-[#303650] hover:text-[#F0F0F0] disabled:bg-[#25283A] disabled:text-[#5D6375]"
             >
               <ArrowUp className="h-4 w-4" />
             </Button>
           </div>
         </div>
+        <div className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-[#0D0E10]/90" />
       </form>
 
       {toolApproval && (
-        <ToolApprovalCard approval={toolApproval} onApprove={onApproveTool} onReject={onRejectTool} />
+        <ToolApprovalCard
+          approval={toolApproval}
+          onApprove={onApproveTool}
+          onReject={onRejectTool}
+        />
       )}
     </div>
   );

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { agentApi, getApiErrorMessage } from '@/lib/api';
+import { agentApi, toastApiError} from '@/lib/api';
 
 type Skill = {
   id: string;
@@ -82,7 +82,7 @@ export default function SkillsPage() {
       toast.success(editor?.id ? 'Skill updated.' : 'Skill created.');
       setEditor(null);
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not save skill.')),
+    onError: (e) => toastApiError(e, 'Could not save skill.'),
   });
 
   const remove = useMutation({
@@ -93,7 +93,7 @@ export default function SkillsPage() {
       qc.invalidateQueries({ queryKey: ['skills'] });
       toast.success('Skill deleted.');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not delete skill.')),
+    onError: (e) => toastApiError(e, 'Could not delete skill.'),
   });
 
   const enabledCount = skills.filter((s) => s.enabled).length;

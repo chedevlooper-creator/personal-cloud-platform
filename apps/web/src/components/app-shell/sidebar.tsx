@@ -1,37 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import type React from 'react';
 import {
-  Bot,
   Boxes,
-  Camera,
   ChevronDown,
   Clock3,
   Database,
   Folder,
   Globe,
   Globe2,
-  History,
   Home,
-  Layers3,
-  MessageCircle,
+  LayoutGrid,
+  MessagesSquare,
   MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plug,
-  ScrollText,
   Search,
   Settings,
   Sparkles,
   SquareTerminal,
-  TerminalSquare,
   X,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { NotificationBell } from '@/components/notifications/notification-bell';
 import { AuthUser } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { SidebarItem } from '@/components/app-shell/sidebar-item';
@@ -40,39 +30,32 @@ import { WorkspaceAccountCard } from '@/components/app-shell/workspace-account-c
 const primaryItems = [
   { label: 'Home', href: '/dashboard', icon: Home },
   { label: 'Files', href: '/files', icon: Folder, searchable: true },
-  { label: 'Chat', href: '/chats', icon: MessageCircle },
+  { label: 'Chats', href: '/chats', icon: MessagesSquare },
   { label: 'Automations', href: '/automations', icon: Clock3 },
+  { label: 'Space', href: '/space', icon: LayoutGrid },
+  { label: 'Skills', href: '/skills', icon: Sparkles },
+  { label: 'Computer', href: '/computer', icon: SquareTerminal },
 ];
 
 const moreItems = [
-  { label: 'Computer', href: '/computer', icon: Layers3 },
-  { label: 'Space', href: '/space', icon: Boxes },
+  { label: 'Terminal', href: '/terminal', icon: SquareTerminal },
   { label: 'Hosting', href: '/hosting', icon: Globe2 },
-  { label: 'Terminal', href: '/terminal', icon: TerminalSquare },
-  { label: 'Snapshots', href: '/snapshots', icon: Camera },
-  { label: 'Personas', href: '/personas', icon: Bot },
-  { label: 'Skills', href: '/skills', icon: Sparkles },
-  { label: 'Rules', href: '/rules', icon: ScrollText },
-  { label: 'Channels', href: '/channels', icon: Plug },
-  { label: 'Datasets', href: '/datasets', icon: Database },
+  { label: 'Datasets', href: '/datasets', icon: Database, badge: 'Beta' as const },
   { label: 'Browser', href: '/browser', icon: Globe },
-  { label: 'Audit Log', href: '/audit-log', icon: History },
+  { label: 'Apps', href: '/apps', icon: Boxes },
+  { label: 'Channels', href: '/channels', icon: Plug },
 ];
 
-const secondaryItems = [
-  { label: 'Settings', href: '/settings', icon: Settings },
-];
+const secondaryItems = [{ label: 'Settings', href: '/settings', icon: Settings }];
 
 export function Sidebar({
   user,
   collapsed,
-  onCollapsedChange,
   mobileOpen,
   onMobileOpenChange,
 }: {
   user?: AuthUser;
   collapsed: boolean;
-  onCollapsedChange: (collapsed: boolean) => void;
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
 }) {
@@ -82,49 +65,30 @@ export function Sidebar({
   const sidebarContent = (
     <aside
       className={cn(
-        'flex h-full flex-col border-r border-border bg-card text-foreground transition-[width] duration-200',
-        collapsed ? 'w-[68px]' : 'w-[260px]'
+        'relative flex h-full flex-col overflow-hidden border-r border-[#494A4D] bg-[#252523] text-[#F0F0F0] transition-[width] duration-200',
+        collapsed ? 'w-[56px]' : 'w-[200px]',
       )}
     >
-      {/* Logo / Brand */}
-      <div className="flex h-14 items-center justify-between px-3">
+      <div className="flex h-12 items-center justify-between px-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <SquareTerminal className="h-4 w-4" />
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center text-xl font-bold text-[#F4F4F4]">
+            ♞
           </div>
-          {!collapsed && (
-            <span className="truncate text-sm font-semibold tracking-tight">CloudMind</span>
-          )}
         </div>
-        <div className="flex items-center">
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="hidden text-muted-foreground hover:text-foreground md:inline-flex"
-            onClick={() => onCollapsedChange(!collapsed)}
-          >
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            title="Close menu"
-            aria-label="Close menu"
-            className="text-muted-foreground hover:text-foreground md:hidden"
-            onClick={() => onMobileOpenChange(false)}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          title="Close menu"
+          aria-label="Close menu"
+          className="text-[#A8A8A8] hover:bg-[#303134] hover:text-[#F0F0F0] md:hidden"
+          onClick={() => onMobileOpenChange(false)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Navigation */}
-      <nav className="min-h-0 flex-1 overflow-auto px-2 pb-2">
-        {/* Primary */}
+      <nav className="min-h-0 flex-1 overflow-auto px-1 pb-2">
         <div className="space-y-0.5">
           {primaryItems.map((item) => (
             <SidebarItem
@@ -140,7 +104,7 @@ export function Sidebar({
                     type="button"
                     title="Search files"
                     aria-label="Search files"
-                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded-md p-1 text-[#A8A8A8] hover:bg-[#303134] hover:text-[#F0F0F0]"
                     onClick={(event) => {
                       event.preventDefault();
                       window.dispatchEvent(new Event('app:open-command-palette'));
@@ -154,22 +118,23 @@ export function Sidebar({
           ))}
         </div>
 
-        {/* More section */}
-        <div className="mt-2">
+        <div className="mt-0.5">
           <button
             type="button"
             title="More"
             aria-label="Toggle more navigation"
             className={cn(
-              'flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-              collapsed && 'justify-center px-0'
+              'flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-[15px] text-[#A8A8A8] transition-colors hover:bg-[#303134] hover:text-[#F0F0F0]',
+              collapsed && 'mx-auto w-8 justify-center px-0',
             )}
             onClick={() => setMoreOpen((value) => !value)}
           >
             {collapsed ? (
-              <MoreHorizontal className="h-4 w-4" />
+              <MoreHorizontal className="h-[17px] w-[17px]" />
             ) : (
-              <ChevronDown className={cn('h-4 w-4 transition-transform', !moreOpen && '-rotate-90')} />
+              <ChevronDown
+                className={cn('h-[17px] w-[17px] transition-transform', !moreOpen && '-rotate-90')}
+              />
             )}
             {!collapsed && <span>More</span>}
           </button>
@@ -183,14 +148,14 @@ export function Sidebar({
                   icon={item.icon}
                   collapsed={collapsed}
                   active={isActive(pathname, item.href)}
+                  badge={item.badge}
                 />
               ))}
             </div>
           )}
         </div>
 
-        {/* Secondary */}
-        <div className="mt-2 space-y-0.5">
+        <div className="mt-3 border-t border-[#303134] pt-2 space-y-0.5">
           {secondaryItems.map((item) => (
             <SidebarItem
               key={item.label}
@@ -204,12 +169,15 @@ export function Sidebar({
         </div>
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-border p-2">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#1E1F1F]/95 to-transparent" />
+
+      <div className="relative z-10 border-t border-[#303134] p-1.5">
         {!collapsed && (
-          <div className="mb-2 flex items-center justify-between px-1">
-            <ThemeToggle />
-            <NotificationBell />
+          <div className="mb-2 rounded-lg border border-[#3C3D40] bg-[#191A1B] px-2 py-2 text-[11px] text-[#A8A8A8]">
+            <div className="flex items-center justify-between gap-2">
+              <span>Share Zo, earn rewards</span>
+              <span aria-hidden="true">×</span>
+            </div>
           </div>
         )}
         <WorkspaceAccountCard user={user} collapsed={collapsed} />
@@ -228,7 +196,7 @@ export function Sidebar({
             className="absolute inset-0 bg-black/60"
             onClick={() => onMobileOpenChange(false)}
           />
-          <div className="relative h-full w-[260px] max-w-[88vw]">{sidebarContent}</div>
+          <div className="relative h-full w-[200px] max-w-[88vw]">{sidebarContent}</div>
         </div>
       )}
     </>

@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
+import { toast } from 'sonner';
 
 export const apiEndpoints = {
   auth: process.env.NEXT_PUBLIC_AUTH_API_URL || 'http://localhost:3001/auth',
@@ -164,4 +165,12 @@ export function getApiErrorCorrelationId(error: unknown): string | undefined {
     if (typeof header === 'string') return header;
   }
   return undefined;
+}
+
+/** Show an error toast for an API failure, surfacing the correlation id
+ *  as the description so support can grep server logs. */
+export function toastApiError(error: unknown, fallback: string): void {
+  const message = getApiErrorMessage(error, fallback);
+  const correlationId = getApiErrorCorrelationId(error);
+  toast.error(message, correlationId ? { description: `Trace ID: ${correlationId}` } : undefined);
 }

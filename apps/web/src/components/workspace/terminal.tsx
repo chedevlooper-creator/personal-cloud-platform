@@ -14,8 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { runtimeApi, getApiErrorMessage } from '@/lib/api';
-import { toast } from 'sonner';
+import { runtimeApi, toastApiError} from '@/lib/api';
 import { useTerminal } from '@/hooks/use-terminal';
 
 function TerminalTab({ runtimeId, isActive, onBlocked }: { runtimeId: string; isActive: boolean; onBlocked: (cmd: string) => void }) {
@@ -57,7 +56,7 @@ export default function WorkspaceTerminal({ workspaceId }: { workspaceId: string
       setActiveTabId(runtimeId);
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to start terminal'));
+      toastApiError(error, 'Failed to start terminal');
     },
   });
 

@@ -4,12 +4,11 @@ import { useState } from 'react';
 import type React from 'react';
 import { SquareTerminal } from 'lucide-react';
 import Link from 'next/link';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRegister } from '@/lib/auth';
-import { getApiErrorMessage } from '@/lib/api';
+import {toastApiError} from '@/lib/api';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -23,7 +22,7 @@ export default function RegisterPage() {
       { email, password, name },
       {
         onError: (error) => {
-          toast.error(getApiErrorMessage(error, 'Registration failed.'));
+          toastApiError(error, 'Registration failed.');
         },
       }
     );

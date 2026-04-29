@@ -7,7 +7,7 @@ import { Send, Bot, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { agentApi, getApiErrorMessage } from '@/lib/api';
+import { agentApi, toastApiError} from '@/lib/api';
 import { usePersonaStore } from '@/store/persona';
 import { useActiveSkillsStore } from '@/store/skills';
 
@@ -94,7 +94,7 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
       }
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to send message'));
+      toastApiError(error, 'Failed to send message');
     },
   });
 
@@ -115,7 +115,7 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
       queryClient.invalidateQueries({ queryKey: ['agent-messages', activeConversationId] });
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to submit approval'));
+      toastApiError(error, 'Failed to submit approval');
     },
   });
 

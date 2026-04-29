@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { agentApi } from '@/lib/api';
 import { usePersonaStore } from '@/store/persona';
+import { cn } from '@/lib/utils';
 
 type Persona = {
   id: string;
@@ -23,7 +24,7 @@ type Persona = {
   isDefault: boolean;
 };
 
-export function PersonaSelector() {
+export function PersonaSelector({ compact }: { compact?: boolean }) {
   const { activePersonaId, activePersonaName, setActivePersona } = usePersonaStore();
 
   const { data } = useQuery({
@@ -53,10 +54,13 @@ export function PersonaSelector() {
             size="sm"
             title={`Active persona: ${currentName}`}
             aria-label="Select assistant persona"
-            className="rounded-full border-zinc-700 bg-zinc-900/70 text-zinc-200 hover:bg-zinc-800 dark:border-zinc-700"
+            className={cn(
+              'rounded-full border-[#66686F] bg-[#202126] text-[#F2F2F2] hover:bg-[#27282E] dark:border-[#66686F]',
+              compact && 'h-7 w-7 px-0',
+            )}
           >
-            <Bot className="mr-1.5 h-4 w-4" />
-            <span className="max-w-[120px] truncate text-xs">{currentName}</span>
+            <Bot className={cn('h-4 w-4', !compact && 'mr-1.5')} />
+            {compact ? null : <span className="max-w-[120px] truncate text-xs">{currentName}</span>}
           </Button>
         )}
       />

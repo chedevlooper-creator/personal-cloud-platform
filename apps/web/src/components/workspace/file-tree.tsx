@@ -4,7 +4,7 @@ import { useMemo, useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, File as FileIcon, Folder, FolderOpen, MoreVertical, Pencil, Trash, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import { workspaceApi, getApiErrorMessage } from '@/lib/api';
+import { workspaceApi, toastApiError} from '@/lib/api';
 import { formatBytes, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useWorkspaceStore, WorkspaceFileMetadata } from '@/store/workspace';
@@ -42,7 +42,7 @@ export default function FileTree({ workspaceId }: { workspaceId: string }) {
       toast.success('File uploaded successfully');
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Failed to upload file'));
+      toastApiError(err, 'Failed to upload file');
     },
   });
 
@@ -155,7 +155,7 @@ function TreeBranch({ workspaceId, path, level }: { workspaceId: string; path: s
       }
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Failed to delete file'));
+      toastApiError(err, 'Failed to delete file');
     },
   });
 

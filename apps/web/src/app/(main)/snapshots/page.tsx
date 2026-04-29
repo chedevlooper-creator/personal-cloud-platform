@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { getApiErrorMessage, workspaceApi } from '@/lib/api';
+import {workspaceApi , toastApiError} from '@/lib/api';
 import { formatDate } from '@/lib/format';
 
 type WorkspacesResponse = {
@@ -63,7 +63,7 @@ export default function SnapshotsPage() {
       setName('');
       setDescription('');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to create snapshot')),
+    onError: (e) => toastApiError(e, 'Failed to create snapshot'),
   });
 
   const restoreMutation = useMutation({
@@ -75,7 +75,7 @@ export default function SnapshotsPage() {
       toast.success('Snapshot restored. A safety backup was created.');
       setRestoreTarget(null);
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to restore')),
+    onError: (e) => toastApiError(e, 'Failed to restore'),
   });
 
   const items = snapshots || [];

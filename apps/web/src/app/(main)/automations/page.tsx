@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { agentApi, apiEndpoints, getApiErrorMessage } from '@/lib/api';
+import { agentApi, apiEndpoints, toastApiError} from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { CreateAutomationDialog } from '@/components/automations/create-automation-dialog';
 import {
@@ -107,7 +107,7 @@ export default function AutomationsPage() {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
       toast.success('Automation updated');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to update')),
+    onError: (e) => toastApiError(e, 'Failed to update'),
   });
 
   const deleteMutation = useMutation({
@@ -118,7 +118,7 @@ export default function AutomationsPage() {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
       toast.success('Automation deleted');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to delete')),
+    onError: (e) => toastApiError(e, 'Failed to delete'),
   });
 
   const runMutation = useMutation({
@@ -128,7 +128,7 @@ export default function AutomationsPage() {
     onSuccess: () => {
       toast.success('Automation triggered');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to run')),
+    onError: (e) => toastApiError(e, 'Failed to run'),
   });
 
   const copyWebhookUrl = useMutation({
@@ -140,7 +140,7 @@ export default function AutomationsPage() {
       return url;
     },
     onSuccess: () => toast.success('Webhook URL copied'),
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to fetch token')),
+    onError: (e) => toastApiError(e, 'Failed to fetch token'),
   });
 
   const all = automations || [];

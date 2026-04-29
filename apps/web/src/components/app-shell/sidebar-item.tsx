@@ -29,17 +29,17 @@ export function SidebarItem({
       className={cn(
         'group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-        collapsed && 'h-9 w-9 justify-center px-0'
+          ? 'border border-[#606166] bg-[#151615] text-[#F2F2F2]'
+          : 'text-[#A8A8A8] hover:bg-[#303134] hover:text-[#F2F2F2]',
+        collapsed ? 'mx-auto h-8 w-8 justify-center px-0' : 'h-8 text-[15px] font-normal',
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-[17px] w-[17px] shrink-0" />
       {!collapsed && (
         <>
           <span className="min-w-0 flex-1 truncate">{label}</span>
           {badge && (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            <span className="rounded-full bg-[#4C4C4C] px-1.5 py-0.5 text-[9px] font-normal text-[#BEBEBE]">
               {badge}
             </span>
           )}

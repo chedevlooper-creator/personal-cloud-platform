@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatComposer } from '@/components/app-shell/chat-composer';
+import { DottedBackground } from '@/components/app-shell/dotted-background';
 import { StatusToast } from '@/components/app-shell/status-toast';
 import { ToolApproval } from '@/components/app-shell/tool-approval-card';
 import { agentApi, getApiErrorMessage } from '@/lib/api';
 
 export function ChatHome() {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Array<{ id: string; role: 'user' | 'assistant'; content: string }>>([]);
+  const [messages, setMessages] = useState<
+    Array<{ id: string; role: 'user' | 'assistant'; content: string }>
+  >([]);
   const [isThinking, setIsThinking] = useState(false);
   const [toolApproval, setToolApproval] = useState<ToolApproval | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -65,7 +68,10 @@ export function ChatHome() {
     const prompt = input.trim();
     if (!prompt || isThinking) return;
 
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'user', content: prompt }]);
+    setMessages((current) => [
+      ...current,
+      { id: crypto.randomUUID(), role: 'user', content: prompt },
+    ]);
     setInput('');
     setIsThinking(true);
     setToolApproval(null);
@@ -74,7 +80,9 @@ export function ChatHome() {
     if (needsTool) {
       setTimeout(() => {
         setToolApproval({
-          toolName: prompt.match(/\bdeploy|publish|host\b/i) ? 'prepare_deployment' : 'workspace_inspector',
+          toolName: prompt.match(/\bdeploy|publish|host\b/i)
+            ? 'prepare_deployment'
+            : 'workspace_inspector',
           description: 'Review workspace context before taking action.',
         });
       }, 450);
@@ -90,16 +98,14 @@ export function ChatHome() {
       const response = await agentApi.post(
         '/agent/chat',
         { input: prompt },
-        { signal: controller.signal }
+        { signal: controller.signal },
       );
       const content =
         (response.data as { content?: string }).content ||
         'I did not receive a response from the model.';
 
       setMessages((current) =>
-        current.map((message) =>
-          message.id === assistantId ? { ...message, content } : message
-        )
+        current.map((message) => (message.id === assistantId ? { ...message, content } : message)),
       );
     } catch (error) {
       const content = controller.signal.aborted
@@ -107,9 +113,7 @@ export function ChatHome() {
         : getApiErrorMessage(error, 'The MiniMax agent service is not available.');
 
       setMessages((current) =>
-        current.map((message) =>
-          message.id === assistantId ? { ...message, content } : message
-        )
+        current.map((message) => (message.id === assistantId ? { ...message, content } : message)),
       );
     } finally {
       if (abortRef.current === controller) {
@@ -120,14 +124,66 @@ export function ChatHome() {
   };
 
   return (
-    <div className="relative flex min-h-full flex-col px-4 pb-24 pt-8 sm:px-8 lg:px-12">
+    <div className="relative flex min-h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#1D1E21_0%,#18191C_100%)] px-4 pb-4 pt-8 text-[#F0F0F0] sm:px-8 lg:px-12">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-40 -top-56 h-[900px] w-[900px] rounded-full bg-[radial-gradient(circle,#3FB6E0_0%,transparent_68%)] opacity-[0.10] blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-48 -top-72 h-[1000px] w-[1000px] rounded-full bg-[radial-gradient(circle,#B85CFF_0%,transparent_68%)] opacity-[0.12] blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[-280px] left-[22%] h-[560px] w-[820px] rounded-full bg-[radial-gradient(circle,#F5A524_0%,transparent_70%)] opacity-[0.09] blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-52 -left-48 h-[600px] w-[760px] rounded-full bg-[radial-gradient(circle,#7CD992_0%,transparent_70%)] opacity-[0.08] blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-32 -top-56 h-[1400px] w-96 -rotate-[22deg] rounded-full bg-[linear-gradient(90deg,transparent,#3FB6E0,transparent)] opacity-[0.07] blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute right-32 -top-72 h-[1400px] w-80 rotate-[18deg] rounded-full bg-[linear-gradient(90deg,transparent,#B85CFF,transparent)] opacity-[0.06] blur-3xl"
+      />
+      <DottedBackground className="opacity-45" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[13%] top-[10%] h-0.5 w-0.5 rounded-full bg-white shadow-[0_0_14px_4px_rgba(122,184,255,0.65)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[43%] top-[16%] h-1 w-1 rounded-full bg-[#FFE7B3] shadow-[0_0_18px_5px_rgba(245,165,36,0.55)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute right-[22%] top-[11%] h-0.5 w-0.5 rounded-full bg-white shadow-[0_0_14px_4px_rgba(184,92,255,0.55)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute right-[15%] bottom-[18%] h-1 w-1 rounded-full bg-[#FFE7B3] shadow-[0_0_16px_4px_rgba(245,165,36,0.5)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[2%] top-[25%] h-px w-40 rotate-[12deg] bg-gradient-to-r from-transparent to-[#A8E0FF] opacity-45"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute right-[12%] bottom-[28%] h-px w-44 rotate-[14deg] bg-gradient-to-r from-transparent to-[#E0BCFF] opacity-45"
+      />
       <input ref={fileInputRef} type="file" multiple className="hidden" aria-label="Upload files" />
-      <div className="mx-auto flex w-[calc(100vw-3rem)] min-w-0 max-w-full flex-1 flex-col justify-center pb-28 pt-8 sm:w-full sm:max-w-[1120px] lg:justify-start lg:pt-[23vh]">
+      <div className="relative z-10 mx-auto flex w-[calc(100vw-3rem)] min-w-0 max-w-full flex-1 flex-col justify-center pb-20 pt-8 sm:w-full sm:max-w-[700px] lg:justify-start lg:pt-[27vh]">
         <StatusToast isThinking={isThinking} onStop={stopGeneration} />
         {messages.length > 0 && (
           <div className="mb-5 max-h-[32vh] space-y-3 overflow-auto rounded-xl border border-zinc-800 bg-zinc-950/35 p-4">
             {messages.map((message) => (
-              <div key={message.id} className={message.role === 'user' ? 'text-right' : 'text-left'}>
+              <div
+                key={message.id}
+                className={message.role === 'user' ? 'text-right' : 'text-left'}
+              >
                 <div
                   className={`inline-block max-w-[84%] rounded-xl px-4 py-2 text-sm leading-6 ${
                     message.role === 'user'
@@ -151,6 +207,15 @@ export function ChatHome() {
           onApproveTool={() => setToolApproval(null)}
           onRejectTool={() => setToolApproval(null)}
         />
+        <div className="mt-5 text-[10px] leading-tight text-[#777C85]">
+          <div className="font-extrabold text-[#B1B3B9]">Rewards</div>
+          <div>Earn $10 / user</div>
+        </div>
+      </div>
+      <div className="relative z-10 mx-auto flex w-full max-w-[520px] flex-wrap items-center justify-center gap-x-5 gap-y-2 pb-1 text-xs text-[#A8A8A8]/80">
+        <span>kafkasder.zo.computer</span>
+        <span>kafkasder.zo.space</span>
+        <span>kafkasder@zo.computer</span>
       </div>
     </div>
   );

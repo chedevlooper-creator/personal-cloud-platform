@@ -18,11 +18,14 @@ export function AppShell({ children, user }: { children: React.ReactNode; user?:
         <Sidebar
           user={user}
           collapsed={collapsed}
-          onCollapsedChange={setCollapsed}
           mobileOpen={mobileOpen}
           onMobileOpenChange={setMobileOpen}
         />
-        <MainCanvas user={user} onOpenSidebar={() => setMobileOpen(true)}>
+        <MainCanvas
+          sidebarCollapsed={collapsed}
+          onToggleSidebar={() => setCollapsed((value) => !value)}
+          onOpenSidebar={() => setMobileOpen(true)}
+        >
           <ErrorBoundary>{children}</ErrorBoundary>
         </MainCanvas>
       </div>

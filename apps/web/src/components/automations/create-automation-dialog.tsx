@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { agentApi, getApiErrorMessage, workspaceApi } from '@/lib/api';
+import { agentApi, workspaceApi , toastApiError} from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 type ScheduleType = 'manual' | 'hourly' | 'daily' | 'weekly' | 'cron';
@@ -89,7 +89,7 @@ export function CreateAutomationDialog({ open, onOpenChange }: CreateAutomationD
       reset();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Failed to create automation')),
+    onError: (e) => toastApiError(e, 'Failed to create automation'),
   });
 
   const valid =

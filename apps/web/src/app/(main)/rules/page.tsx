@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScrollText, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { authApi, getApiErrorMessage } from '@/lib/api';
+import { authApi, toastApiError} from '@/lib/api';
 
 type UserPreferences = {
   rules?: string | null;
@@ -39,7 +39,7 @@ export default function RulesPage() {
       qc.invalidateQueries({ queryKey: ['user-preferences'] });
       toast.success('Rules saved.');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not save rules.')),
+    onError: (e) => toastApiError(e, 'Could not save rules.'),
   });
 
   return (

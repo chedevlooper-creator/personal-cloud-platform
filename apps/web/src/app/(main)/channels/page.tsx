@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { agentApi, getApiErrorMessage } from '@/lib/api';
+import { agentApi, toastApiError} from '@/lib/api';
 
 type ChannelLink = {
   id: string;
@@ -61,7 +61,7 @@ export default function ChannelsPage() {
       setExternalId('');
       setLabelText('');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not link channel.')),
+    onError: (e) => toastApiError(e, 'Could not link channel.'),
   });
 
   const toggle = useMutation({
@@ -69,7 +69,7 @@ export default function ChannelsPage() {
       await agentApi.patch(`/channels/links/${id}`, { enabled });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['channel-links'] }),
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not update link.')),
+    onError: (e) => toastApiError(e, 'Could not update link.'),
   });
 
   const remove = useMutation({
@@ -80,7 +80,7 @@ export default function ChannelsPage() {
       qc.invalidateQueries({ queryKey: ['channel-links'] });
       toast.success('Link removed.');
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Could not remove link.')),
+    onError: (e) => toastApiError(e, 'Could not remove link.'),
   });
 
   const telegramOk = status?.telegram.enabled ?? false;
