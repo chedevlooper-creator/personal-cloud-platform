@@ -1,5 +1,6 @@
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
@@ -27,6 +28,11 @@ export interface WorkspaceObjectStorage {
   putBuffer(key: string, buffer: Buffer, contentType: string): Promise<void>;
   getText(key: string): Promise<string>;
   getBuffer(key: string): Promise<Buffer>;
+  /**
+   * Best-effort delete. Used as a compensating action when a DB write fails
+   * after a successful S3 put, to avoid orphaned tenant objects.
+   */
+  deleteObject(key: string): Promise<void>;
 }
 
 export class WorkspaceError extends Error {
@@ -113,6 +119,11 @@ class S3WorkspaceObjectStorage implements WorkspaceObjectStorage {
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
     );
     return this.bodyToBuffer(response.Body);
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.ensureBucket();
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
   private async bodyToBuffer(body: unknown): Promise<Buffer> {
@@ -452,44 +463,60 @@ export class WorkspaceService {
     const size = upload.getSize();
 
     let file;
-    if (existing) {
-      const [updated] = await db
-        .update(workspaceFiles)
+    try {
+      if (existing) {
+        const [updated] = await db
+          .update(workspaceFiles)
+          .set({
+            mimeType,
+            size: size.toString(),
+            storageKey,
+            updatedAt: new Date(),
+          })
+          .where(eq(workspaceFiles.id, existing.id))
+          .returning();
+        file = updated;
+      } else {
+        const [inserted] = await db
+          .insert(workspaceFiles)
+          .values({
+            workspaceId,
+            path: normalizedPath,
+            name,
+            mimeType,
+            size: size.toString(),
+            storageKey,
+            isDirectory: '0',
+            parentPath,
+          })
+          .returning();
+        file = inserted;
+      }
+
+      if (!file) throw new Error('Failed to create/update file record');
+
+      await db
+        .update(workspaces)
         .set({
-          mimeType,
-          size: size.toString(),
-          storageKey,
+          storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
           updatedAt: new Date(),
         })
-        .where(eq(workspaceFiles.id, existing.id))
-        .returning();
-      file = updated;
-    } else {
-      const [inserted] = await db
-        .insert(workspaceFiles)
-        .values({
-          workspaceId,
-          path: normalizedPath,
-          name,
-          mimeType,
-          size: size.toString(),
-          storageKey,
-          isDirectory: '0',
-          parentPath,
-        })
-        .returning();
-      file = inserted;
+        .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
+    } catch (err) {
+      // S3 already received the new bytes. For NEW files (no `existing` row)
+      // delete the just-written object to avoid an orphan that leaks tenant
+      // storage and bypasses quota tracking. For overwrites of existing files
+      // we cannot restore previous content; leave as-is and surface the error.
+      if (!existing) {
+        await this.storage.deleteObject(storageKey).catch((cleanupErr) => {
+          this.logger.error(
+            { err: cleanupErr, storageKey, workspaceId, userId },
+            'Failed to delete orphaned S3 object after DB write failure',
+          );
+        });
+      }
+      throw err;
     }
-
-    if (!file) throw new Error('Failed to create/update file record');
-
-    await db
-      .update(workspaces)
-      .set({
-        storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return file;
   }
@@ -570,36 +597,48 @@ export class WorkspaceService {
     const fileName = parts.pop() ?? '';
     const parentPath = parts.length > 0 ? '/' + parts.join('/') : null;
 
-    if (existing) {
-      await db
-        .update(workspaceFiles)
-        .set({
+    try {
+      if (existing) {
+        await db
+          .update(workspaceFiles)
+          .set({
+            mimeType,
+            size: size.toString(),
+            storageKey,
+            updatedAt: new Date(),
+          })
+          .where(eq(workspaceFiles.id, existing.id));
+      } else {
+        await db.insert(workspaceFiles).values({
+          workspaceId,
+          path: normalizedPath,
+          name: fileName,
           mimeType,
           size: size.toString(),
           storageKey,
+          isDirectory: '0',
+          parentPath,
+        });
+      }
+
+      await db
+        .update(workspaces)
+        .set({
+          storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
           updatedAt: new Date(),
         })
-        .where(eq(workspaceFiles.id, existing.id));
-    } else {
-      await db.insert(workspaceFiles).values({
-        workspaceId,
-        path: normalizedPath,
-        name: fileName,
-        mimeType,
-        size: size.toString(),
-        storageKey,
-        isDirectory: '0',
-        parentPath,
-      });
+        .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
+    } catch (err) {
+      if (!existing) {
+        await this.storage.deleteObject(storageKey).catch((cleanupErr) => {
+          this.logger.error(
+            { err: cleanupErr, storageKey, workspaceId, userId },
+            'Failed to delete orphaned S3 object after DB write failure',
+          );
+        });
+      }
+      throw err;
     }
-
-    await db
-      .update(workspaces)
-      .set({
-        storageUsed: Math.max(0, workspace.storageUsed - previousSize + size),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)));
 
     return { bytesWritten: size, path: normalizedPath };
   }

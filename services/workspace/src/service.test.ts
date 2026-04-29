@@ -130,6 +130,10 @@ class MemoryStorage implements WorkspaceObjectStorage {
     if (content === undefined) throw new Error(`Missing object: ${key}`);
     return Buffer.from(content, 'binary');
   }
+
+  async deleteObject(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
 }
 
 describe('WorkspaceService', () => {
@@ -253,6 +257,27 @@ describe('WorkspaceService', () => {
     expect(metadataUpdate).toBeDefined();
     expect(predicateContainsEq(metadataUpdate?.where, workspaces.id, 'workspace-1')).toBe(true);
     expect(predicateContainsEq(metadataUpdate?.where, workspaces.userId, 'user-1')).toBe(true);
+  });
+
+  it('deletes the orphaned S3 object when the metadata insert fails for a new file', async () => {
+    // Regression for transaction-boundary gap (Trace 13): a successful S3 put
+    // followed by a failed DB insert previously left an orphan object that
+    // leaked tenant storage and bypassed quota tracking. The compensating
+    // delete restores object-store consistency.
+    const storage = new MemoryStorage();
+    const workspaceService = new WorkspaceService(logger, storage);
+    mockDb.query.workspaceFiles.findFirst.mockResolvedValue(null);
+    mockDb.insert.mockImplementationOnce(() => ({
+      values: vi.fn(() => {
+        throw new Error('db insert exploded');
+      }),
+    }));
+
+    await expect(
+      workspaceService.writeTextFile('workspace-1', 'user-1', '/notes.txt', 'tenant scoped'),
+    ).rejects.toThrow('db insert exploded');
+
+    expect(storage.objects.has('user-1/workspace-1/notes.txt')).toBe(false);
   });
 
   it('previews text files and rejects directories or binary files', async () => {
