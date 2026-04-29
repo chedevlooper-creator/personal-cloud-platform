@@ -63,4 +63,45 @@ describe('DockerProvider sandbox options', () => {
       }),
     );
   });
+
+  it('wires configured Docker security profiles into runtime container launches', async () => {
+    const originalSeccompProfile = process.env.RUNTIME_SECCOMP_PROFILE;
+    const originalAppArmorProfile = process.env.RUNTIME_APPARMOR_PROFILE;
+    process.env.RUNTIME_SECCOMP_PROFILE = '/etc/pcp/seccomp-runtime.json';
+    process.env.RUNTIME_APPARMOR_PROFILE = 'pcp-runtime';
+    vi.resetModules();
+
+    try {
+      const { DockerProvider } = await import('./docker');
+      const provider = new DockerProvider();
+
+      await provider.create('node:20-alpine', {
+        workspacePath: '/tmp/workspaces/workspace-1',
+      });
+
+      expect(createContainer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          HostConfig: expect.objectContaining({
+            SecurityOpt: expect.arrayContaining([
+              'no-new-privileges:true',
+              'seccomp=/etc/pcp/seccomp-runtime.json',
+              'apparmor=pcp-runtime',
+            ]),
+          }),
+        }),
+      );
+    } finally {
+      restoreEnvValue('RUNTIME_SECCOMP_PROFILE', originalSeccompProfile);
+      restoreEnvValue('RUNTIME_APPARMOR_PROFILE', originalAppArmorProfile);
+      vi.resetModules();
+    }
+  });
 });
+
+function restoreEnvValue(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}

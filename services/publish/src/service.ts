@@ -3,7 +3,8 @@ import { hostedServices, hostedServiceLogs, workspaces, auditLogs } from '@pcp/d
 import { eq, desc, and, isNull } from 'drizzle-orm';
 import Docker from 'dockerode';
 import { encryptEnvVars, decryptEnvVars, redactEnvVars } from './encryption';
-import { resolvePublishImage } from './policy';
+import { env } from './env';
+import { buildPublishSecurityOptions, resolvePublishImage } from './policy';
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/;
@@ -206,7 +207,10 @@ export class PublishService {
           OomKillDisable: false,
           CapDrop: ['ALL'],
           PidsLimit: 100,
-          SecurityOpt: ['no-new-privileges:true'],
+          SecurityOpt: buildPublishSecurityOptions({
+            seccompProfile: env.PUBLISH_SECCOMP_PROFILE,
+            appArmorProfile: env.PUBLISH_APPARMOR_PROFILE,
+          }),
           Tmpfs: {
             '/tmp': 'rw,noexec,nosuid,size=100m',
           },

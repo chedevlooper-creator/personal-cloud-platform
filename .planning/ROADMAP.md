@@ -24,8 +24,11 @@ polish.
       tenant scoping across data, storage, audit, and tests.
       Completed 2026-04-29 with representative tenant predicate, storage path,
       container label, channel polling, and snapshot audit regression coverage.
-- [ ] **Phase 3: Runtime And Publish Sandbox Hardening** - Reduce host escape
+- [x] **Phase 3: Runtime And Publish Sandbox Hardening** - Reduce host escape
       and resource-exhaustion risk for workspace and hosted-app containers.
+      Completed 2026-04-29 with explicit Docker sandbox defaults, image
+      allow-lists, command policy metadata, hosted secret regression tests, and
+      configurable seccomp/AppArmor profile wiring.
 - [ ] **Phase 4: Agent Durability, Approval, And Memory** - Make agent execution,
       approvals, streaming, telemetry, and memory retrieval production-ready.
 - [ ] **Phase 5: Delivery, Observability, And Frontend Polish** - Add CI gates,
@@ -103,7 +106,7 @@ Plans:
 
 - [x] 03-01: Harden Docker provider defaults for runtime and publish.
 - [x] 03-02: Add execution policy, limits, and approval visibility.
-- [ ] 03-03: Verify hosted-service secret handling and sandbox tests.
+- [x] 03-03: Verify hosted-service secret handling and sandbox tests.
 
 ### Phase 4: Agent Durability, Approval, And Memory
 
@@ -156,7 +159,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | ----------------------------------------------- | -------------- | ----------- | ---------- |
 | 1. Contracts, Config, And Auth Foundation       | 3/3            | Complete    | 2026-04-28 |
 | 2. Tenant Isolation And Audit Hardening         | 3/3            | Complete    | 2026-04-29 |
-| 3. Runtime And Publish Sandbox Hardening        | 2/3            | In progress | -          |
+| 3. Runtime And Publish Sandbox Hardening        | 3/3            | Complete    | 2026-04-29 |
 | 4. Agent Durability, Approval, And Memory       | 0/3            | Not started | -          |
 | 5. Delivery, Observability, And Frontend Polish | 0/2            | Not started | -          |
 

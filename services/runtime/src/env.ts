@@ -13,6 +13,8 @@ const envSchema = z.object({
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
   WORKSPACE_HOST_ROOT: z.string().default('/var/lib/pcp/workspaces'),
   WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+  RUNTIME_SECCOMP_PROFILE: z.string().optional(),
+  RUNTIME_APPARMOR_PROFILE: z.string().optional(),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -30,6 +32,8 @@ export const env = {
   ),
   WORKSPACE_HOST_ROOT: parsed.WORKSPACE_HOST_ROOT,
   WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
+  RUNTIME_SECCOMP_PROFILE: parsed.RUNTIME_SECCOMP_PROFILE,
+  RUNTIME_APPARMOR_PROFILE: parsed.RUNTIME_APPARMOR_PROFILE,
 };
 
 function resolveSecret(name: string, value: string | undefined, minLength: number): string {

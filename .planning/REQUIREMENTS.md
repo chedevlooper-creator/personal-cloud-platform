@@ -43,23 +43,28 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 
 ### Sandbox And Runtime
 
-- [ ] **SBOX-01**: Runtime and publish containers enforce non-root execution,
+- [x] **SBOX-01**: Runtime and publish containers enforce non-root execution,
       read-only rootfs, dropped capabilities, no-new-privileges, tmpfs `/tmp`, and
       CPU/RAM/pid/wall-clock limits. Phase 3 plan 03-01 made runtime/publish
       Docker HostConfig defaults explicit and test-covered, including
       `Privileged: false`, `Init: true`, `OomKillDisable: false`, and
-      `MemorySwap` capped to memory.
-- [ ] **SBOX-02**: Runtime and publish workloads use seccomp/AppArmor or an
+      `MemorySwap` capped to memory. Plan 03-03 added broader regression
+      coverage through runtime/publish sandbox tests.
+- [x] **SBOX-02**: Runtime and publish workloads use seccomp/AppArmor or an
       equivalent hardened profile plus an image allow-list for untrusted
       execution. Phase 3 plan 03-02 added runtime and publish image allow-list
-      enforcement; hardened profile wiring remains.
-- [ ] **SBOX-03**: Terminal and `run_command` tool execution surfaces policy
+      enforcement. Plan 03-03 added validated, optional seccomp/AppArmor profile
+      wiring for runtime and publish Docker launch paths.
+- [x] **SBOX-03**: Terminal and `run_command` tool execution surfaces policy
       decisions, resource limits, and approval requirements before side effects.
       Phase 3 plan 03-02 added structured `run_command` policy metadata for
       approval, timeout, network, output truncation, and blocked command
-      categories.
-- [ ] **SBOX-04**: Hosted-service environment variables remain encrypted at rest,
-      masked in client responses, and decrypted only for container launch.
+      categories. Plan 03-03 added regression coverage for shell-wrapped
+      privilege escalation patterns.
+- [x] **SBOX-04**: Hosted-service environment variables remain encrypted at rest,
+      masked in client responses, and decrypted only for container launch. Phase
+      3 plan 03-03 added service-level coverage for create/update encryption,
+      masked responses, launch-time decryption, and invalid env-name filtering.
 
 ### Agent And Automation
 
@@ -131,10 +136,10 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 | SEC-03      | Phase 2 | Complete |
 | SEC-04      | Phase 2 | Complete |
 | TST-01      | Phase 2 | Partial  |
-| SBOX-01     | Phase 3 | Partial  |
-| SBOX-02     | Phase 3 | Partial  |
-| SBOX-03     | Phase 3 | Partial  |
-| SBOX-04     | Phase 3 | Pending  |
+| SBOX-01     | Phase 3 | Complete |
+| SBOX-02     | Phase 3 | Complete |
+| SBOX-03     | Phase 3 | Complete |
+| SBOX-04     | Phase 3 | Complete |
 | AGT-01      | Phase 4 | Pending  |
 | AGT-02      | Phase 4 | Pending  |
 | AGT-03      | Phase 4 | Pending  |
@@ -154,4 +159,4 @@ cloud workspaces without leaking tenant data, credentials, or host resources.
 ---
 
 _Requirements defined: 2026-04-28_
-_Last updated: 2026-04-29 after Phase 3 plan 03-02 execution_
+_Last updated: 2026-04-29 after Phase 3 plan 03-03 execution_

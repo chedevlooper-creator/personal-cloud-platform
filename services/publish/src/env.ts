@@ -6,6 +6,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3006),
   DATABASE_URL: z.string().url().optional(),
   ENCRYPTION_KEY: z.string().optional(),
+  PUBLISH_SECCOMP_PROFILE: z.string().optional(),
+  PUBLISH_APPARMOR_PROFILE: z.string().optional(),
 });
 
 const parsed = envSchema.parse(process.env);
@@ -16,6 +18,8 @@ export const env = {
   PORT: parsed.PORT,
   DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
   ENCRYPTION_KEY: resolveEncryptionKey(parsed.ENCRYPTION_KEY),
+  PUBLISH_SECCOMP_PROFILE: parsed.PUBLISH_SECCOMP_PROFILE,
+  PUBLISH_APPARMOR_PROFILE: parsed.PUBLISH_APPARMOR_PROFILE,
 };
 
 function resolveProductionValue(name: string, value: string | undefined): string {

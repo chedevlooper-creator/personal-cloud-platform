@@ -1,5 +1,7 @@
 import Docker from 'dockerode';
 import { RuntimeProvider, RuntimeOptions, ExecResult } from './types';
+import { env } from '../env';
+import { buildRuntimeSecurityOptions } from '../policy';
 
 const DEFAULT_CPU = 1;
 const MAX_CPU = 4;
@@ -36,7 +38,10 @@ export class DockerProvider implements RuntimeProvider {
         OomKillDisable: false,
         CapDrop: ['ALL'],
         PidsLimit: 100,
-        SecurityOpt: ['no-new-privileges:true'],
+        SecurityOpt: buildRuntimeSecurityOptions({
+          seccompProfile: env.RUNTIME_SECCOMP_PROFILE,
+          appArmorProfile: env.RUNTIME_APPARMOR_PROFILE,
+        }),
         Tmpfs: {
           '/tmp': 'rw,noexec,nosuid,size=100m',
         },
