@@ -8,10 +8,11 @@ import { setupProfileRoutes } from './routes/profile';
 import { setupAdminRoutes } from './routes/admin';
 import { env } from './env';
 
-const googleUserInfoSchema = z.object({
+export const googleUserInfoSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   name: z.string(),
+  verified_email: z.literal(true),
 });
 
 export async function setupAuthRoutes(fastify: FastifyInstance) {
