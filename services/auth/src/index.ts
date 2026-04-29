@@ -3,11 +3,16 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
-import { createApiErrorHandler } from '@pcp/shared';
+import {
+  createApiErrorHandler,
+  createCorrelationIdGenerator,
+  registerObservability,
+} from '@pcp/shared';
 import { setupAuthRoutes } from './routes';
 import { env } from './env';
 
 const server = Fastify({
+  genReqId: createCorrelationIdGenerator(),
   logger: {
     transport:
       env.NODE_ENV === 'development'
@@ -28,6 +33,7 @@ server.setSerializerCompiler(serializerCompiler);
 
 // Shared API error envelope: prevents 5xx leaks and standardizes the response shape.
 server.setErrorHandler(createApiErrorHandler());
+registerObservability(server, { serviceName: 'auth' });
 
 server.addHook('onRequest', (request, reply, done) => {
   reply.header('x-correlation-id', request.id);

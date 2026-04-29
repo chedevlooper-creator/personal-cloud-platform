@@ -3,7 +3,11 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { createApiErrorHandler } from '@pcp/shared';
+import {
+  createApiErrorHandler,
+  createCorrelationIdGenerator,
+  registerObservability,
+} from '@pcp/shared';
 import { publishRoutes } from './routes';
 import { env } from './env';
 import { startHealthDaemon } from './health';
@@ -37,6 +41,7 @@ const envToLogger = {
 };
 
 const app = Fastify({
+  genReqId: createCorrelationIdGenerator(),
   logger:
     env.NODE_ENV === 'production'
       ? {
@@ -59,6 +64,7 @@ app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
 
 app.setErrorHandler(createApiErrorHandler());
+registerObservability(app, { serviceName: 'publish' });
 
 app.addHook('onRequest', (request, reply, done) => {
   reply.header('x-correlation-id', request.id);

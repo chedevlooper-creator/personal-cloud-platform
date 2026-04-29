@@ -14,3 +14,4 @@ export * from './datasets';
 export * from './browser';
 export * from './errors';
 export * from './env-helpers';
+export * from './observability';

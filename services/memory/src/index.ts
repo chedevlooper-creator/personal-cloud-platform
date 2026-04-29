@@ -2,11 +2,16 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
-import { createApiErrorHandler } from '@pcp/shared';
+import {
+  createApiErrorHandler,
+  createCorrelationIdGenerator,
+  registerObservability,
+} from '@pcp/shared';
 import { setupMemoryRoutes } from './routes';
 import { env } from './env';
 
 const server = Fastify({
+  genReqId: createCorrelationIdGenerator(),
   logger: {
     transport:
       env.NODE_ENV === 'development'
@@ -25,6 +30,7 @@ server.setValidatorCompiler(validatorCompiler);
 server.setSerializerCompiler(serializerCompiler);
 
 server.setErrorHandler(createApiErrorHandler());
+registerObservability(server, { serviceName: 'memory' });
 
 server.addHook('onRequest', (request, reply, done) => {
   reply.header('x-correlation-id', request.id);

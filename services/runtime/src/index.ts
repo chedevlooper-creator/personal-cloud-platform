@@ -4,11 +4,16 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
-import { createApiErrorHandler } from '@pcp/shared';
+import {
+  createApiErrorHandler,
+  createCorrelationIdGenerator,
+  registerObservability,
+} from '@pcp/shared';
 import { setupRuntimeRoutes } from './routes';
 import { env } from './env';
 
 const server = Fastify({
+  genReqId: createCorrelationIdGenerator(),
   logger: {
     transport:
       env.NODE_ENV === 'development'
@@ -27,6 +32,7 @@ server.setValidatorCompiler(validatorCompiler);
 server.setSerializerCompiler(serializerCompiler);
 
 server.setErrorHandler(createApiErrorHandler());
+registerObservability(server, { serviceName: 'runtime' });
 
 server.addHook('onRequest', (request, reply, done) => {
   reply.header('x-correlation-id', request.id);
