@@ -9,18 +9,41 @@ interface UseTerminalOptions {
   onCommandBlocked?: (command: string) => void;
 }
 
+export type TerminalConnectionState =
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'closed';
+
+const MAX_RECONNECT_ATTEMPTS = 6;
+const BASE_BACKOFF_MS = 500;
+const MAX_BACKOFF_MS = 8_000;
+
+/** Exponential backoff with light jitter, capped at MAX_BACKOFF_MS. */
+function computeBackoff(attempt: number): number {
+  const exp = Math.min(BASE_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS);
+  const jitter = Math.random() * 0.3 * exp;
+  return Math.round(exp + jitter);
+}
+
 export function useTerminal({ runtimeId, onCommandBlocked }: UseTerminalOptions) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  
-  const [isConnected, setIsConnected] = useState(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptsRef = useRef(0);
+  const cancelledRef = useRef(false);
+
+  const [connectionState, setConnectionState] = useState<TerminalConnectionState>('connecting');
 
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    // Initialize xterm.js
+    cancelledRef.current = false;
+    attemptsRef.current = 0;
+
+    // Initialize xterm.js once; the Terminal instance is reused across reconnects.
     const term = new Terminal({
       cursorBlink: true,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -30,68 +53,35 @@ export function useTerminal({ runtimeId, onCommandBlocked }: UseTerminalOptions)
         foreground: '#cccccc',
       },
     });
-
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.loadAddon(new WebLinksAddon());
-
     term.open(terminalRef.current);
     fitAddon.fit();
-
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Connect WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/runtimes/${runtimeId}/terminal`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setIsConnected(true);
-      term.writeln('\r\n\x1b[32m--- Connected to CloudMind Terminal ---\x1b[0m\r\n');
-    };
-
-    ws.onmessage = (event) => {
-      term.write(event.data);
-    };
-
-    ws.onclose = () => {
-      setIsConnected(false);
-      term.writeln('\r\n\x1b[31m--- Connection Closed ---\x1b[0m\r\n');
-    };
-
-    ws.onerror = () => {
-      term.writeln('\r\n\x1b[31m--- Connection Error ---\x1b[0m\r\n');
-    };
-
-    // Client-side interceptor for simple risk checks
-    // We intercept data being sent to WS.
+    // Buffered input for client-side command screening.
     let inputBuffer = '';
 
     term.onData((data) => {
+      const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      
-      // Simple frontend blocker for specific strings
-      // Note: This is rudimentary. In a real PTY, data comes char by char.
-      // We buffer characters until enter is pressed (\r)
+
       if (data === '\r') {
         const blockedPatterns = [/rm\s+-rf\s+\//, /^sudo\b/, /:\(\)\{\s*:\|:&\s*\};:/];
-        const isBlocked = blockedPatterns.some(pattern => pattern.test(inputBuffer.trim()));
-        
+        const isBlocked = blockedPatterns.some((p) => p.test(inputBuffer.trim()));
         if (isBlocked) {
           term.writeln('\r\n\x1b[31mError: Command blocked by security policy.\x1b[0m');
-          if (onCommandBlocked) onCommandBlocked(inputBuffer.trim());
+          onCommandBlocked?.(inputBuffer.trim());
           inputBuffer = '';
-          // Send a newline to PTY to give back the prompt without executing the command
-          // Actually sending Ctrl+C is better to cancel the current line
-          ws.send('\x03'); 
+          ws.send('\x03');
           return;
         }
         inputBuffer = '';
-      } else if (data === '\x7f') { // Backspace
+      } else if (data === '\x7f') {
         inputBuffer = inputBuffer.slice(0, -1);
-      } else if (data === '\x03') { // Ctrl+C
+      } else if (data === '\x03') {
         inputBuffer = '';
       } else {
         inputBuffer += data;
@@ -100,18 +90,93 @@ export function useTerminal({ runtimeId, onCommandBlocked }: UseTerminalOptions)
       ws.send(data);
     });
 
-    // Handle resize
-    const handleResize = () => {
-      fitAddon.fit();
-    };
+    const handleResize = () => fitAddon.fit();
     window.addEventListener('resize', handleResize);
 
+    const connect = () => {
+      if (cancelledRef.current) return;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/runtimes/${runtimeId}/terminal`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        attemptsRef.current = 0;
+        setConnectionState('connected');
+        term.writeln('\r\n\x1b[32m--- Connected to CloudMind Terminal ---\x1b[0m\r\n');
+      };
+
+      ws.onmessage = (event) => {
+        term.write(event.data);
+      };
+
+      ws.onerror = () => {
+        term.writeln('\r\n\x1b[31m--- Connection Error ---\x1b[0m');
+      };
+
+      ws.onclose = (event) => {
+        if (cancelledRef.current) {
+          setConnectionState('closed');
+          return;
+        }
+        // 1000 = normal closure; do not retry intentional closes.
+        if (event.code === 1000) {
+          setConnectionState('closed');
+          term.writeln('\r\n\x1b[31m--- Connection Closed ---\x1b[0m\r\n');
+          return;
+        }
+
+        const attempt = attemptsRef.current;
+        if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+          setConnectionState('closed');
+          term.writeln(
+            '\r\n\x1b[31m--- Connection Lost (max reconnect attempts reached) ---\x1b[0m\r\n',
+          );
+          return;
+        }
+
+        const delay = computeBackoff(attempt);
+        attemptsRef.current = attempt + 1;
+        setConnectionState('reconnecting');
+        term.writeln(
+          `\r\n\x1b[33m--- Disconnected. Reconnecting in ${
+            Math.round(delay / 100) / 10
+          }s (attempt ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS}) ---\x1b[0m`,
+        );
+
+        reconnectTimerRef.current = setTimeout(connect, delay);
+      };
+    };
+
+    setConnectionState('connecting');
+    connect();
+
     return () => {
+      cancelledRef.current = true;
       window.removeEventListener('resize', handleResize);
-      ws.close();
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      const ws = wsRef.current;
+      if (ws) {
+        // Detach handlers before close so the close handler does not schedule a reconnect.
+        ws.onopen = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+        ws.close(1000, 'unmount');
+      }
+      wsRef.current = null;
       term.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
     };
   }, [runtimeId, onCommandBlocked]);
 
-  return { terminalRef, isConnected };
+  return {
+    terminalRef,
+    connectionState,
+    isConnected: connectionState === 'connected',
+  };
 }

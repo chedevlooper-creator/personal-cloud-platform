@@ -18,14 +18,32 @@ import { runtimeApi, toastApiError} from '@/lib/api';
 import { useTerminal } from '@/hooks/use-terminal';
 
 function TerminalTab({ runtimeId, isActive, onBlocked }: { runtimeId: string; isActive: boolean; onBlocked: (cmd: string) => void }) {
-  const { terminalRef, isConnected } = useTerminal({ runtimeId, onCommandBlocked: onBlocked });
+  const { terminalRef, connectionState } = useTerminal({ runtimeId, onCommandBlocked: onBlocked });
+
+  const badgeStyle =
+    connectionState === 'connected'
+      ? 'bg-emerald-500/20 text-emerald-300'
+      : connectionState === 'connecting'
+        ? 'bg-zinc-500/20 text-zinc-300'
+        : connectionState === 'reconnecting'
+          ? 'bg-amber-500/20 text-amber-300'
+          : 'bg-red-500/20 text-red-300';
 
   return (
-    <div className={`flex-1 p-2 bg-[#1e1e1e] ${isActive ? 'block' : 'hidden'}`}>
-      {!isConnected && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e1e] bg-opacity-80 z-10">
-          <Loader2 className="animate-spin text-zinc-400 mr-2" /> 
-          <span className="text-zinc-400">Connecting...</span>
+    <div className={`flex-1 p-2 bg-[#1e1e1e] relative ${isActive ? 'block' : 'hidden'}`}>
+      <div
+        className={`absolute top-2 right-3 z-10 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${badgeStyle}`}
+        role="status"
+        aria-live="polite"
+      >
+        {connectionState}
+      </div>
+      {connectionState !== 'connected' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e1e]/80 z-10">
+          <Loader2 className="animate-spin text-zinc-400 mr-2" />
+          <span className="text-zinc-400">
+            {connectionState === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
+          </span>
         </div>
       )}
       <div className="h-full w-full" ref={terminalRef} />

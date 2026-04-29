@@ -44,4 +44,5 @@ coverage/
 # Misc
 .cache/
 tmp/
-temp/selam.zip
+temp/
+selam.zip
