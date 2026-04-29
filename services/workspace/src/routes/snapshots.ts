@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { createSnapshotSchema, snapshotResponseSchema } from '@pcp/shared';
+import { createSnapshotSchema, snapshotResponseSchema, sendApiError } from '@pcp/shared';
 import { WorkspaceService } from '../service';
 import { db } from '@pcp/db/src/client';
 import { auditLogs } from '@pcp/db/src/schema';
@@ -38,7 +38,7 @@ export async function setupSnapshotRoutes(
     },
     async (request, reply) => {
       const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const snapshot = await workspaceService.createSnapshot(
         request.params.id,
@@ -65,7 +65,7 @@ export async function setupSnapshotRoutes(
     },
     async (request, reply) => {
       const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const snapshots = await workspaceService.getSnapshots(request.params.id, userId);
       return { snapshots };
@@ -81,7 +81,7 @@ export async function setupSnapshotRoutes(
     },
     async (request, reply) => {
       const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const result = await workspaceService.restoreSnapshot(request.params.id, userId);
       await emitAudit(fastify, userId, 'SNAPSHOT_RESTORE', { snapshotId: request.params.id });
@@ -98,7 +98,7 @@ export async function setupSnapshotRoutes(
     },
     async (request, reply) => {
       const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await workspaceService.deleteSnapshot(request.params.id, userId);
       await emitAudit(fastify, userId, 'SNAPSHOT_DELETE', { snapshotId: request.params.id });

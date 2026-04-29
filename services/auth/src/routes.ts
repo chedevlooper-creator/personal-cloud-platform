@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import oauthPlugin from '@fastify/oauth2';
-import { registerSchema, loginSchema, authResponseSchema } from '@pcp/shared';
+import { registerSchema, loginSchema, authResponseSchema, sendApiError } from '@pcp/shared';
 import { AuthService } from './service';
 import { setupProfileRoutes } from './routes/profile';
 import { setupAdminRoutes } from './routes/admin';
@@ -117,12 +117,12 @@ export async function setupAuthRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const sessionId = request.cookies.sessionId;
       if (!sessionId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const user = await authService.validateSession(sessionId);
       if (!user) {
-        return reply.code(401).send({ error: 'Invalid session' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED', 'Invalid session');
       }
 
       return { user };
@@ -132,7 +132,7 @@ export async function setupAuthRoutes(fastify: FastifyInstance) {
   server.post('/refresh', async (request, reply) => {
     const sessionId = request.cookies.sessionId;
     if (!sessionId) {
-      return reply.code(401).send({ error: 'Unauthorized' } as any);
+      return sendApiError(reply, 401, 'UNAUTHORIZED');
     }
 
     const newSession = await authService.refreshSession(
@@ -143,7 +143,7 @@ export async function setupAuthRoutes(fastify: FastifyInstance) {
 
     if (!newSession) {
       reply.clearCookie('sessionId', { path: '/' });
-      return reply.code(401).send({ error: 'Invalid or expired session' } as any);
+      return sendApiError(reply, 401, 'UNAUTHORIZED', 'Invalid or expired session');
     }
 
     reply.setCookie('sessionId', newSession.id, {

@@ -10,6 +10,7 @@ import {
   providerCredentialResponseSchema,
   createProviderCredentialSchema,
   auditLogSchema,
+  sendApiError,
 } from '@pcp/shared';
 import { encrypt } from '../encryption';
 import { AuthService } from '../service';
@@ -48,12 +49,12 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
   async function getUserId(request: any, reply: any) {
     const sessionId = request.cookies.sessionId;
     if (!sessionId) {
-      reply.code(401).send({ error: 'Unauthorized' });
+      sendApiError(reply, 401, 'UNAUTHORIZED');
       return null;
     }
     const user = await authService.validateSession(sessionId);
     if (!user) {
-      reply.code(401).send({ error: 'Unauthorized' });
+      sendApiError(reply, 401, 'UNAUTHORIZED');
       return null;
     }
     return user.id;

@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { browserSessionSchema, navigateSchema, clickSchema, fillSchema } from '@pcp/shared';
+import { browserSessionSchema, navigateSchema, clickSchema, fillSchema, sendApiError } from '@pcp/shared';
 import { BrowserService, type BrowserSessionInfo } from './service';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 import { env } from './env';
@@ -32,7 +32,19 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
   function handle(err: any, reply: any, fallback = 'Internal error') {
     const status = err?.statusCode ?? 500;
     if (status === 500) fastify.log.error({ err }, 'browser route failed');
-    return reply.code(status).send({ error: err?.message ?? fallback });
+    if (status === 401) {
+      return sendApiError(reply, 401, 'UNAUTHORIZED', err?.message ?? fallback);
+    }
+    if (status === 403) {
+      return sendApiError(reply, 403, 'FORBIDDEN', err?.message ?? fallback);
+    }
+    if (status === 404) {
+      return sendApiError(reply, 404, 'NOT_FOUND', err?.message ?? fallback);
+    }
+    if (status === 409) {
+      return sendApiError(reply, 409, 'CONFLICT', err?.message ?? fallback);
+    }
+    return sendApiError(reply, 500, 'INTERNAL_ERROR', err?.message ?? fallback);
   }
 
   server.get(
@@ -44,7 +56,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       return { sessions: browserService.list(userId).map(toJson) };
     },
   );
@@ -54,7 +66,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     { schema: { response: { 201: browserSessionSchema } } },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.createSession(userId);
         return reply.code(201).send(toJson(s));
@@ -69,7 +81,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     { schema: { params: z.object({ id: z.string().uuid() }) } },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         await browserService.close(userId, request.params.id);
         return { success: true };
@@ -90,7 +102,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.navigate(userId, request.params.id, request.body.url);
         return toJson(s);
@@ -111,7 +123,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.click(userId, request.params.id, request.body.selector);
         return toJson(s);
@@ -132,7 +144,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.fill(
           userId,
@@ -157,7 +169,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await browserService.screenshot(userId, request.params.id);
       } catch (err) {
@@ -183,7 +195,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await browserService.extract(userId, request.params.id);
       } catch (err) {

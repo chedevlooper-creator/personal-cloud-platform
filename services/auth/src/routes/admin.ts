@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@pcp/db/src/client';
 import { users, auditLogs } from '@pcp/db/src/schema';
 import { desc } from 'drizzle-orm';
-import { auditLogSchema } from '@pcp/shared';
+import { auditLogSchema, sendApiError } from '@pcp/shared';
 import { AuthService, SanitizedUser } from '../service';
 import { env } from '../env';
 
@@ -29,18 +29,18 @@ export async function setupAdminRoutes(fastify: FastifyInstance) {
   async function checkIsAdmin(request: FastifyRequest, reply: FastifyReply) {
     const sessionId = request.cookies.sessionId;
     if (!sessionId) {
-      reply.code(401).send({ error: 'Unauthorized' });
+      sendApiError(reply, 401, 'UNAUTHORIZED');
       return false;
     }
     const user = await authService.validateSession(sessionId);
     if (!user) {
-      reply.code(401).send({ error: 'Unauthorized' });
+      sendApiError(reply, 401, 'UNAUTHORIZED');
       return false;
     }
 
     // MVP admin policy: fail closed unless an explicit admin email is configured.
     if (!isAdminUser(user, env.ADMIN_EMAIL)) {
-      reply.code(403).send({ error: 'Forbidden' });
+      sendApiError(reply, 403, 'FORBIDDEN');
       return false;
     }
 

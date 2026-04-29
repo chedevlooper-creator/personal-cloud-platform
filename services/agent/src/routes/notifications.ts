@@ -6,6 +6,7 @@ import { validateSessionUserId } from '@pcp/db/src/session';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { env } from '../env';
+import { sendApiError } from '@pcp/shared';
 
 export async function setupNotificationRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -30,7 +31,7 @@ export async function setupNotificationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { unreadOnly, limit } = request.query;
       const items = await db.query.notifications.findMany({
@@ -47,7 +48,7 @@ export async function setupNotificationRoutes(fastify: FastifyInstance) {
 
   server.get('/notifications/unread-count', async (request, reply) => {
     const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-    if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+    if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
     const rows = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -64,7 +65,7 @@ export async function setupNotificationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await db
         .update(notifications)
@@ -77,7 +78,7 @@ export async function setupNotificationRoutes(fastify: FastifyInstance) {
 
   server.post('/notifications/read-all', async (request, reply) => {
     const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-    if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+    if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
     await db
       .update(notifications)

@@ -4,7 +4,7 @@ import { db } from '@pcp/db/src/client';
 import { automations, automationRuns } from '@pcp/db/src/schema';
 import { validateSessionUserId } from '@pcp/db/src/session';
 import { and, eq, desc } from 'drizzle-orm';
-import { createAutomationSchema, updateAutomationSchema } from '@pcp/shared';
+import { createAutomationSchema, updateAutomationSchema, sendApiError } from '@pcp/shared';
 import { automationQueue } from '../automation/queue';
 import { automationRepeatKey, computeNextRunAt, resolveSchedule } from '../automation/schedule';
 import { automationTriggerToken, verifyAutomationTriggerToken } from '../automation/notify';
@@ -26,7 +26,7 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const { workspaceId } = request.query;
 
       const items = await db.query.automations.findMany({
@@ -47,7 +47,7 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const nextRunAt = computeNextRunAt(request.body);
 
@@ -93,7 +93,7 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { id } = request.params;
 
@@ -113,7 +113,7 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
         .where(and(eq(automations.id, id), eq(automations.userId, userId)))
         .returning();
 
-      if (!updated) return reply.code(404).send({ error: 'Not found' } as any);
+      if (!updated) return sendApiError(reply, 404, 'NOT_FOUND', 'Not found');
 
       // Re-register the repeat: always remove the existing key first; then add
       // a fresh repeat job if the automation is enabled and has a schedule.
@@ -150,7 +150,7 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { id } = request.params;
       await db
@@ -176,14 +176,14 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { id } = request.params;
       const automation = await db.query.automations.findFirst({
         where: and(eq(automations.id, id), eq(automations.userId, userId)),
       });
 
-      if (!automation) return reply.code(404).send({ error: 'Not found' } as any);
+      if (!automation) return sendApiError(reply, 404, 'NOT_FOUND', 'Not found');
 
       // Create a run record
       const [run] = await db
@@ -220,13 +220,13 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { id } = request.params;
       const automation = await db.query.automations.findFirst({
         where: and(eq(automations.id, id), eq(automations.userId, userId)),
       });
-      if (!automation) return reply.code(404).send({ error: 'Not found' } as any);
+      if (!automation) return sendApiError(reply, 404, 'NOT_FOUND', 'Not found');
 
       const runs = await db.query.automationRuns.findMany({
         where: and(eq(automationRuns.automationId, id), eq(automationRuns.userId, userId)),
@@ -246,12 +246,12 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const automation = await db.query.automations.findFirst({
         where: and(eq(automations.id, request.params.id), eq(automations.userId, userId)),
       });
-      if (!automation) return reply.code(404).send({ error: 'Not found' } as any);
+      if (!automation) return sendApiError(reply, 404, 'NOT_FOUND', 'Not found');
 
       return { token: automationTriggerToken(automation.id) };
     },
@@ -272,17 +272,17 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       const { token } = request.query;
 
       if (!verifyAutomationTriggerToken(id, token)) {
-        return reply.code(401).send({ error: 'Invalid trigger token' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED', 'Invalid trigger token');
       }
 
       const automation = await db.query.automations.findFirst({
         where: eq(automations.id, id),
       });
       if (!automation || !automation.enabled) {
-        return reply.code(404).send({ error: 'Automation not found or disabled' } as any);
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Automation not found or disabled');
       }
       if (!automation.workspaceId) {
-        return reply.code(400).send({ error: 'Automation missing workspace' } as any);
+        return sendApiError(reply, 400, 'BAD_REQUEST', 'Automation missing workspace');
       }
 
       const [run] = await db

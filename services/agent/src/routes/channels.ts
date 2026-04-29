@@ -8,6 +8,7 @@ import {
   channelLinkResponseSchema,
   createChannelLinkSchema,
   updateChannelLinkSchema,
+  sendApiError,
 } from '@pcp/shared';
 import { AgentOrchestrator } from '../orchestrator';
 import { TelegramAdapter } from '../channels/telegram';
@@ -38,7 +39,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const rows = await db.query.channelLinks.findMany({
         where: eq(channelLinks.userId, userId),
         orderBy: (l, { desc: d }) => [d(l.createdAt)],
@@ -52,7 +53,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     { schema: { body: createChannelLinkSchema, response: { 201: channelLinkResponseSchema } } },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const existing = await db.query.channelLinks.findFirst({
         where: and(
@@ -61,9 +62,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
         ),
       });
       if (existing) {
-        return reply
-          .code(409)
-          .send({ error: 'This external account is already linked.' } as any);
+        return sendApiError(reply, 409, 'CONFLICT', 'This external account is already linked.');
       }
 
       const [row] = await db
@@ -76,7 +75,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
           workspaceId: request.body.workspaceId ?? null,
         })
         .returning();
-      if (!row) return reply.code(500).send({ error: 'Failed to create link' } as any);
+      if (!row) return sendApiError(reply, 500, 'INTERNAL_ERROR', 'Failed to create link');
       try {
         await db.insert(auditLogs).values({
           userId,
@@ -101,7 +100,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const patch: Record<string, unknown> = { updatedAt: new Date() };
       if (request.body.label !== undefined) patch.label = request.body.label;
       if (request.body.workspaceId !== undefined) patch.workspaceId = request.body.workspaceId;
@@ -111,7 +110,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
         .set(patch)
         .where(and(eq(channelLinks.id, request.params.id), eq(channelLinks.userId, userId)))
         .returning();
-      if (!row) return reply.code(404).send({ error: 'Link not found' } as any);
+      if (!row) return sendApiError(reply, 404, 'NOT_FOUND', 'Link not found');
       return row;
     },
   );
@@ -121,12 +120,12 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     { schema: { params: z.object({ id: z.string().uuid() }) } },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const result = await db
         .delete(channelLinks)
         .where(and(eq(channelLinks.id, request.params.id), eq(channelLinks.userId, userId)))
         .returning();
-      if (result.length === 0) return reply.code(404).send({ error: 'Link not found' } as any);
+      if (result.length === 0) return sendApiError(reply, 404, 'NOT_FOUND', 'Link not found');
       try {
         await db.insert(auditLogs).values({
           userId,
@@ -157,7 +156,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       return {
         telegram: {
           enabled: telegram !== null,
@@ -178,13 +177,13 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      if (!telegram) return reply.code(503).send({ error: 'Telegram not configured' } as any);
+      if (!telegram) return sendApiError(reply, 500, 'INTERNAL_ERROR', 'Telegram not configured');
 
       const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
       if (expectedSecret) {
         const got = request.headers['x-telegram-bot-api-secret-token'];
         if (got !== expectedSecret) {
-          return reply.code(401).send({ error: 'Bad secret' } as any);
+          return sendApiError(reply, 401, 'UNAUTHORIZED', 'Bad secret');
         }
       }
 

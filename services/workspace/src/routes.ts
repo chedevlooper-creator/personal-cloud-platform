@@ -8,6 +8,8 @@ import {
   listWorkspacesSchema,
   moveFileSchema,
   workspaceResponseSchema,
+  apiErrorCodeFromStatus,
+  sendApiError,
 } from '@pcp/shared';
 import { WorkspaceError, WorkspaceService } from './service';
 import { z } from 'zod';
@@ -46,7 +48,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const { name } = request.body;
@@ -75,7 +77,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const { page, limit } = request.query;
@@ -100,13 +102,13 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const workspace = await workspaceService.getWorkspace(request.params.id, userId);
 
       if (!workspace) {
-        return reply.code(404).send({ error: 'Workspace not found' } as any);
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
       }
 
       return workspace;
@@ -125,7 +127,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       await workspaceService.deleteWorkspace(request.params.id, userId);
@@ -151,7 +153,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const { path } = request.query;
@@ -177,14 +179,19 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       try {
         return await workspaceService.getFileContent(request.params.id, userId, request.query.path);
       } catch (error) {
         if (error instanceof WorkspaceError) {
-          return reply.code(error.statusCode).send({ error: error.message } as any);
+          return sendApiError(
+            reply,
+            error.statusCode,
+            apiErrorCodeFromStatus(error.statusCode),
+            error.message,
+          );
         }
         throw error;
       }
@@ -213,7 +220,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
       try {
         return await workspaceService.writeTextFile(
@@ -225,7 +232,12 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         );
       } catch (error) {
         if (error instanceof WorkspaceError) {
-          return reply.code(error.statusCode).send({ error: error.message } as any);
+          return sendApiError(
+            reply,
+            error.statusCode,
+            apiErrorCodeFromStatus(error.statusCode),
+            error.message,
+          );
         }
         throw error;
       }
@@ -260,7 +272,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
       try {
         return await workspaceService.buildSyncManifest(request.params.id, userId, {
@@ -268,7 +280,12 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         });
       } catch (error) {
         if (error instanceof WorkspaceError) {
-          return reply.code(error.statusCode).send({ error: error.message } as any);
+          return sendApiError(
+            reply,
+            error.statusCode,
+            apiErrorCodeFromStatus(error.statusCode),
+            error.message,
+          );
         }
         throw error;
       }
@@ -293,14 +310,14 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const filePath = '/' + (request.params as any)['*'];
       const file = await workspaceService.getFile(request.params.id, userId, filePath);
 
       if (!file) {
-        return reply.code(404).send({ error: 'File not found' } as any);
+        return sendApiError(reply, 404, 'NOT_FOUND', 'File not found');
       }
 
       return {
@@ -336,7 +353,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const file = await workspaceService.createFile(request.params.id, userId, request.body);
@@ -369,7 +386,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const { path, name, parentPath } = request.body;
@@ -401,12 +418,12 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const data = await request.file();
       if (!data) {
-        return reply.code(400).send({ error: 'No file uploaded' } as any);
+        return sendApiError(reply, 400, 'BAD_REQUEST', 'No file uploaded');
       }
 
       const targetPath = (data.fields.path as any)?.value || `/${data.filename}`;
@@ -429,7 +446,12 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         });
       } catch (error) {
         if (error instanceof WorkspaceError) {
-          return reply.code(error.statusCode).send({ error: error.message } as any);
+          return sendApiError(
+            reply,
+            error.statusCode,
+            apiErrorCodeFromStatus(error.statusCode),
+            error.message,
+          );
         }
         throw error;
       }
@@ -451,7 +473,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const filePath = '/' + (request.params as any)['*'];
@@ -477,7 +499,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request);
 
       if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' } as any);
+        return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
       const { sourcePath, destinationPath } = request.body;

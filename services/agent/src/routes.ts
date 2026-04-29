@@ -8,6 +8,7 @@ import {
   messageResponseSchema,
   toolApprovalSchema,
   taskEventStreamQuerySchema,
+  sendApiError,
 } from '@pcp/shared';
 import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
@@ -49,7 +50,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const response = await orchestrator.chat(request.body.input, userId);
       return {
@@ -71,7 +72,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { workspaceId, conversationId, input, personaId, skillIds } = request.body;
       const task = await orchestrator.createTask(userId, workspaceId, input, conversationId, {
@@ -94,10 +95,10 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const task = await orchestrator.getTask(request.params.id, userId);
-      if (!task) return reply.code(404).send({ error: 'Task not found' } as any);
+      if (!task) return sendApiError(reply, 404, 'NOT_FOUND', 'Task not found');
 
       return task;
     },
@@ -115,7 +116,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const steps = await orchestrator.getTaskSteps(request.params.id, userId);
       return { steps };
@@ -131,7 +132,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await orchestrator.cancelTask(request.params.id, userId);
       return { success: true };
@@ -151,7 +152,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const convos = await orchestrator.getConversations(userId);
       return { conversations: convos };
@@ -172,7 +173,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const messages = await orchestrator.getMessages(request.params.id, userId);
       return { messages };
@@ -189,7 +190,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await orchestrator.submitToolApproval(
         request.params.id,
@@ -210,7 +211,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       await orchestrator.deleteConversation(request.params.id, userId);
       return { success: true };
     },
@@ -226,7 +227,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { id } = request.params;
       const { snapshot } = request.query;

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { createRuntimeSchema, execCommandSchema, runtimeResponseSchema } from '@pcp/shared';
+import { createRuntimeSchema, execCommandSchema, runtimeResponseSchema, sendApiError } from '@pcp/shared';
 import { RuntimeService } from './service';
 import { z } from 'zod';
 import { env } from './env';
@@ -29,7 +29,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { workspaceId, image, options } = request.body;
       const runtime = await runtimeService.createRuntime(userId, workspaceId, image, options);
@@ -46,7 +46,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await runtimeService.startRuntime(request.params.id, userId);
       return { success: true };
@@ -62,7 +62,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await runtimeService.stopRuntime(request.params.id, userId);
       return { success: true };
@@ -79,7 +79,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const result = await runtimeService.execCommand(request.params.id, userId, request.body.command);
       return result;
@@ -95,7 +95,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await runtimeService.deleteRuntime(request.params.id, userId);
       return { success: true };
@@ -125,7 +125,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { workspaceId, image, options } = request.body;
       const runtime = await runtimeService.ensureRuntimeForWorkspace(

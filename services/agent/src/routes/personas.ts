@@ -5,6 +5,8 @@ import {
   createPersonaSchema,
   personaResponseSchema,
   updatePersonaSchema,
+  apiErrorCodeFromStatus,
+  sendApiError,
 } from '@pcp/shared';
 import { PersonasService } from '../personas/service';
 import { AgentOrchestrator } from '../orchestrator';
@@ -30,7 +32,7 @@ export async function setupPersonasRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const rows = await service.list(userId);
       return { personas: rows };
     },
@@ -41,14 +43,18 @@ export async function setupPersonasRoutes(fastify: FastifyInstance) {
     { schema: { body: createPersonaSchema, response: { 201: personaResponseSchema } } },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const row = await service.create(userId, request.body);
         return reply.code(201).send(row);
       } catch (err: any) {
-        return reply
-          .code(err.statusCode ?? 400)
-          .send({ error: err.message ?? 'Failed to create persona' } as any);
+        const status = err.statusCode ?? 400;
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          err.message ?? 'Failed to create persona',
+        );
       }
     },
   );
@@ -64,14 +70,18 @@ export async function setupPersonasRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const row = await service.update(request.params.id, userId, request.body);
         return row;
       } catch (err: any) {
-        return reply
-          .code(err.statusCode ?? 400)
-          .send({ error: err.message ?? 'Failed to update persona' } as any);
+        const status = err.statusCode ?? 400;
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          err.message ?? 'Failed to update persona',
+        );
       }
     },
   );
@@ -81,14 +91,18 @@ export async function setupPersonasRoutes(fastify: FastifyInstance) {
     { schema: { params: z.object({ id: z.string().uuid() }) } },
     async (request, reply) => {
       const userId = await getUserId(request.cookies.sessionId);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         await service.remove(request.params.id, userId);
         return { success: true };
       } catch (err: any) {
-        return reply
-          .code(err.statusCode ?? 400)
-          .send({ error: err.message ?? 'Failed to delete persona' } as any);
+        const status = err.statusCode ?? 400;
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          err.message ?? 'Failed to delete persona',
+        );
       }
     },
   );

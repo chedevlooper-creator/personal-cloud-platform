@@ -10,10 +10,12 @@ import {
   datasetResponseSchema,
   queryDatasetSchema,
   queryResultSchema,
+  apiErrorCodeFromStatus,
+  sendApiError,
 } from '@pcp/shared';
 import { DatasetsService } from '../datasets/service';
-import { WorkspaceService } from '../service';
 import { env } from '../env';
+import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
 const SOURCE_TYPE_BY_EXT: Record<string, 'csv' | 'json' | 'parquet'> = {
   '.csv': 'csv',
@@ -42,26 +44,12 @@ function toResponse(row: any) {
 
 export async function setupDatasetsRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
-  const workspaceService = new WorkspaceService(fastify.log);
   const datasetsService = new DatasetsService(fastify.log);
 
   async function authUser(request: FastifyRequest): Promise<string | null> {
-    const auth = request.headers['authorization'];
-    if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
-      const token = auth.slice('Bearer '.length).trim();
-      const headerUserId = request.headers['x-user-id'];
-      if (
-        token &&
-        token === env.INTERNAL_SERVICE_TOKEN &&
-        typeof headerUserId === 'string' &&
-        headerUserId.length > 0
-      ) {
-        return headerUserId;
-      }
-    }
-    const sessionId = request.cookies.sessionId;
-    if (!sessionId) return null;
-    return workspaceService.validateUserFromCookie(sessionId);
+    return resolveAuthenticatedUserId(request, {
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
   }
 
   server.get(
@@ -75,7 +63,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const rows = await datasetsService.list(userId);
       return { datasets: rows.map(toResponse) };
     },
@@ -88,13 +76,18 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         await datasetsService.remove(userId, request.params.id);
         return { success: true };
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
-        return reply.code(status).send({ error: err?.message ?? 'Internal error' } as any);
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          err?.message ?? 'Internal error',
+        );
       }
     },
   );
@@ -110,9 +103,9 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const ds = await datasetsService.get(userId, request.params.id);
-      if (!ds) return reply.code(404).send({ error: 'Dataset not found' } as any);
+      if (!ds) return sendApiError(reply, 404, 'NOT_FOUND', 'Dataset not found');
       try {
         return await datasetsService.query({
           userId,
@@ -122,7 +115,12 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
         if (status === 500) fastify.log.error({ err }, 'dataset query failed');
-        return reply.code(status).send({ error: err?.message ?? 'Query failed' } as any);
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          err?.message ?? 'Query failed',
+        );
       }
     },
   );
@@ -137,7 +135,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await datasetsService.query({
           userId,
@@ -147,7 +145,12 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
         if (status === 500) fastify.log.error({ err }, 'dataset query failed');
-        return reply.code(status).send({ error: err?.message ?? 'Query failed' } as any);
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          err?.message ?? 'Query failed',
+        );
       }
     },
   );
@@ -163,12 +166,17 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await authUser(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await datasetsService.preview(userId, request.params.id, request.query.limit);
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
-        return reply.code(status).send({ error: err?.message ?? 'Preview failed' } as any);
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          err?.message ?? 'Preview failed',
+        );
       }
     },
   );
@@ -177,10 +185,10 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
   // text field "name" overrides the dataset display name.
   server.post('/datasets/import', async (request, reply) => {
     const userId = await authUser(request);
-    if (!userId) return reply.code(401).send({ error: 'Unauthorized' });
+    if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
     if (!request.isMultipart()) {
-      return reply.code(400).send({ error: 'Expected multipart/form-data' });
+      return sendApiError(reply, 400, 'BAD_REQUEST', 'Expected multipart/form-data');
     }
 
     let displayName: string | undefined;
@@ -200,9 +208,12 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
           const detected = SOURCE_TYPE_BY_EXT[ext];
           if (!detected) {
             await part.file.resume();
-            return reply.code(400).send({
-              error: `Unsupported file type "${ext}". Use .csv, .tsv, .json, .ndjson, or .parquet.`,
-            });
+            return sendApiError(
+              reply,
+              400,
+              'BAD_REQUEST',
+              `Unsupported file type "${ext}". Use .csv, .tsv, .json, .ndjson, or .parquet.`,
+            );
           }
           sourceType = detected;
           savedPath = path.join(tmpDir, `upload${ext}`);
@@ -211,7 +222,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       }
 
       if (!savedPath || !sourceType || !originalFilename) {
-        return reply.code(400).send({ error: 'No file provided' });
+        return sendApiError(reply, 400, 'BAD_REQUEST', 'No file provided');
       }
 
       const finalName =
@@ -229,7 +240,12 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       const status = err?.statusCode ?? 500;
       if (status === 500) fastify.log.error({ err }, 'dataset import failed');
-      return reply.code(status).send({ error: err?.message ?? 'Import failed' });
+      return sendApiError(
+        reply,
+        status,
+        apiErrorCodeFromStatus(status),
+        err?.message ?? 'Import failed',
+      );
     } finally {
       if (savedPath) {
         await fs.rm(path.dirname(savedPath), { recursive: true, force: true }).catch(() => {});

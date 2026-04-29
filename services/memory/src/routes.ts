@@ -1,6 +1,12 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { addMemorySchema, searchMemorySchema, updateMemorySchema, memoryResponseSchema } from '@pcp/shared';
+import {
+  addMemorySchema,
+  searchMemorySchema,
+  updateMemorySchema,
+  memoryResponseSchema,
+  sendApiError,
+} from '@pcp/shared';
 import { MemoryService } from './service';
 import { z } from 'zod';
 import { env } from './env';
@@ -29,7 +35,7 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { type, content, metadata, workspaceId } = request.body;
       const memory = await memoryService.addMemory(userId, type, content, metadata, workspaceId);
@@ -47,7 +53,7 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { query, limit, type, workspaceId, minSimilarity } = request.body;
       const results = await memoryService.searchMemory(userId, query, {
@@ -74,10 +80,10 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const updated = await memoryService.updateMemory(request.params.id, userId, request.body);
-      if (!updated) return reply.code(404).send({ error: 'Memory not found' } as any);
+      if (!updated) return sendApiError(reply, 404, 'NOT_FOUND', 'Memory not found');
       
       return updated;
     }
@@ -92,7 +98,7 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request);
-      if (!userId) return reply.code(401).send({ error: 'Unauthorized' } as any);
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await memoryService.deleteMemory(request.params.id, userId);
       return { success: true };
