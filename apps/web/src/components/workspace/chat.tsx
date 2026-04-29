@@ -7,7 +7,7 @@ import { Send, Bot, Loader2, CheckCircle2, XCircle, Paperclip, X } from 'lucide-
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { agentApi, workspaceApi, toastApiError} from '@/lib/api';
+import { agentApi, apiEndpoints, workspaceApi, toastApiError} from '@/lib/api';
 import { usePersonaStore } from '@/store/persona';
 import { useActiveSkillsStore } from '@/store/skills';
 
@@ -54,7 +54,8 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
 
   const activeConversationId = convosData?.[0]?.id;
 
-  // Fetch messages
+  // Fetch messages. Live updates come via SSE (see effect below); we keep a
+  // long fallback poll only as a safety net in case an event is missed.
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['agent-messages', activeConversationId],
     queryFn: async () => {
@@ -63,16 +64,44 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
       return res.data as { messages: Message[] };
     },
     enabled: !!activeConversationId,
-    refetchInterval: (query) => {
-      // Poll if any task is executing or waiting approval
-      const isPending = query.state?.data?.messages.some((m: Message) =>
-        ['pending', 'executing'].includes(m.taskStatus),
-      );
-      return isPending ? 2000 : false;
-    },
   });
 
   const messages = useMemo(() => messagesData?.messages ?? [], [messagesData]);
+
+  // Subscribe to per-task SSE streams for any active task in this conversation.
+  // The agent service closes the stream automatically once the task reaches a
+  // terminal status, so we only need to track active tasks here.
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const activeTaskIds = Array.from(
+      new Set(
+        messages
+          .filter((m) =>
+            ['pending', 'executing', 'waiting_approval'].includes(m.taskStatus),
+          )
+          .map((m) => m.taskId),
+      ),
+    );
+    if (activeTaskIds.length === 0) return;
+
+    const sources: EventSource[] = [];
+    const invalidate = () =>
+      queryClient.invalidateQueries({
+        queryKey: ['agent-messages', activeConversationId],
+      });
+
+    for (const tid of activeTaskIds) {
+      const url = `${apiEndpoints.agent}/agent/tasks/${tid}/events`;
+      const es = new EventSource(url, { withCredentials: true });
+      es.addEventListener('task', invalidate);
+      es.addEventListener('step', invalidate);
+      es.onerror = () => es.close();
+      sources.push(es);
+    }
+    return () => {
+      for (const es of sources) es.close();
+    };
+  }, [messages, activeConversationId, queryClient]);
 
   // Scroll to bottom
   useEffect(() => {

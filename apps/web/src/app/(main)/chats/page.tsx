@@ -19,7 +19,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { agentApi, workspaceApi , toastApiError} from '@/lib/api';
+import { agentApi, apiEndpoints, workspaceApi , toastApiError} from '@/lib/api';
 import { useUser } from '@/lib/auth';
 import { usePersonaStore } from '@/store/persona';
 import { useActiveSkillsStore } from '@/store/skills';
@@ -117,8 +117,8 @@ export default function ChatsPage() {
     },
     onSuccess: (data) => {
       setInput('');
-      // Poll for completion
-      pollTask(data.id);
+      // Subscribe to live task events instead of polling.
+      subscribeToTask(data.id);
     },
     onError: (err) => {
       setIsStreaming(false);
@@ -126,32 +126,50 @@ export default function ChatsPage() {
     },
   });
 
-  const pollTask = useCallback(async (taskId: string) => {
-    const maxAttempts = 60;
-    for (let i = 0; i < maxAttempts; i++) {
-      try {
-        const res = await agentApi.get(`/agent/tasks/${taskId}`);
-        const status = res.data?.status;
-        if (status === 'completed' || status === 'failed') {
-          setIsStreaming(false);
-          // Refresh conversations and messages
-          queryClient.invalidateQueries({ queryKey: ['conversations'] });
-          if (selectedConvoId) {
-            queryClient.invalidateQueries({ queryKey: ['messages', selectedConvoId] });
-          }
-          // If new conversation was created, select it
-          if (res.data?.conversationId && !selectedConvoId) {
-            setSelectedConvoId(res.data.conversationId);
-          }
-          break;
+  const subscribeToTask = useCallback(
+    (taskId: string) => {
+      const url = `${apiEndpoints.agent}/agent/tasks/${taskId}/events`;
+      const es = new EventSource(url, { withCredentials: true });
+
+      const refresh = () => {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        if (selectedConvoId) {
+          queryClient.invalidateQueries({ queryKey: ['messages', selectedConvoId] });
         }
-      } catch {
-        // Continue polling
-      }
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-    setIsStreaming(false);
-  }, [queryClient, selectedConvoId]);
+      };
+
+      es.addEventListener('step', refresh);
+      es.addEventListener('task', (ev: MessageEvent) => {
+        refresh();
+        try {
+          const payload = JSON.parse(ev.data) as {
+            status?: string;
+            conversationId?: string | null;
+          };
+          // If a new conversation was created server-side, surface it.
+          if (payload.conversationId && !selectedConvoId) {
+            setSelectedConvoId(payload.conversationId);
+          }
+          if (
+            payload.status &&
+            ['completed', 'failed', 'cancelled'].includes(payload.status)
+          ) {
+            setIsStreaming(false);
+            es.close();
+          }
+        } catch {
+          // Ignore malformed payloads; the server still closed the stream
+          // on terminal status, and our es.onerror handler covers cleanup.
+        }
+      });
+
+      es.onerror = () => {
+        setIsStreaming(false);
+        es.close();
+      };
+    },
+    [queryClient, selectedConvoId],
+  );
 
   const handleSend = () => {
     const prompt = input.trim();

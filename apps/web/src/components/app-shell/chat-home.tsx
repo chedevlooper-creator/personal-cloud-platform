@@ -76,17 +76,10 @@ export function ChatHome() {
     setIsThinking(true);
     setToolApproval(null);
 
-    const needsTool = /\b(file|deploy|publish|terminal|workspace|host)\b/i.test(prompt);
-    if (needsTool) {
-      setTimeout(() => {
-        setToolApproval({
-          toolName: prompt.match(/\bdeploy|publish|host\b/i)
-            ? 'prepare_deployment'
-            : 'workspace_inspector',
-          description: 'Review workspace context before taking action.',
-        });
-      }, 450);
-    }
+    // Note: the dashboard chat uses the lightweight `/agent/chat` endpoint,
+    // which does not run tools and therefore has no approval flow. Real
+    // tool-approval lives in the workspace chat, wired against the
+    // task SSE stream and `/agent/tasks/:id/tool-approval`.
 
     const assistantId = crypto.randomUUID();
     setMessages((current) => [...current, { id: assistantId, role: 'assistant', content: '' }]);

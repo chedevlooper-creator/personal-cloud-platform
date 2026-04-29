@@ -54,6 +54,10 @@ export default function HostingPage() {
   const [slug, setSlug] = useState('');
   const [kind, setKind] = useState('static');
   const [rootPath, setRootPath] = useState('/');
+  const [startCommand, setStartCommand] = useState('');
+  const [envVarsText, setEnvVarsText] = useState('');
+  const [customDomain, setCustomDomain] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
   const [workspaceId, setWorkspaceId] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
@@ -94,12 +98,19 @@ export default function HostingPage() {
   const createService = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error('You must be signed in.');
+      const envVars = parseEnvVars(envVarsText);
+      const trimmedStart = startCommand.trim();
+      const trimmedDomain = customDomain.trim();
       await publishApi.post('/hosted-services', {
         workspaceId: defaultWorkspaceId,
         name: name.trim(),
         slug: normalizeSlug(slug || name),
         kind,
         rootPath,
+        envVars,
+        isPublic,
+        ...(trimmedStart ? { startCommand: trimmedStart } : {}),
+        ...(trimmedDomain ? { customDomain: trimmedDomain } : {}),
       });
     },
     onSuccess: () => {
@@ -110,6 +121,10 @@ export default function HostingPage() {
       setSlug('');
       setKind('static');
       setRootPath('/');
+      setStartCommand('');
+      setEnvVarsText('');
+      setCustomDomain('');
+      setIsPublic(true);
     },
     onError: (e) => toastApiError(e, 'Could not create service.'),
   });
@@ -256,6 +271,50 @@ export default function HostingPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
+            <Label htmlFor="svc-start">Start command (Node/Vite only)</Label>
+            <Input
+              id="svc-start"
+              value={startCommand}
+              onChange={(e) => setStartCommand(e.target.value)}
+              placeholder="npm start"
+            />
+          </div>
+          <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
+            <Label htmlFor="svc-env">Environment variables</Label>
+            <textarea
+              id="svc-env"
+              value={envVarsText}
+              onChange={(e) => setEnvVarsText(e.target.value)}
+              placeholder={'KEY=value\nANOTHER_KEY=secret'}
+              rows={4}
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              One <code>KEY=VALUE</code> pair per line. Stored encrypted at rest.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="svc-domain">Custom domain</Label>
+            <Input
+              id="svc-domain"
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
+              placeholder="app.example.com"
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-6">
+            <input
+              id="svc-public"
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            <Label htmlFor="svc-public" className="font-normal">
+              Publicly accessible
+            </Label>
           </div>
           <div className="flex items-end">
             <Button type="submit" size="sm" disabled={!canCreate || createService.isPending}>
@@ -422,4 +481,26 @@ function normalizeSlug(value: string) {
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 48);
+}
+
+function parseEnvVars(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (!key) continue;
+    // Strip matching surrounding quotes if present.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
 }
