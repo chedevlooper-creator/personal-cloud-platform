@@ -15,6 +15,19 @@ import { TelegramAdapter } from '../channels/telegram';
 import { handleIncoming } from '../channels/router';
 import { env } from '../env';
 
+type TelegramWebhookUpdate = {
+  message?: {
+    text?: string;
+    chat?: { id?: string | number };
+    from?: {
+      id?: string | number;
+      username?: string;
+      first_name?: string;
+      last_name?: string;
+    };
+  };
+};
+
 /**
  * Channel routes: CRUD for channel_links + Telegram webhook receiver.
  */
@@ -187,7 +200,7 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const update = request.body as any;
+      const update = request.body as TelegramWebhookUpdate;
       const m = update?.message;
       if (!m || !m.text || !m.chat?.id) {
         return reply.send({ ok: true, ignored: true });

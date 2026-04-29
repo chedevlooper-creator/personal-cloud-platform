@@ -1,4 +1,5 @@
 import Docker from 'dockerode';
+import { Writable } from 'node:stream';
 import { RuntimeProvider, RuntimeOptions, ExecResult } from './types';
 import { env } from '../env';
 import { buildRuntimeSecurityOptions } from '../policy';
@@ -88,18 +89,24 @@ export class DockerProvider implements RuntimeProvider {
       let stdout = '';
       let stderr = '';
 
+      const stdoutSink = new Writable({
+        write(chunk, _encoding, callback) {
+          stdout += chunk.toString();
+          callback();
+        },
+      });
+
+      const stderrSink = new Writable({
+        write(chunk, _encoding, callback) {
+          stderr += chunk.toString();
+          callback();
+        },
+      });
+
       container.modem.demuxStream(
         stream,
-        {
-          write: (chunk: Buffer) => {
-            stdout += chunk.toString();
-          },
-        } as any,
-        {
-          write: (chunk: Buffer) => {
-            stderr += chunk.toString();
-          },
-        } as any,
+        stdoutSink,
+        stderrSink,
       );
 
       stream.on('end', async () => {

@@ -1,6 +1,10 @@
 import OpenAI from 'openai';
 import { LLMProvider, Message, ToolDefinition, LLMResponse } from './types';
 
+function toOpenAIRole(role: Message['role']): 'system' | 'user' | 'assistant' {
+  return role;
+}
+
 export class OpenAIProvider implements LLMProvider {
   readonly providerName = 'openai';
   readonly modelName: string;
@@ -13,7 +17,7 @@ export class OpenAIProvider implements LLMProvider {
 
   async generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
     const formattedMessages = messages.map(m => ({
-      role: m.role as any,
+      role: toOpenAIRole(m.role),
       content: m.content,
       name: m.name,
     }));

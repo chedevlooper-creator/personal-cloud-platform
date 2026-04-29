@@ -134,12 +134,17 @@ export class BrowserService {
   }> {
     const s = this.requireSession(userId, sessionId);
     const result = await s.page.evaluate(() => {
-      const doc = (globalThis as any).document;
+      type LinkLike = { href?: string; innerText?: string };
+      type BrowserDocLike = {
+        body?: { innerText?: string };
+        querySelectorAll: (selector: string) => ArrayLike<LinkLike>;
+      };
+      const doc = (globalThis as { document?: BrowserDocLike }).document;
       const text = String(doc?.body?.innerText ?? '').trim();
-      const anchors: any[] = doc ? Array.from(doc.querySelectorAll('a[href]')) : [];
+      const anchors = doc ? Array.from(doc.querySelectorAll('a[href]')) : [];
       const links = anchors
         .slice(0, 100)
-        .map((a: any) => ({
+        .map((a) => ({
           href: String(a.href ?? ''),
           text: String(a.innerText ?? '').trim().slice(0, 200),
         }))

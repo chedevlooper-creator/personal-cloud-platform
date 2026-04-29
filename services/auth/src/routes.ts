@@ -2,10 +2,17 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import oauthPlugin from '@fastify/oauth2';
 import { registerSchema, loginSchema, authResponseSchema, sendApiError } from '@pcp/shared';
+import { z } from 'zod';
 import { AuthService } from './service';
 import { setupProfileRoutes } from './routes/profile';
 import { setupAdminRoutes } from './routes/admin';
 import { env } from './env';
+
+const googleUserInfoSchema = z.object({
+  id: z.string(),
+  email: z.string().email(),
+  name: z.string(),
+});
 
 export async function setupAuthRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -180,7 +187,7 @@ export async function setupAuthRoutes(fastify: FastifyInstance) {
       throw new Error('Failed to fetch user info from Google');
     }
 
-    const userInfo = (await userInfoResponse.json()) as any;
+    const userInfo = googleUserInfoSchema.parse(await userInfoResponse.json());
 
     const { session } = await authService.handleOAuthLogin(
       {

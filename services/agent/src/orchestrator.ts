@@ -437,8 +437,8 @@ export class AgentOrchestrator {
       return null;
     });
     const llm: LLMProvider = userProvider?.provider ?? this.llm;
-    const providerName = userProvider?.providerName ?? (llm as any).providerName ?? 'openai';
-    const modelName = userProvider?.model ?? (llm as any).modelName ?? 'gpt-4-turbo-preview';
+    const providerName = userProvider?.providerName ?? llm.providerName ?? 'openai';
+    const modelName = userProvider?.model ?? llm.modelName ?? 'gpt-4-turbo-preview';
 
     let stepNumber = 1;
     const maxIterations = 15;

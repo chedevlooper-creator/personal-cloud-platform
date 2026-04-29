@@ -10,6 +10,22 @@ import { OpenAIEmbeddingProvider } from './embeddings/openai';
 import { LocalHashEmbeddingProvider } from './embeddings/local';
 import { env } from './env';
 
+type MemorySearchRow = {
+  id: string;
+  user_id: string;
+  workspace_id: string | null;
+  type: string;
+  content: string;
+  metadata: unknown;
+  created_at: Date | string;
+  updated_at: Date | string;
+  similarity: number;
+};
+
+type SqlRowsResult<T> = {
+  rows?: T[];
+};
+
 export class MemoryService {
   private embeddings: EmbeddingProvider;
 
@@ -100,7 +116,8 @@ export class MemoryService {
       LIMIT ${limit}
     `);
 
-    const rows: any[] = (results as any).rows ?? (results as any) ?? [];
+    const typedResults = results as SqlRowsResult<MemorySearchRow> | MemorySearchRow[];
+    const rows = Array.isArray(typedResults) ? typedResults : typedResults.rows ?? [];
     if (typeof minSimilarity === 'number') {
       return rows.filter(
         (row) => typeof row.similarity === 'number' && row.similarity >= minSimilarity,

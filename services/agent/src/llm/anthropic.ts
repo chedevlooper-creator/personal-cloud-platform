@@ -3,6 +3,17 @@ import { LLMProvider, Message, ToolDefinition, LLMResponse, ToolCall } from './t
 
 type AnthropicAuthMode = 'api-key' | 'bearer';
 
+function toAnthropicRole(role: Message['role']): 'user' | 'assistant' {
+  return role === 'assistant' ? 'assistant' : 'user';
+}
+
+function toAnthropicInputSchema(parameters: ToolDefinition['parameters']) {
+  return {
+    type: 'object' as const,
+    ...parameters,
+  };
+}
+
 export class AnthropicProvider implements LLMProvider {
   readonly providerName: string;
   readonly modelName: string;
@@ -26,7 +37,7 @@ export class AnthropicProvider implements LLMProvider {
 
   async generate(messages: Message[], tools?: ToolDefinition[]): Promise<LLMResponse> {
     const formattedMessages = messages.filter(m => m.role !== 'system').map(m => ({
-      role: m.role as any,
+      role: toAnthropicRole(m.role),
       content: m.content,
     }));
 
@@ -35,7 +46,7 @@ export class AnthropicProvider implements LLMProvider {
     const formattedTools = tools?.map(t => ({
       name: t.name,
       description: t.description,
-      input_schema: t.parameters as any,
+      input_schema: toAnthropicInputSchema(t.parameters),
     }));
 
     const response = await this.client.messages.create({
@@ -44,20 +55,19 @@ export class AnthropicProvider implements LLMProvider {
       system: systemMessage,
       messages: formattedMessages,
       tools: formattedTools,
-    } as any);
+    });
 
     let contentStr = null;
     const toolCalls: ToolCall[] = [];
 
     for (const block of response.content) {
-      const b = block as any;
-      if (b.type === 'text') {
-        contentStr = b.text;
-      } else if (b.type === 'tool_use') {
+      if (block.type === 'text') {
+        contentStr = block.text;
+      } else if (block.type === 'tool_use') {
         toolCalls.push({
-          id: b.id,
-          name: b.name,
-          arguments: JSON.stringify(b.input),
+          id: block.id,
+          name: block.name,
+          arguments: JSON.stringify(block.input),
         });
       }
     }

@@ -7,6 +7,10 @@ import { env } from './env';
 import type { FastifyRequest } from 'fastify';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
+type RuntimeTerminalParams = {
+  id: string;
+};
+
 export async function setupRuntimeRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const runtimeService = new RuntimeService(fastify.log);
@@ -150,7 +154,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
         return;
       }
 
-      const { id } = request.params as any;
+      const { id } = request.params as RuntimeTerminalParams;
       try {
         const stream = await runtimeService.attachTerminal(id, userId);
         

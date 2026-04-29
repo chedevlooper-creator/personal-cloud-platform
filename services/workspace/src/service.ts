@@ -14,6 +14,7 @@ import {
 } from '@pcp/db/src/session';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { PassThrough } from 'node:stream';
+import type { Readable } from 'node:stream';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { env } from './env';
 
@@ -75,7 +76,7 @@ class S3WorkspaceObjectStorage implements WorkspaceObjectStorage {
       params: {
         Bucket: this.bucket,
         Key: key,
-        Body: stream as any,
+        Body: stream as Readable,
         ContentType: contentType,
       },
     });

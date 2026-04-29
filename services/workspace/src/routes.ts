@@ -19,6 +19,15 @@ import { env } from './env';
 import type { FastifyRequest } from 'fastify';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
+type WildcardFileParams = {
+  id: string;
+  '*': string;
+};
+
+type MultipartFieldWithValue = {
+  value?: unknown;
+};
+
 export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const workspaceService = new WorkspaceService(fastify.log);
@@ -313,7 +322,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
-      const filePath = '/' + (request.params as any)['*'];
+      const filePath = '/' + (request.params as WildcardFileParams)['*'];
       const file = await workspaceService.getFile(request.params.id, userId, filePath);
 
       if (!file) {
@@ -426,7 +435,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         return sendApiError(reply, 400, 'BAD_REQUEST', 'No file uploaded');
       }
 
-      const targetPath = (data.fields.path as any)?.value || `/${data.filename}`;
+      const targetPathField = data.fields.path as MultipartFieldWithValue | undefined;
+      const targetPath =
+        typeof targetPathField?.value === 'string' ? targetPathField.value : `/${data.filename}`;
       const name = targetPath.split('/').filter(Boolean).pop() || data.filename;
 
       try {
@@ -476,7 +487,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
-      const filePath = '/' + (request.params as any)['*'];
+      const filePath = '/' + (request.params as WildcardFileParams)['*'];
       await workspaceService.deleteFile(request.params.id, userId, filePath);
 
       return { success: true };
