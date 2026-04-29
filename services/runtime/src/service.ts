@@ -156,17 +156,9 @@ export class RuntimeService {
     const hostPath = await this.resolveWorkspaceHostPath(userId, runtime.workspaceId);
     await this.materializeWorkspace(userId, runtime.workspaceId, hostPath);
 
-    const execPromise = this.provider.exec(runtime.containerId, command);
-    const timeoutPromise = new Promise<{ stdout: string; stderr: string; exitCode: number }>(
-      (_, reject) => {
-        setTimeout(
-          () => reject(new Error('Command execution timed out after 60 seconds')),
-          RUNTIME_COMMAND_POLICY.timeoutMs,
-        );
-      },
-    );
-
-    const result = await Promise.race([execPromise, timeoutPromise]);
+    const result = await this.provider.exec(runtime.containerId, command, {
+      timeoutMs: RUNTIME_COMMAND_POLICY.timeoutMs,
+    });
 
     // After exec, push any small text files back to the workspace so that
     // outputs (e.g. generated build artifacts under the workspace root) become
@@ -197,6 +189,10 @@ export class RuntimeService {
   }
 
   async attachTerminal(runtimeId: string, userId: string) {
+    if (!env.RUNTIME_TERMINAL_ENABLED) {
+      throw Object.assign(new Error('Runtime terminal is disabled'), { statusCode: 403 });
+    }
+
     const runtime = await this.getRuntime(runtimeId, userId);
     if (!runtime || !runtime.containerId || runtime.status !== 'running') {
       throw new Error('Runtime not running or container not found');

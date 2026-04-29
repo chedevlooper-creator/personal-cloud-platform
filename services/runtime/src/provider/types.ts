@@ -12,12 +12,25 @@ export interface ExecResult {
   stderr: string;
 }
 
+export interface RuntimeExecOptions {
+  timeoutMs?: number;
+}
+
+export class RuntimeExecTimeoutError extends Error {
+  statusCode = 408;
+
+  constructor(timeoutMs: number) {
+    super(`Command execution timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+    this.name = 'RuntimeExecTimeoutError';
+  }
+}
+
 export interface RuntimeProvider {
   create(image: string, options: RuntimeOptions): Promise<string>;
   start(id: string): Promise<void>;
   stop(id: string): Promise<void>;
   destroy(id: string): Promise<void>;
-  exec(id: string, command: string[]): Promise<ExecResult>;
+  exec(id: string, command: string[], options?: RuntimeExecOptions): Promise<ExecResult>;
   attach(id: string): Promise<NodeJS.ReadWriteStream>;
   getStatus(id: string): Promise<string>;
 }

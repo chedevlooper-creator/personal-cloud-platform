@@ -1,6 +1,12 @@
 import Docker from 'dockerode';
 import { Writable } from 'node:stream';
-import { RuntimeProvider, RuntimeOptions, ExecResult } from './types';
+import {
+  RuntimeExecOptions,
+  RuntimeExecTimeoutError,
+  RuntimeProvider,
+  RuntimeOptions,
+  ExecResult,
+} from './types';
 import { env } from '../env';
 import { buildRuntimeSecurityOptions } from '../policy';
 
@@ -75,7 +81,7 @@ export class DockerProvider implements RuntimeProvider {
     await container.remove();
   }
 
-  async exec(id: string, command: string[]): Promise<ExecResult> {
+  async exec(id: string, command: string[], options: RuntimeExecOptions = {}): Promise<ExecResult> {
     const container = this.docker.getContainer(id);
     const exec = await container.exec({
       Cmd: command,
@@ -90,6 +96,24 @@ export class DockerProvider implements RuntimeProvider {
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
+      let settled = false;
+
+      const timeout = options.timeoutMs
+        ? setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            stream.destroy?.();
+            container.kill().catch(() => undefined);
+            reject(new RuntimeExecTimeoutError(options.timeoutMs ?? 0));
+          }, options.timeoutMs)
+        : undefined;
+
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        callback();
+      };
 
       const stdoutSink = new Writable({
         write(chunk, _encoding, callback) {
@@ -112,15 +136,23 @@ export class DockerProvider implements RuntimeProvider {
       );
 
       stream.on('end', async () => {
-        const status = await exec.inspect();
-        resolve({
-          exitCode: status.ExitCode || 0,
-          stdout,
-          stderr,
+        finish(async () => {
+          try {
+            const status = await exec.inspect();
+            resolve({
+              exitCode: status.ExitCode || 0,
+              stdout,
+              stderr,
+            });
+          } catch (err) {
+            reject(err);
+          }
         });
       });
 
-      stream.on('error', reject);
+      stream.on('error', (err) => {
+        finish(() => reject(err));
+      });
     });
   }
 

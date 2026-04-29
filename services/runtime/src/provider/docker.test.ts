@@ -1,17 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createContainer, containerExec } = vi.hoisted(() => {
+const { createContainer, containerExec, containerKill } = vi.hoisted(() => {
   const mockContainer = { id: 'container-1' };
   const containerExec = vi.fn(async () => ({
     start: vi.fn(async () => ({
       on: vi.fn(),
       write: vi.fn(),
       end: vi.fn(),
+      destroy: vi.fn(),
     })),
+    inspect: vi.fn(async () => ({ ExitCode: 0 })),
   }));
+  const containerKill = vi.fn(async () => undefined);
   return {
     createContainer: vi.fn(async () => mockContainer),
     containerExec,
+    containerKill,
   };
 });
 
@@ -20,6 +24,7 @@ vi.mock('dockerode', () => ({
     createContainer,
     getContainer: vi.fn(() => ({
       exec: containerExec,
+      kill: containerKill,
       modem: { demuxStream: vi.fn() },
     })),
   })),
@@ -123,6 +128,35 @@ describe('DockerProvider sandbox options', () => {
         Tty: true,
       }),
     );
+  });
+
+  it('kills the runtime container when an exec command times out', async () => {
+    vi.useFakeTimers();
+    try {
+      const streamHandlers = new Map<string, (...args: unknown[]) => void>();
+      const stream = {
+        on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+          streamHandlers.set(event, handler);
+          return stream;
+        }),
+        destroy: vi.fn(),
+      };
+      containerExec.mockResolvedValueOnce({
+        start: vi.fn(async () => stream),
+        inspect: vi.fn(async () => ({ ExitCode: 0 })),
+      });
+      const { DockerProvider } = await import('./docker');
+      const provider = new DockerProvider();
+
+      const result = provider.exec('container-1', ['sleep', '120'], { timeoutMs: 1000 });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(result).rejects.toThrow('Command execution timed out after 1 seconds');
+      expect(stream.destroy).toHaveBeenCalled();
+      expect(containerKill).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
