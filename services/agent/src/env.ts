@@ -1,7 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import { isUnsafeEnvValue, resolveProductionValue, resolveSecret } from '@pcp/shared';
+import {
+  assertEncryptionKey,
+  isUnsafeEnvValue,
+  resolveProductionValue,
+  resolveSecret,
+} from '@pcp/shared';
 
 loadLocalEnv();
 
@@ -75,8 +80,26 @@ export const env = {
   WEB_SEARCH_PROVIDER: parsed.WEB_SEARCH_PROVIDER,
   WEB_SEARCH_API_KEY: parsed.WEB_SEARCH_API_KEY,
   WEB_FETCH_MAX_BYTES: parsed.WEB_FETCH_MAX_BYTES,
-  ENCRYPTION_KEY: parsed.ENCRYPTION_KEY,
+  ENCRYPTION_KEY: resolveAgentEncryptionKey(parsed.ENCRYPTION_KEY),
 };
+
+/**
+ * The agent service decrypts user-provided LLM provider credentials with
+ * AES-256-GCM. In production we refuse to start without a strong key — a
+ * weak/missing key would silently fail every decrypt, masking config bugs.
+ * In development we permit an undefined key (decrypt simply returns null).
+ */
+function resolveAgentEncryptionKey(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (ctx.isProduction) {
+    if (!trimmed || trimmed.length !== 32 || isUnsafeEnvValue(trimmed)) {
+      throw new Error('ENCRYPTION_KEY must be a 32-character non-default value in production');
+    }
+    assertEncryptionKey('ENCRYPTION_KEY', trimmed, ctx);
+    return trimmed;
+  }
+  return trimmed || undefined;
+}
 
 function loadLocalEnv(): void {
   const root = findWorkspaceRoot(process.cwd());
