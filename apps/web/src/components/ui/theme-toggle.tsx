@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/button';
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  // SSR/CSR mount-detection: the only safe way to avoid hydration
+  // mismatch when the resolved theme depends on `localStorage` is to
+  // flip a flag once on mount.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   // Use a stable label until mounted so SSR markup matches the first client render.

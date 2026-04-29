@@ -126,7 +126,7 @@ export function MainCanvas({
       </header>
 
       {/* Main Content */}
-      <main className="h-[calc(100vh-3.5rem)] overflow-auto">{children}</main>
+      <main id="main-content" tabIndex={-1} className="h-[calc(100vh-3.5rem)] overflow-auto">{children}</main>
     </section>
   );
 }

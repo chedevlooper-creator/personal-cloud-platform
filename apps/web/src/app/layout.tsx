@@ -34,6 +34,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased bg-background text-foreground`}
       >
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         <Providers>
           {children}
         </Providers>

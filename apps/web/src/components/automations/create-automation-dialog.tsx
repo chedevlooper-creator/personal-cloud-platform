@@ -50,6 +50,10 @@ export function CreateAutomationDialog({ open, onOpenChange }: CreateAutomationD
 
   useEffect(() => {
     if (open && !workspaceId && workspaces.length > 0 && workspaces[0]) {
+      // Default-select the first workspace when the dialog opens; the
+      // selection is user-overridable so the cascading-render warning is
+      // not applicable here.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWorkspaceId(workspaces[0].id);
     }
   }, [open, workspaces, workspaceId]);

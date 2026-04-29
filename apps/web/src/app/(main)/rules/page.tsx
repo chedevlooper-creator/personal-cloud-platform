@@ -25,6 +25,9 @@ export default function RulesPage() {
   });
 
   useEffect(() => {
+    // Sync server-loaded rules into the local edit buffer when the query
+    // resolves; safe one-shot per `data` change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (data) setRules(data.rules ?? '');
   }, [data]);
 
