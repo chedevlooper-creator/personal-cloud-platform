@@ -104,6 +104,8 @@ export default function WorkspaceTerminal({ workspaceId }: { workspaceId: string
           className="h-8 w-8 text-zinc-400 hover:text-white mr-2"
           onClick={() => createRuntimeMutation.mutate()}
           disabled={createRuntimeMutation.isPending}
+          aria-label="New terminal session"
+          title="New terminal session"
         >
           {createRuntimeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         </Button>

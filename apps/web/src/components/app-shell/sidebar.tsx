@@ -123,6 +123,8 @@ export function Sidebar({
             type="button"
             title="More"
             aria-label="Toggle more navigation"
+            aria-expanded={moreOpen}
+            aria-controls="sidebar-more-section"
             className={cn(
               'flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-[15px] text-[#A8A8A8] transition-colors hover:bg-[#303134] hover:text-[#F0F0F0]',
               collapsed && 'mx-auto w-8 justify-center px-0',
@@ -139,7 +141,7 @@ export function Sidebar({
             {!collapsed && <span>More</span>}
           </button>
           {moreOpen && (
-            <div className="mt-0.5 space-y-0.5">
+            <div id="sidebar-more-section" className="mt-0.5 space-y-0.5">
               {moreItems.map((item) => (
                 <SidebarItem
                   key={item.label}

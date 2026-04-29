@@ -1,15 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createContainer } = vi.hoisted(() => {
+const { createContainer, containerExec } = vi.hoisted(() => {
   const mockContainer = { id: 'container-1' };
+  const containerExec = vi.fn(async () => ({
+    start: vi.fn(async () => ({
+      on: vi.fn(),
+      write: vi.fn(),
+      end: vi.fn(),
+    })),
+  }));
   return {
     createContainer: vi.fn(async () => mockContainer),
+    containerExec,
   };
 });
 
 vi.mock('dockerode', () => ({
   default: vi.fn(() => ({
     createContainer,
+    getContainer: vi.fn(() => ({
+      exec: containerExec,
+      modem: { demuxStream: vi.fn() },
+    })),
   })),
 }));
 
@@ -95,6 +107,22 @@ describe('DockerProvider sandbox options', () => {
       restoreEnvValue('RUNTIME_APPARMOR_PROFILE', originalAppArmorProfile);
       vi.resetModules();
     }
+  });
+
+  it('creates exec sessions as the sandbox user in the workspace', async () => {
+    const { DockerProvider } = await import('./docker');
+    const provider = new DockerProvider();
+
+    await provider.attach('container-1');
+
+    expect(containerExec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Cmd: ['/bin/sh'],
+        User: '1000:1000',
+        WorkingDir: '/workspace',
+        Tty: true,
+      }),
+    );
   });
 });
 

@@ -238,6 +238,7 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
             size="icon"
             className="h-9 w-9 bg-blue-600 hover:bg-blue-500"
             disabled={!input.trim() || sendMutation.isPending}
+            aria-label={sendMutation.isPending ? 'Sending message' : 'Send message'}
           >
             {sendMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

@@ -136,8 +136,8 @@ export class DockerProvider implements RuntimeProvider {
       Tty: true,
     });
     const stream = await exec.start({
-      stream: true,
       stdin: true,
+      Tty: true,
     });
     return stream;
   }
