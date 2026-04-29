@@ -60,7 +60,7 @@ Snapshot of where the platform is right now. Replaces the old "Faz 0–7" tracke
 - Streaming responses (currently single-shot).
 - Token / cost telemetry stored on `task_steps`.
 - Required-approval gating for high-risk tools (run_command, browser fill).
-- pgvector HNSW/IVFFlat index for memory + retrieval reranking.
+- Retrieval reranking on top of pgvector HNSW (added in migration `0010`).
 
 ### Observability
 - `correlationId` + `userId` consistently attached to every pino log.

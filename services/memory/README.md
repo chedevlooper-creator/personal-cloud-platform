@@ -38,9 +38,13 @@ The pgvector extension is required (`postgres:pgvector` image is wired up
 in `infra/docker/docker-compose.yml`). The schema declares a custom
 Drizzle type for `vector(1536)` in
 [`packages/db/src/schema/memory_entries.ts`](../../packages/db/src/schema/memory_entries.ts).
-A production-grade ivfflat/hnsw index is **not** yet created — searches
-are sequential scans today; tracked in
-[docs/PROGRESS.md](../../docs/PROGRESS.md).
+Migration `0010_memory_vector_index.sql` creates an HNSW index on
+`embedding vector_l2_ops` plus btree indexes on `(user_id, type)` and
+`(user_id, workspace_id)` to support tenant-filtered nearest-neighbor
+search. HNSW is used because it works on empty tables, unlike IVFFlat
+(which requires training rows). Both embedding providers emit
+L2-normalized vectors, so L2 ranking matches cosine ranking — the
+index's `vector_l2_ops` opclass aligns with the runtime `<->` operator.
 
 ## Environment
 

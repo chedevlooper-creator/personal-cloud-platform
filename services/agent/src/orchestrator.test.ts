@@ -309,4 +309,58 @@ describe('AgentOrchestrator', () => {
       true,
     );
   });
+
+  it('persists provider, model, token usage, and latency metadata for completed agent runs', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    mockDb.query.tasks.findFirst.mockResolvedValue({
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      conversationId: CONVERSATION_ID,
+      input: 'answer directly',
+      output: null,
+      status: 'pending',
+      metadata: { personaId: null, skillIds: [] },
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    });
+    const generate = vi.fn(async () => ({
+      content: 'done',
+      usage: {
+        promptTokens: 11,
+        completionTokens: 7,
+        totalTokens: 18,
+      },
+    }));
+    const orchestrator = new AgentOrchestrator(logger) as unknown as {
+      llm: { generate: typeof generate };
+      runAgentLoop: (taskId: string, userId: string) => Promise<void>;
+    };
+    orchestrator.llm = { generate };
+
+    await orchestrator.runAgentLoop(TASK_ID, USER_ID);
+
+    const completed = updatedValues.find((value) => value.status === 'completed');
+    expect(completed).toMatchObject({
+      output: 'done',
+      metadata: {
+        personaId: null,
+        skillIds: [],
+        agentRun: {
+          provider: 'openai',
+          model: 'gpt-4-turbo-preview',
+          iterations: 1,
+          usage: {
+            promptTokens: 11,
+            completionTokens: 7,
+            totalTokens: 18,
+          },
+        },
+      },
+    });
+    expect(
+      (completed as { metadata?: { agentRun?: { latencyMs?: number } } }).metadata?.agentRun
+        ?.latencyMs,
+    ).toEqual(expect.any(Number));
+  });
 });

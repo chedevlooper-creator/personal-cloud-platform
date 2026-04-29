@@ -86,7 +86,9 @@ export class MemoryService {
 
     const whereClause = sql.join(conditions, sql` AND `);
 
-    // Using exact cosine distance with <-> operator from pgvector
+    // L2 distance via pgvector `<->`. Both embedding providers emit
+    // L2-normalized vectors, so L2 ranking is monotonic with cosine ranking.
+    // The 0010 migration adds an HNSW index on (embedding vector_l2_ops).
     const results = await db.execute(sql`
       SELECT id, user_id, workspace_id, type, content, metadata, created_at, updated_at,
              1 - (embedding <-> ${embeddingStr}::vector) as similarity
