@@ -1,10 +1,9 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Plus, TerminalSquare, Trash2, X } from 'lucide-react';
+import { Plus, TerminalSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 
 const BLOCKED_PATTERNS = [
@@ -43,7 +42,6 @@ export default function TerminalPage() {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [confirmCommand, setConfirmCommand] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

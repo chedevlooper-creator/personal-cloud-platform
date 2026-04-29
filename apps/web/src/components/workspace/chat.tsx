@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send, Bot, Loader2, CheckCircle2, XCircle } from 'lucide-react';
@@ -66,7 +66,7 @@ export default function WorkspaceChat({ workspaceId }: { workspaceId: string }) 
     },
   });
 
-  const messages = messagesData?.messages || [];
+  const messages = useMemo(() => messagesData?.messages ?? [], [messagesData]);
 
   // Scroll to bottom
   useEffect(() => {

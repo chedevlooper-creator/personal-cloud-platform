@@ -46,7 +46,7 @@ export default function DatasetsPage() {
     },
     retry: false,
   });
-  const datasets = data ?? [];
+  const datasets = useMemo(() => data ?? [], [data]);
   const active = useMemo(
     () => datasets.find((d) => d.id === activeId) ?? null,
     [datasets, activeId],

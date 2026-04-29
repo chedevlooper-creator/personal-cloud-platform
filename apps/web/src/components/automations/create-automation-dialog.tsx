@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -46,7 +46,10 @@ export function CreateAutomationDialog({ open, onOpenChange }: CreateAutomationD
     },
     enabled: open,
   });
-  const workspaces = workspacesData?.workspaces ?? [];
+  const workspaces = useMemo(
+    () => workspacesData?.workspaces ?? [],
+    [workspacesData],
+  );
 
   useEffect(() => {
     if (open && !workspaceId && workspaces.length > 0 && workspaces[0]) {

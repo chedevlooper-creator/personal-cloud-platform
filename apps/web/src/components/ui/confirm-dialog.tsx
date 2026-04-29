@@ -4,7 +4,6 @@ import { useState } from 'react';
 import type React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 interface ConfirmDialogProps {
   open: boolean;

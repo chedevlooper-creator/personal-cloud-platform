@@ -5,9 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ExternalLink,
   Globe2,
-  Loader2,
   Play,
-  Plus,
   RefreshCw,
   Rocket,
   Server,
@@ -67,7 +65,10 @@ export default function HostingPage() {
     },
   });
 
-  const workspaces = workspacesQuery.data?.workspaces ?? [];
+  const workspaces = useMemo(
+    () => workspacesQuery.data?.workspaces ?? [],
+    [workspacesQuery.data],
+  );
   const defaultWorkspaceId = workspaceId || workspaces[0]?.id || '';
 
   const servicesQuery = useQuery({

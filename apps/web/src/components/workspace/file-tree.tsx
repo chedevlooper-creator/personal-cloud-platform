@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, File as FileIcon, Folder, FolderOpen, MoreVertical, Pencil, Trash, Download } from 'lucide-react';
+import { ChevronDown, ChevronRight, File as FileIcon, Folder, FolderOpen, Pencil, Trash, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { workspaceApi, toastApiError} from '@/lib/api';
 import { formatBytes, formatDate } from '@/lib/format';

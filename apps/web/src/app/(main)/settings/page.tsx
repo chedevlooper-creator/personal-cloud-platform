@@ -159,8 +159,6 @@ export default function SettingsPage() {
     onError: () => toast.error('Failed to revoke API key'),
   });
 
-  const savedProviderIds = new Set((providers || []).map((p) => p.provider));
-
   return (
     <div className="mx-auto max-w-4xl p-6">
       <h2 className="text-lg font-semibold text-foreground">Settings</h2>

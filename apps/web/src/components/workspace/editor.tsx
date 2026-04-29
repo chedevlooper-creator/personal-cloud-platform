@@ -10,7 +10,7 @@ import { workspaceApi, toastApiError} from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { useWorkspaceStore } from '@/store/workspace';
 import { cn } from '@/lib/utils';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 type FileContentResponse = {
   path: string;
@@ -37,7 +37,6 @@ export default function WorkspaceEditor() {
   } = useWorkspaceStore();
   const { resolvedTheme } = useTheme();
   const [draftContent, setDraftContent] = useState<DraftContent | null>(null);
-  const editorRef = useRef<unknown>(null);
 
   const {
     data: fileContent,

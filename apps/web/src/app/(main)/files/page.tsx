@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FolderPlus, Upload } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FolderPlus } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import FileTree from '@/components/workspace/file-tree';
@@ -15,7 +14,7 @@ type WorkspaceSummary = { id: string; name: string };
 type WorkspacesResponse = { workspaces: WorkspaceSummary[] };
 
 export default function FilesPage() {
-  const { currentWorkspaceId, setCurrentWorkspaceId, selectedFile } = useWorkspaceStore();
+  const { currentWorkspaceId, setCurrentWorkspaceId } = useWorkspaceStore();
 
   const { data, isLoading } = useQuery({
     queryKey: ['workspaces'],
@@ -25,7 +24,7 @@ export default function FilesPage() {
     },
   });
 
-  const workspaces = data?.workspaces ?? [];
+  const workspaces = useMemo(() => data?.workspaces ?? [], [data]);
 
   // Auto-select first workspace
   useEffect(() => {
