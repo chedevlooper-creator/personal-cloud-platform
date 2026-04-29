@@ -196,7 +196,7 @@ export class PublishService {
           [`traefik.http.services.${containerName}.loadbalancer.server.port`]: containerPort,
         },
         HostConfig: {
-          NetworkMode: 'pcp_network',
+          NetworkMode: env.PUBLISH_DOCKER_NETWORK,
           Binds: [`${workspaceVolume}:/workspace:ro`],
           Memory: 512 * 1024 * 1024,
           MemorySwap: 512 * 1024 * 1024,

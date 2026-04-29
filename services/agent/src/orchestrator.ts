@@ -248,11 +248,7 @@ export class AgentOrchestrator {
 
     // Fire & forget agent loop start
     this.runAgentLoop(task.id, userId).catch((err) => {
-      this.logger.error({ err, taskId: task.id }, 'Agent loop failed');
-      db.update(tasks)
-        .set({ status: 'failed', output: err.message })
-        .where(eq(tasks.id, task.id))
-        .execute();
+      void this.failTaskFromError(task.id, userId, err);
     });
 
     return task;
@@ -405,6 +401,7 @@ export class AgentOrchestrator {
   }
 
   private async runAgentLoop(taskId: string, userId: string) {
+    try {
     const task = await db.query.tasks.findFirst({
       where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)),
     });
@@ -634,6 +631,42 @@ export class AgentOrchestrator {
     });
     this.cleanupTaskEmitter(taskId);
     this.taskRuntimeIds.delete(taskId);
+    } catch (err) {
+      await this.failTaskFromError(taskId, userId, err);
+    }
+  }
+
+  /**
+   * Centralized failure path for the agent loop. Marks the task failed,
+   * emits the terminal status to SSE subscribers, and cleans up emitter +
+   * runtime maps so resources don't leak when the LLM provider throws after
+   * exhausting retries (network/429/5xx) or any unhandled exception escapes
+   * the loop body.
+   */
+  private async failTaskFromError(
+    taskId: string,
+    userId: string,
+    err: unknown,
+  ): Promise<void> {
+    const message = err instanceof Error ? err.message : String(err);
+    this.logger.error({ err, taskId, userId }, 'Agent loop failed');
+    try {
+      await db
+        .update(tasks)
+        .set({ status: 'failed', output: message, updatedAt: new Date() })
+        .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+      const updated = await db.query.tasks.findFirst({
+        where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)),
+      });
+      if (updated) this.emitTaskUpdate(taskId, updated);
+    } catch (writeErr) {
+      this.logger.error(
+        { err: writeErr, taskId, userId },
+        'Failed to persist agent loop failure',
+      );
+    }
+    this.cleanupTaskEmitter(taskId);
+    this.taskRuntimeIds.delete(taskId);
   }
 
   /**
@@ -720,7 +753,9 @@ export class AgentOrchestrator {
         .set({ status: 'executing', updatedAt: new Date() })
         .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
       // Resume
-      this.runAgentLoop(taskId, userId).catch(console.error);
+      this.runAgentLoop(taskId, userId).catch((err) =>
+        this.failTaskFromError(taskId, userId, err),
+      );
     } else {
       // Execute tool and resume
       const ctx = this.buildToolContext(taskId, userId, task.workspaceId);
@@ -775,7 +810,9 @@ export class AgentOrchestrator {
         .set({ status: 'executing', updatedAt: new Date() })
         .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
       // Resume
-      this.runAgentLoop(taskId, userId).catch(console.error);
+      this.runAgentLoop(taskId, userId).catch((err) =>
+        this.failTaskFromError(taskId, userId, err),
+      );
     }
   }
 

@@ -363,4 +363,51 @@ describe('AgentOrchestrator', () => {
         ?.latencyMs,
     ).toEqual(expect.any(Number));
   });
+
+  it('marks the task failed and emits a terminal update when the LLM provider throws', async () => {
+    // Regression: previously an uncaught provider exception left the task in
+    // 'executing' with no SSE update, leaking emitter listeners and runtime
+    // ids. The loop now wraps its body and routes failures through
+    // failTaskFromError so subscribers see the terminal state.
+    const { AgentOrchestrator } = await import('./orchestrator');
+    const taskRow = {
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      conversationId: CONVERSATION_ID,
+      input: 'will explode',
+      output: null,
+      status: 'pending',
+      metadata: { personaId: null, skillIds: [] },
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    };
+    mockDb.query.tasks.findFirst.mockResolvedValue(taskRow);
+
+    const generate = vi.fn(async () => {
+      throw new Error('upstream 503');
+    });
+    const emitTaskUpdate = vi.fn();
+    const orchestrator = new AgentOrchestrator(logger) as unknown as {
+      llm: { generate: typeof generate };
+      emitTaskUpdate: typeof emitTaskUpdate;
+      runAgentLoop: (taskId: string, userId: string) => Promise<void>;
+    };
+    orchestrator.llm = { generate };
+    orchestrator.emitTaskUpdate = emitTaskUpdate;
+
+    await expect(
+      orchestrator.runAgentLoop(TASK_ID, USER_ID),
+    ).resolves.toBeUndefined();
+
+    const failed = updatedValues.find(
+      (value) => value.status === 'failed' && value.output === 'upstream 503',
+    );
+    expect(failed).toBeDefined();
+    // Terminal state must be broadcast so SSE subscribers don't hang.
+    expect(emitTaskUpdate).toHaveBeenCalledWith(
+      TASK_ID,
+      expect.objectContaining({ id: TASK_ID }),
+    );
+  });
 });
