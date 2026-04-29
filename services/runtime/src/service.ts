@@ -69,17 +69,40 @@ export class RuntimeService {
 
     const hostWorkspacePath = await this.resolveWorkspaceHostPath(userId, workspaceId);
 
-    const containerId = await this.provider.create(image, {
-      ...options,
-      workspacePath: hostWorkspacePath,
-      labels: {
-        ...(options?.labels ?? {}),
-        'pcp.service': 'runtime',
-        'pcp.userId': userId,
-        'pcp.workspaceId': workspaceId,
-        'pcp.runtimeId': runtime.id,
-      },
-    });
+    let containerId: string;
+    try {
+      containerId = await this.provider.create(image, {
+        ...options,
+        workspacePath: hostWorkspacePath,
+        labels: {
+          ...(options?.labels ?? {}),
+          'pcp.service': 'runtime',
+          'pcp.userId': userId,
+          'pcp.workspaceId': workspaceId,
+          'pcp.runtimeId': runtime.id,
+        },
+      });
+    } catch (err) {
+      // Trace 13 (#13m): a Docker provisioning failure used to leave the
+      // runtime row pinned at status='pending' forever, requiring manual
+      // database cleanup. Mark the row failed and emit an event so listings,
+      // health probes, and the operator UI can move on.
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        { err, runtimeId: runtime.id, userId, workspaceId, image },
+        'Docker provisioning failed; marking runtime failed',
+      );
+      await db
+        .update(runtimes)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(and(eq(runtimes.id, runtime.id), eq(runtimes.userId, userId)));
+      await db.insert(runtimeEvents).values({
+        runtimeId: runtime.id,
+        type: 'failed',
+        payload: { stage: 'create', error: message },
+      });
+      throw err;
+    }
 
     await db
       .update(runtimes)

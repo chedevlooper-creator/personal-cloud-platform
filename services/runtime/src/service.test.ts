@@ -270,6 +270,67 @@ describe('RuntimeService workspace ownership', () => {
     expect(predicateContainsEq(deleteWhere, runtimes.id, 'runtime-1')).toBe(true);
     expect(predicateContainsEq(deleteWhere, runtimes.userId, USER_ID)).toBe(true);
   });
+
+  it('marks the runtime failed and emits a failed event when Docker provisioning throws', async () => {
+    // Trace 13 (#13m) regression: previously a Docker provisioning error left
+    // the runtime row pinned at status='pending' and required manual cleanup.
+    // The error path now updates the row to 'failed' and inserts a runtime
+    // event capturing the stage + error message before rethrowing.
+    const { RuntimeService } = await import('./service');
+    mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
+
+    const insertedTables: string[] = [];
+    const insertedValues: Record<string, unknown>[] = [];
+    let updatedSet: Record<string, unknown> | null = null;
+    mockDb.insert.mockImplementation(((table: unknown) => {
+      const tableName =
+        (table && typeof table === 'object' && 'name' in (table as Record<string, unknown>)
+          ? String((table as { name?: unknown }).name)
+          : '') || 'unknown';
+      insertedTables.push(tableName);
+      return {
+        values: vi.fn(((value: Record<string, unknown>) => {
+          insertedValues.push(value);
+          return {
+            returning: vi.fn(async () => [
+              {
+                id: '550e8400-e29b-41d4-a716-446655440003',
+                userId: USER_ID,
+                workspaceId: WORKSPACE_ID,
+                image: 'node:20-alpine',
+                status: 'pending',
+                createdAt: new Date('2026-04-27T00:00:00.000Z'),
+                updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+              },
+            ]),
+          };
+        }) as never) as never,
+      };
+    }) as never);
+    mockDb.update.mockReturnValue({
+      set: vi.fn(((value: Record<string, unknown>) => {
+        updatedSet = value;
+        return { where: vi.fn() };
+      }) as never) as never,
+    });
+    providerCreate.mockRejectedValueOnce(new Error('docker daemon unreachable'));
+
+    const service = new RuntimeService(logger);
+
+    await expect(
+      service.createRuntime(USER_ID, WORKSPACE_ID, 'node:20-alpine', {}),
+    ).rejects.toThrow('docker daemon unreachable');
+
+    expect(updatedSet).toMatchObject({ status: 'failed' });
+    const failedEvent = insertedValues.find(
+      (value) => value.type === 'failed' && (value.payload as { stage?: string })?.stage === 'create',
+    );
+    expect(failedEvent).toBeDefined();
+    expect(failedEvent?.payload).toMatchObject({
+      stage: 'create',
+      error: 'docker daemon unreachable',
+    });
+  });
 });
 
 function predicateContainsEq(predicate: unknown, column: unknown, value: unknown): boolean {
