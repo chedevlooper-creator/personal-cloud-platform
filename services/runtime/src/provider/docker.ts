@@ -25,11 +25,15 @@ export class DockerProvider implements RuntimeProvider {
       HostConfig: {
         Binds: [`${options.workspacePath}:/workspace`],
         Memory: memoryMb * 1024 * 1024,
+        MemorySwap: memoryMb * 1024 * 1024,
         // Docker expects NanoCpus as an integer; round to preserve the requested
         // CPU allocation despite floating-point imprecision in `cpu * 1e9`.
         NanoCpus: Math.round(cpu * 1e9),
         NetworkMode: 'none', // Default security: no network
         ReadonlyRootfs: true,
+        Privileged: false,
+        Init: true,
+        OomKillDisable: false,
         CapDrop: ['ALL'],
         PidsLimit: 100,
         SecurityOpt: ['no-new-privileges:true'],

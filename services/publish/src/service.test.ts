@@ -157,7 +157,13 @@ describe('PublishService security boundaries', () => {
         HostConfig: expect.objectContaining({
           NetworkMode: 'pcp_network',
           Binds: [`/tmp/workspaces/${USER_ID}/${WORKSPACE_ID}:/workspace:ro`],
+          Memory: 512 * 1024 * 1024,
+          MemorySwap: 512 * 1024 * 1024,
+          NanoCpus: 1_000_000_000,
           ReadonlyRootfs: true,
+          Privileged: false,
+          Init: true,
+          OomKillDisable: false,
           CapDrop: ['ALL'],
           PidsLimit: 100,
           SecurityOpt: expect.arrayContaining(['no-new-privileges:true']),

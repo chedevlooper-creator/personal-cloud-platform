@@ -48,9 +48,13 @@ describe('DockerProvider sandbox options', () => {
         HostConfig: expect.objectContaining({
           Binds: ['/tmp/workspaces/workspace-1:/workspace'],
           Memory: 4 * 1024 * 1024 * 1024,
+          MemorySwap: 4 * 1024 * 1024 * 1024,
           NanoCpus: 4_000_000_000,
           NetworkMode: 'none',
           ReadonlyRootfs: true,
+          Privileged: false,
+          Init: true,
+          OomKillDisable: false,
           CapDrop: ['ALL'],
           PidsLimit: 100,
           SecurityOpt: expect.arrayContaining(['no-new-privileges:true']),
