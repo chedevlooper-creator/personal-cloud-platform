@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveExternalValue, resolveProductionValue, resolveSecret } from '@pcp/shared';
 
 const rawEnv = {
   ...process.env,
@@ -15,63 +16,18 @@ const envSchema = z.object({
 });
 
 const parsed = envSchema.parse(rawEnv);
-const isProduction = parsed.NODE_ENV === 'production';
+const ctx = { isProduction: parsed.NODE_ENV === 'production' };
 
 export const env = {
   NODE_ENV: parsed.NODE_ENV,
   PORT: parsed.PORT,
-  DATABASE_URL: resolveProductionValue('DATABASE_URL', parsed.DATABASE_URL),
-  COOKIE_SECRET: resolveSecret('COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
-  OPENAI_API_KEY: resolveProviderKey('OPENAI_API_KEY', parsed.OPENAI_API_KEY),
+  DATABASE_URL: resolveProductionValue(ctx, 'DATABASE_URL', parsed.DATABASE_URL),
+  COOKIE_SECRET: resolveSecret(ctx, 'COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
+  OPENAI_API_KEY: resolveExternalValue(ctx, 'OPENAI_API_KEY', parsed.OPENAI_API_KEY),
   INTERNAL_SERVICE_TOKEN: resolveSecret(
+    ctx,
     'INTERNAL_SERVICE_TOKEN',
     parsed.INTERNAL_SERVICE_TOKEN,
     32,
   ),
 };
-
-function resolveSecret(name: string, value: string | undefined, minLength: number): string {
-  const resolved = value?.trim() || makeDevelopmentSecret(minLength, name);
-  if (resolved.length < minLength) {
-    throw new Error(`${name} must be at least ${minLength} characters long`);
-  }
-  if (isProduction && isUnsafeValue(resolved)) {
-    throw new Error(`${name} must be set to a non-default value in production`);
-  }
-  return resolved;
-}
-
-function resolveProviderKey(name: string, value: string | undefined): string {
-  const resolved = value?.trim() || makeDevelopmentValue(name);
-  if (isProduction && isUnsafeValue(resolved)) {
-    throw new Error(`${name} must be set to a non-default value in production`);
-  }
-  return resolved;
-}
-
-function resolveProductionValue(name: string, value: string | undefined): string {
-  const resolved = value?.trim() || '';
-  if (isProduction && (!resolved || isUnsafeValue(resolved))) {
-    throw new Error(`${name} must be set to a non-default value in production`);
-  }
-  return resolved;
-}
-
-function isUnsafeValue(value: string): boolean {
-  const lower = value.toLowerCase();
-  return (
-    lower.includes('change_me') ||
-    lower.includes('replace') ||
-    lower.includes('dummy') ||
-    lower.startsWith('dev-')
-  );
-}
-
-function makeDevelopmentSecret(length: number, name: string): string {
-  const seed = `dev-${name.toLowerCase().replace(/_/g, '-')}-`;
-  return seed.repeat(Math.ceil(length / seed.length)).slice(0, length);
-}
-
-function makeDevelopmentValue(name: string): string {
-  return `dev-${name.toLowerCase().replace(/_/g, '-')}`;
-}

@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import {
+  assertEncryptionKey,
+  isUnsafeEnvValue,
+  makeDevelopmentSecret,
+  resolveExternalValue,
+  resolveSecret,
+} from '@pcp/shared';
 
 const rawEnv = {
   ...process.env,
@@ -20,66 +27,25 @@ const envSchema = z.object({
 });
 
 const parsed = envSchema.parse(rawEnv);
-const isProduction = parsed.NODE_ENV === 'production';
+const ctx = { isProduction: parsed.NODE_ENV === 'production' };
 
 export const env = {
   NODE_ENV: parsed.NODE_ENV,
   PORT: parsed.PORT,
-  COOKIE_SECRET: resolveSecret('COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
+  COOKIE_SECRET: resolveSecret(ctx, 'COOKIE_SECRET', parsed.COOKIE_SECRET, 32),
   ENCRYPTION_KEY: resolveEncryptionKey(parsed.ENCRYPTION_KEY),
-  GOOGLE_CLIENT_ID: resolveExternalValue('GOOGLE_CLIENT_ID', parsed.GOOGLE_CLIENT_ID),
-  GOOGLE_CLIENT_SECRET: resolveExternalValue('GOOGLE_CLIENT_SECRET', parsed.GOOGLE_CLIENT_SECRET),
+  GOOGLE_CLIENT_ID: resolveExternalValue(ctx, 'GOOGLE_CLIENT_ID', parsed.GOOGLE_CLIENT_ID),
+  GOOGLE_CLIENT_SECRET: resolveExternalValue(ctx, 'GOOGLE_CLIENT_SECRET', parsed.GOOGLE_CLIENT_SECRET),
   GOOGLE_CALLBACK_URL: parsed.GOOGLE_CALLBACK_URL,
   FRONTEND_URL: parsed.FRONTEND_URL,
   ADMIN_EMAIL: parsed.ADMIN_EMAIL?.trim().toLowerCase(),
 };
 
-function resolveSecret(name: string, value: string | undefined, minLength: number): string {
-  const resolved = value?.trim() || makeDevelopmentSecret(minLength, name);
-  if (resolved.length < minLength) {
-    throw new Error(`${name} must be at least ${minLength} characters long`);
-  }
-  if (isProduction && isUnsafeSecret(resolved)) {
-    throw new Error(`${name} must be set to a non-default value in production`);
-  }
-  return resolved;
-}
-
 function resolveEncryptionKey(value: string | undefined): string {
   const resolved = value?.trim() || makeDevelopmentSecret(32, 'ENCRYPTION_KEY');
-  if (Buffer.byteLength(resolved, 'utf8') !== 32) {
-    throw new Error('ENCRYPTION_KEY must be exactly 32 bytes long');
-  }
-  if (isProduction && isUnsafeSecret(resolved)) {
+  if (ctx.isProduction && (!value?.trim() || isUnsafeEnvValue(resolved))) {
     throw new Error('ENCRYPTION_KEY must be set to a non-default value in production');
   }
+  assertEncryptionKey('ENCRYPTION_KEY', resolved, ctx);
   return resolved;
-}
-
-function resolveExternalValue(name: string, value: string | undefined): string {
-  const resolved = value?.trim() || makeDevelopmentValue(name);
-  if (isProduction && isUnsafeSecret(resolved)) {
-    throw new Error(`${name} must be set to a non-default value in production`);
-  }
-  return resolved;
-}
-
-function isUnsafeSecret(value: string): boolean {
-  const lower = value.toLowerCase();
-  return (
-    lower.includes('change_me') ||
-    lower.includes('replace') ||
-    lower.includes('dummy') ||
-    lower.startsWith('dev-') ||
-    value === '0123456789abcdef'.repeat(2)
-  );
-}
-
-function makeDevelopmentSecret(length: number, name: string): string {
-  const seed = `dev-${name.toLowerCase().replace(/_/g, '-')}-`;
-  return seed.repeat(Math.ceil(length / seed.length)).slice(0, length);
-}
-
-function makeDevelopmentValue(name: string): string {
-  return `dev-${name.toLowerCase().replace(/_/g, '-')}`;
 }
