@@ -14,6 +14,8 @@ import { AgentOrchestrator } from '../orchestrator';
 import { TelegramAdapter } from '../channels/telegram';
 import { handleIncoming } from '../channels/router';
 import { env } from '../env';
+import { createAuthMiddleware } from '@pcp/shared';
+import { validateSessionUserId } from '@pcp/db/src/session';
 
 type TelegramWebhookUpdate = {
   message?: {
@@ -36,11 +38,10 @@ export async function setupChannelsRoutes(fastify: FastifyInstance) {
   const orchestrator = new AgentOrchestrator(fastify.log);
   const telegram = TelegramAdapter.fromEnv();
 
-  async function getUserId(sessionId: string | undefined): Promise<string | null> {
-    if (env.AUTH_BYPASS) return 'local-dev-user';
-    if (!sessionId) return null;
-    return orchestrator.validateUserFromCookie(sessionId);
-  }
+  const getUserId = createAuthMiddleware({
+    authBypass: env.AUTH_BYPASS,
+    validateSession: validateSessionUserId,
+  });
 
   async function assertWorkspaceOwned(workspaceId: string | null | undefined, userId: string) {
     if (!workspaceId) return true;

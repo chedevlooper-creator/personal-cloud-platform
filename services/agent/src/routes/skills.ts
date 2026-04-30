@@ -7,7 +7,9 @@ import {
   updateSkillSchema,
   apiErrorCodeFromStatus,
   sendApiError,
+  createAuthMiddleware,
 } from '@pcp/shared';
+import { validateSessionUserId } from '@pcp/db/src/session';
 import { SkillsService } from '../skills/service';
 import { SKILL_CATALOG } from '../skills/catalog';
 import {
@@ -19,19 +21,16 @@ import {
   searchSkills,
   type RegistrySkill,
 } from '../skills/registry';
-import { AgentOrchestrator } from '../orchestrator';
 import { env } from '../env';
 
 export async function setupSkillsRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const service = new SkillsService();
-  const orchestrator = new AgentOrchestrator(fastify.log);
 
-  async function getUserId(sessionId: string | undefined): Promise<string | null> {
-    if (env.AUTH_BYPASS) return 'local-dev-user';
-    if (!sessionId) return null;
-    return orchestrator.validateUserFromCookie(sessionId);
-  }
+  const getUserId = createAuthMiddleware({
+    authBypass: env.AUTH_BYPASS,
+    validateSession: validateSessionUserId,
+  });
 
   server.get(
     '/skills',
