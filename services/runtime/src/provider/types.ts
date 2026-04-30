@@ -25,6 +25,23 @@ export class RuntimeExecTimeoutError extends Error {
   }
 }
 
+export interface RuntimeContainerInfo {
+  id: string;
+  state: {
+    status: string;
+    running: boolean;
+    pid: number;
+    oomKilled: boolean;
+  };
+  hostConfig: {
+    networkMode: string;
+    readonlyRootfs: boolean;
+    privileged: boolean;
+    pidMode?: string;
+    capDrop?: string[];
+  };
+}
+
 export interface RuntimeProvider {
   create(image: string, options: RuntimeOptions): Promise<string>;
   start(id: string): Promise<void>;
@@ -33,4 +50,5 @@ export interface RuntimeProvider {
   exec(id: string, command: string[], options?: RuntimeExecOptions): Promise<ExecResult>;
   attach(id: string): Promise<NodeJS.ReadWriteStream>;
   getStatus(id: string): Promise<string>;
+  inspect(id: string): Promise<RuntimeContainerInfo>;
 }

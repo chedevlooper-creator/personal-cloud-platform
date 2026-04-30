@@ -459,4 +459,64 @@ export class RuntimeService {
       }
     }
   }
+
+  async checkRunningContainersHealth() {
+    const runningRuntimes = await db.query.runtimes.findMany({
+      where: eq(runtimes.status, 'running'),
+    });
+
+    for (const runtime of runningRuntimes) {
+      if (!runtime.containerId) continue;
+      try {
+        const info = await this.provider.inspect(runtime.containerId);
+        const violations: string[] = [];
+
+        if (info.hostConfig.privileged) {
+          violations.push('privileged');
+        }
+        if (info.hostConfig.networkMode !== 'none') {
+          violations.push('network_mode=' + info.hostConfig.networkMode);
+        }
+        if (!info.hostConfig.readonlyRootfs) {
+          violations.push('readonly_rootfs_disabled');
+        }
+        if (info.state.oomKilled) {
+          violations.push('oom_killed');
+        }
+        if (!info.state.running) {
+          violations.push('not_running');
+        }
+
+        if (violations.length > 0) {
+          this.logger.warn(
+            { runtimeId: runtime.id, containerId: runtime.containerId, violations },
+            'Runtime container security violation detected',
+          );
+          await this.auditLog(runtime.userId, 'runtime.security_violation', {
+            runtimeId: runtime.id,
+            containerId: runtime.containerId,
+            violations,
+          });
+
+          try {
+            await this.provider.stop(runtime.containerId);
+            await db
+              .update(runtimes)
+              .set({ status: 'stopped', updatedAt: new Date() })
+              .where(and(eq(runtimes.id, runtime.id), eq(runtimes.userId, runtime.userId)));
+          } catch (err) {
+            this.logger.error(
+              { err, runtimeId: runtime.id },
+              'Failed to stop compromised runtime container',
+            );
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          { err, runtimeId: runtime.id, containerId: runtime.containerId },
+          'Failed to inspect runtime container during health check',
+        );
+      }
+    }
+  }
 }

@@ -24,6 +24,7 @@ const envSchema = z.object({
         ? value.split(',').map((s) => s.trim())
         : ['node:20-alpine'],
     ),
+  RUNTIME_HEALTH_CHECK_INTERVAL_MS: z.coerce.number().int().min(5000).default(30000),
   RUNTIME_TERMINAL_ENABLED: z
     .string()
     .optional()
@@ -49,6 +50,7 @@ export const env = {
   RUNTIME_SECCOMP_PROFILE: parsed.RUNTIME_SECCOMP_PROFILE,
   RUNTIME_APPARMOR_PROFILE: parsed.RUNTIME_APPARMOR_PROFILE,
   RUNTIME_IMAGE_ALLOWLIST: parsed.RUNTIME_IMAGE_ALLOWLIST,
+  RUNTIME_HEALTH_CHECK_INTERVAL_MS: parsed.RUNTIME_HEALTH_CHECK_INTERVAL_MS,
   RUNTIME_TERMINAL_ENABLED:
     parsed.RUNTIME_TERMINAL_ENABLED ?? parsed.NODE_ENV !== 'production',
 };

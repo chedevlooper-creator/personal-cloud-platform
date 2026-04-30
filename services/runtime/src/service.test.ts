@@ -4,59 +4,73 @@ import pino from 'pino';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
 const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440002';
 
-const { mockDb, providerCreate, providerStart, providerStop, providerDestroy, providerExec, providerAttach } =
-  vi.hoisted(() => {
-    const providerCreate = vi.fn(async () => 'container-1');
-    const providerStart = vi.fn();
-    const providerStop = vi.fn();
-    const providerDestroy = vi.fn();
-    const providerExec = vi.fn();
-    const providerAttach = vi.fn();
-    const insertReturning = vi.fn(async () => [
-      {
-        id: '550e8400-e29b-41d4-a716-446655440003',
-        userId: USER_ID,
-        workspaceId: WORKSPACE_ID,
-        image: 'node:20-alpine',
-        containerId: 'container-1',
-        status: 'pending',
-        createdAt: new Date('2026-04-27T00:00:00.000Z'),
-        updatedAt: new Date('2026-04-27T00:00:00.000Z'),
-      },
-    ]);
+const {
+  mockDb,
+  providerCreate,
+  providerStart,
+  providerStop,
+  providerDestroy,
+  providerExec,
+  providerAttach,
+  providerInspect,
+} = vi.hoisted(() => {
+  const providerCreate = vi.fn(async () => 'container-1');
+  const providerStart = vi.fn();
+  const providerStop = vi.fn();
+  const providerDestroy = vi.fn();
+  const providerExec = vi.fn();
+  const providerAttach = vi.fn();
+  const providerInspect = vi.fn(async () => ({
+    id: 'container-1',
+    state: { status: 'running', running: true, pid: 1234, oomKilled: false },
+    hostConfig: { networkMode: 'none', readonlyRootfs: true, privileged: false },
+  }));
+  const insertReturning = vi.fn(async () => [
+    {
+      id: '550e8400-e29b-41d4-a716-446655440003',
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      image: 'node:20-alpine',
+      containerId: 'container-1',
+      status: 'pending',
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    },
+  ]);
 
-    const mockDb = {
-      query: {
-        sessions: { findFirst: vi.fn() },
-        users: { findFirst: vi.fn() },
-        workspaces: { findFirst: vi.fn() },
-        runtimes: { findFirst: vi.fn() },
-      },
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({
-          returning: insertReturning,
-        })),
+  const mockDb = {
+    query: {
+      sessions: { findFirst: vi.fn() },
+      users: { findFirst: vi.fn() },
+      workspaces: { findFirst: vi.fn() },
+      runtimes: { findFirst: vi.fn(), findMany: vi.fn() },
+    },
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({
+        returning: insertReturning,
       })),
-      update: vi.fn(() => ({
-        set: vi.fn(() => ({
-          where: vi.fn(),
-        })),
-      })),
-      delete: vi.fn(() => ({
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
         where: vi.fn(),
       })),
-    };
+    })),
+    delete: vi.fn(() => ({
+      where: vi.fn(),
+    })),
+  };
 
-    return {
-      mockDb,
-      providerCreate,
-      providerStart,
-      providerStop,
-      providerDestroy,
-      providerExec,
-      providerAttach,
-    };
-  });
+  return {
+    mockDb,
+    providerCreate,
+    providerStart,
+    providerStop,
+    providerDestroy,
+    providerExec,
+    providerAttach,
+    providerInspect,
+  };
+});
 
 vi.mock('@pcp/db/src/client', () => ({
   db: mockDb,
@@ -79,6 +93,7 @@ vi.mock('./provider/docker', () => ({
     exec: providerExec,
     attach: providerAttach,
     getStatus: vi.fn(),
+    inspect: providerInspect,
   })),
 }));
 
@@ -367,6 +382,55 @@ describe('RuntimeService workspace ownership', () => {
 
     expect(providerExec).toHaveBeenCalled();
     expect(mockDb.insert).toHaveBeenCalled();
+  });
+
+  it('detects and stops containers with security policy violations during health check', async () => {
+    const { RuntimeService } = await import('./service');
+    mockDb.query.runtimes.findMany.mockResolvedValue([
+      {
+        id: 'runtime-1',
+        userId: USER_ID,
+        workspaceId: WORKSPACE_ID,
+        containerId: 'container-1',
+        status: 'running',
+      },
+    ]);
+    providerInspect.mockResolvedValue({
+      id: 'container-1',
+      state: { status: 'running', running: true, pid: 1234, oomKilled: false },
+      hostConfig: { networkMode: 'bridge', readonlyRootfs: true, privileged: false },
+    });
+    const service = new RuntimeService(logger);
+
+    await service.checkRunningContainersHealth();
+
+    expect(providerInspect).toHaveBeenCalledWith('container-1');
+    expect(providerStop).toHaveBeenCalledWith('container-1');
+    expect(mockDb.insert).toHaveBeenCalled();
+  });
+
+  it('ignores healthy containers during health check', async () => {
+    const { RuntimeService } = await import('./service');
+    mockDb.query.runtimes.findMany.mockResolvedValue([
+      {
+        id: 'runtime-1',
+        userId: USER_ID,
+        workspaceId: WORKSPACE_ID,
+        containerId: 'container-1',
+        status: 'running',
+      },
+    ]);
+    providerInspect.mockResolvedValue({
+      id: 'container-1',
+      state: { status: 'running', running: true, pid: 1234, oomKilled: false },
+      hostConfig: { networkMode: 'none', readonlyRootfs: true, privileged: false },
+    });
+    const service = new RuntimeService(logger);
+
+    await service.checkRunningContainersHealth();
+
+    expect(providerInspect).toHaveBeenCalledWith('container-1');
+    expect(providerStop).not.toHaveBeenCalled();
   });
 });
 

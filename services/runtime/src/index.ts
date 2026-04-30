@@ -11,6 +11,7 @@ import {
   registerObservability,
 } from '@pcp/shared';
 import { setupRuntimeRoutes } from './routes';
+import { RuntimeService } from './service';
 import { env } from './env';
 
 const server = Fastify({
@@ -63,6 +64,13 @@ const start = async () => {
   try {
     await server.listen({ port: env.PORT, host: '0.0.0.0' });
     server.log.info(`Runtime service running on port ${env.PORT}`);
+
+    const runtimeService = new RuntimeService(server.log);
+    setInterval(() => {
+      runtimeService.checkRunningContainersHealth().catch((err) => {
+        server.log.error(err, 'Runtime health check failed');
+      });
+    }, env.RUNTIME_HEALTH_CHECK_INTERVAL_MS);
   } catch (err) {
     server.log.error(err);
     process.exit(1);

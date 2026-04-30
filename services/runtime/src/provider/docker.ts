@@ -179,6 +179,31 @@ export class DockerProvider implements RuntimeProvider {
     const data = await container.inspect();
     return data.State.Status;
   }
+
+  async inspect(id: string): Promise<{
+    id: string;
+    state: { status: string; running: boolean; pid: number; oomKilled: boolean };
+    hostConfig: { networkMode: string; readonlyRootfs: boolean; privileged: boolean; pidMode?: string; capDrop?: string[] };
+  }> {
+    const container = this.docker.getContainer(id);
+    const data = await container.inspect();
+    return {
+      id: data.Id,
+      state: {
+        status: data.State.Status,
+        running: data.State.Running,
+        pid: data.State.Pid,
+        oomKilled: data.State.OOMKilled,
+      },
+      hostConfig: {
+        networkMode: data.HostConfig.NetworkMode ?? '',
+        readonlyRootfs: data.HostConfig.ReadonlyRootfs ?? false,
+        privileged: data.HostConfig.Privileged ?? false,
+        pidMode: data.HostConfig.PidMode,
+        capDrop: data.HostConfig.CapDrop,
+      },
+    };
+  }
 }
 
 function clampLimit(value: number | undefined, defaultValue: number, max: number): number {
