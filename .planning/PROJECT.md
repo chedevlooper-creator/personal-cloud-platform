@@ -85,12 +85,12 @@ This is a **brownfield TypeScript pnpm monorepo**. The major product modules alr
 - ✓ Admin dashboard surfaces (users, audit logs, runtime events, health)
 - ✓ Dataset query tool expansion (list_datasets, describe_dataset, query_dataset)
 - ✓ Parallel multi-tool execution in single LLM response (Promise.all)
-- ✓ All tests passing (203 total across 7 services)
+- ✓ Automation worker waits for real task completion (polling loop)
+- ✓ All tests passing (204 total across 7 services)
 - ✓ Full monorepo typecheck clean (10 packages)
 
 ### Active
 
-- [ ] Automation worker waits for real task completion
 - [ ] Frontend notification system polish
 - [ ] Snapshot system completion
 

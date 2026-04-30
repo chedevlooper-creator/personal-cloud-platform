@@ -51,13 +51,15 @@ None.
 | 2026-04-30 | Admin dashboard improvements | Real DB health check + runtime events tab with color-coded event badges |
 | 2026-04-30 | Dataset tools added to agent | list_datasets and describe_dataset tools for data discovery before querying |
 | 2026-04-30 | Parallel multi-tool execution | Non-approval tools now run via Promise.all instead of sequential for-loop |
+| 2026-04-30 | Automation worker polling verified | Test confirms worker polls getTask until terminal status before updating run |
 
 ## Notes
 
 - Brownfield project — code exists, needs production-readiness work
 - **Full monorepo status: typecheck clean + all tests passing**
-  - auth: 36 passed | workspace: 24 passed | runtime: 23 passed | agent: 56 passed
+  - auth: 36 passed | workspace: 24 passed | runtime: 23 passed | agent: 57 passed
   - memory: 15 passed | publish: 40 passed | browser: 9 passed
+  - Total: 204 tests
 - Agent service recently received multi-tool, automation polling, and safe parsing fixes (committed to master)
 
 ---
