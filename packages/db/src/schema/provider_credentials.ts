@@ -6,6 +6,7 @@ import {
   text,
   jsonb,
   boolean,
+  integer,
   index,
 } from 'drizzle-orm/pg-core';
 import { users } from './users';
@@ -54,6 +55,7 @@ export const userPreferences = pgTable('user_preferences', {
     emailMock?: boolean;
     webhookUrl?: string | null;
   }>(),
+  monthlyTokenQuota: integer('monthly_token_quota').default(100_000),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
@@ -74,5 +76,26 @@ export const personas = pgTable(
   },
   (t) => ({
     userSlugIdx: index('personas_user_slug_idx').on(t.userId, t.slug),
+  }),
+);
+
+export const tokenUsage = pgTable(
+  'token_usage',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    yearMonth: varchar('year_month', { length: 7 }).notNull(),
+    provider: varchar('provider', { length: 32 }).notNull(),
+    model: varchar('model', { length: 120 }),
+    promptTokens: integer('prompt_tokens').default(0).notNull(),
+    completionTokens: integer('completion_tokens').default(0).notNull(),
+    totalTokens: integer('total_tokens').default(0).notNull(),
+    requestCount: integer('request_count').default(0).notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    userMonthIdx: index('token_usage_user_month_idx').on(t.userId, t.yearMonth),
   }),
 );

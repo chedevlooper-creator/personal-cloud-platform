@@ -12,6 +12,9 @@ import {
   createAuthMiddleware,
 } from '@pcp/shared';
 import { validateSessionUserId } from '@pcp/db/src/session';
+import { db } from '@pcp/db/src/client';
+import { tokenUsage, userPreferences } from '@pcp/db/src/schema';
+import { and, eq, sql } from 'drizzle-orm';
 import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
 import { z } from 'zod';
@@ -374,4 +377,47 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       return reply;
     },
   );
+
+  server.get('/agent/usage', async (request, reply) => {
+    const userId = await getAuthenticatedUserId(request.cookies.sessionId);
+    if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+
+    const yearMonth = new Date().toISOString().slice(0, 7);
+
+    const [usageRows, prefs] = await Promise.all([
+      db
+        .select({
+          provider: tokenUsage.provider,
+          model: tokenUsage.model,
+          promptTokens: sql<number>`COALESCE(SUM(${tokenUsage.promptTokens}), 0)`,
+          completionTokens: sql<number>`COALESCE(SUM(${tokenUsage.completionTokens}), 0)`,
+          totalTokens: sql<number>`COALESCE(SUM(${tokenUsage.totalTokens}), 0)`,
+          requests: sql<number>`COALESCE(SUM(${tokenUsage.requestCount}), 0)`,
+        })
+        .from(tokenUsage)
+        .where(and(eq(tokenUsage.userId, userId), eq(tokenUsage.yearMonth, yearMonth)))
+        .groupBy(tokenUsage.provider, tokenUsage.model),
+      db.query.userPreferences.findFirst({
+        where: eq(userPreferences.userId, userId),
+      }),
+    ]);
+
+    const quota = prefs?.monthlyTokenQuota ?? 100_000;
+    const providers = usageRows.map((r) => ({
+      provider: r.provider,
+      model: r.model,
+      promptTokens: r.promptTokens,
+      completionTokens: r.completionTokens,
+      totalTokens: r.totalTokens,
+      requests: r.requests,
+    }));
+
+    const totalUsed = providers.reduce((sum, p) => sum + p.totalTokens, 0);
+
+    return {
+      month: yearMonth,
+      quota: { limit: quota, used: totalUsed },
+      providers,
+    };
+  });
 }

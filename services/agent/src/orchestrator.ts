@@ -10,9 +10,10 @@ import {
   skills as skillsTable,
   userPreferences,
   auditLogs,
+  tokenUsage,
 } from '@pcp/db/src/schema';
 import { validateSessionUserId } from '@pcp/db/src/session';
-import { eq, and, isNull, inArray, desc } from 'drizzle-orm';
+import { eq, and, isNull, inArray, desc, sql } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 import { LLMProvider, Message } from './llm/types';
 import { createLLMProvider } from './llm/provider';
@@ -117,6 +118,71 @@ export class AgentOrchestrator {
 
   async validateUserFromCookie(sessionId: string): Promise<string | null> {
     return validateSessionUserId(sessionId);
+  }
+
+  private async assertTokenQuota(userId: string, provider: string): Promise<void> {
+    const yearMonth = new Date().toISOString().slice(0, 7);
+    const usage = await db.query.tokenUsage.findFirst({
+      where: and(
+        eq(tokenUsage.userId, userId),
+        eq(tokenUsage.yearMonth, yearMonth),
+        eq(tokenUsage.provider, provider),
+      ),
+    });
+
+    const prefs = await db.query.userPreferences.findFirst({
+      where: eq(userPreferences.userId, userId),
+    });
+
+    const quota = prefs?.monthlyTokenQuota ?? 100_000;
+    const used = usage?.totalTokens ?? 0;
+
+    if (used >= quota) {
+      throw new Error(
+        `Monthly token quota exceeded: ${used.toLocaleString()} / ${quota.toLocaleString()} tokens. ` +
+          `Quota resets on the 1st of next month.`,
+      );
+    }
+  }
+
+  private async recordTokenUsage(
+    userId: string,
+    provider: string,
+    model: string,
+    usage: { promptTokens: number; completionTokens: number; totalTokens: number },
+  ): Promise<void> {
+    const yearMonth = new Date().toISOString().slice(0, 7);
+    const existing = await db.query.tokenUsage.findFirst({
+      where: and(
+        eq(tokenUsage.userId, userId),
+        eq(tokenUsage.yearMonth, yearMonth),
+        eq(tokenUsage.provider, provider),
+      ),
+    });
+
+    if (existing) {
+      await db
+        .update(tokenUsage)
+        .set({
+          promptTokens: existing.promptTokens + usage.promptTokens,
+          completionTokens: existing.completionTokens + usage.completionTokens,
+          totalTokens: existing.totalTokens + usage.totalTokens,
+          requestCount: existing.requestCount + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(tokenUsage.id, existing.id));
+    } else {
+      await db.insert(tokenUsage).values({
+        userId,
+        yearMonth,
+        provider,
+        model,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.totalTokens,
+        requestCount: 1,
+      });
+    }
   }
 
   async getConversations(userId: string, workspaceId?: string) {
@@ -337,7 +403,10 @@ export class AgentOrchestrator {
   async chat(input: string, userId?: string) {
     const userProvider = userId ? await resolveUserProvider(userId).catch(() => null) : null;
     const llm: LLMProvider = userProvider?.provider ?? this.llm;
-    return llm.generate([
+    if (userId) {
+      await this.assertTokenQuota(userId, llm.providerName);
+    }
+    const response = await llm.generate([
       {
         role: 'system',
         content: [
@@ -359,6 +428,10 @@ export class AgentOrchestrator {
       },
       { role: 'user', content: input },
     ]);
+    if (userId && response.usage) {
+      await this.recordTokenUsage(userId, llm.providerName, llm.modelName, response.usage);
+    }
+    return response;
   }
 
   private async buildSystemPrompt(
@@ -420,6 +493,10 @@ export class AgentOrchestrator {
   }
 
   private async runAgentLoop(taskId: string, userId: string) {
+    let providerName = 'openai';
+    let modelName = 'gpt-4-turbo-preview';
+    let accumulatedUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+
     try {
     const task = await db.query.tasks.findFirst({
       where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)),
@@ -453,16 +530,16 @@ export class AgentOrchestrator {
       orderBy: (taskSteps, { asc }) => [asc(taskSteps.stepNumber)],
     });
 
-    let lastActionToolName: string | undefined;
+    let lastActionToolName = '';
     for (const step of existingSteps) {
       if (step.type === 'thought' && step.content) {
         messages.push({ role: 'assistant', content: step.content });
       } else if (step.type === 'action' && step.toolName) {
+        lastActionToolName = step.toolName;
         messages.push({
           role: 'assistant',
           content: `Calling tool ${step.toolName}`,
         });
-        lastActionToolName = step.toolName;
       } else if (step.type === 'observation' && step.toolOutput) {
         messages.push({
           role: 'user',
@@ -479,14 +556,14 @@ export class AgentOrchestrator {
       return null;
     });
     const llm: LLMProvider = userProvider?.provider ?? this.llm;
-    const providerName = userProvider?.providerName ?? llm.providerName ?? 'openai';
-    const modelName = userProvider?.model ?? llm.modelName ?? 'gpt-4-turbo-preview';
+    providerName = userProvider?.providerName ?? llm.providerName ?? 'openai';
+    modelName = userProvider?.model ?? llm.modelName ?? 'gpt-4-turbo-preview';
 
     const maxIterations = 15;
     const tools = this.registry.getAllDefinitions();
     const loopStartedAt = Date.now();
     let iterations = 0;
-    const accumulatedUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    accumulatedUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     for (let i = 0; i < maxIterations; i++) {
       // Check if cancelled — always re-check with userId scope to prevent cross-tenant reads.
@@ -495,6 +572,7 @@ export class AgentOrchestrator {
       });
       if (!currentTask || currentTask.status === 'cancelled') return;
 
+      await this.assertTokenQuota(userId, providerName);
       const response = await llm.generate(messages, tools);
       iterations++;
       if (response.usage) {
@@ -674,11 +752,13 @@ export class AgentOrchestrator {
         this.cleanupTaskEmitter(taskId);
         this.taskRuntimeIds.delete(taskId);
         await this.persistTaskMemory(userId, task.workspaceId, task.input, response.content ?? '');
+        await this.recordTokenUsage(userId, providerName, modelName, accumulatedUsage);
         return;
       }
     }
 
     // Exceeded max iterations
+    await this.recordTokenUsage(userId, providerName, modelName, accumulatedUsage);
     await db
       .update(tasks)
       .set({
@@ -694,6 +774,7 @@ export class AgentOrchestrator {
     this.cleanupTaskEmitter(taskId);
     this.taskRuntimeIds.delete(taskId);
     } catch (err) {
+      await this.recordTokenUsage(userId, providerName, modelName, accumulatedUsage);
       await this.failTaskFromError(taskId, userId, err);
     }
   }

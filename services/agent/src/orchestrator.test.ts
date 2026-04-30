@@ -40,6 +40,7 @@ const { mockDb, insertedValues, updatedValues } = vi.hoisted(() => {
       userPreferences: { findFirst: vi.fn() },
       providerCredentials: { findFirst: vi.fn() },
       skills: { findMany: vi.fn() },
+      tokenUsage: { findFirst: vi.fn() },
     },
     insert: vi.fn(() => ({
       values: vi.fn((value: Record<string, unknown>) => {
@@ -96,6 +97,7 @@ describe('AgentOrchestrator', () => {
     mockDb.query.userPreferences.findFirst.mockResolvedValue(null);
     mockDb.query.providerCredentials.findFirst.mockResolvedValue(null);
     mockDb.query.skills.findMany.mockResolvedValue([]);
+    mockDb.query.tokenUsage.findFirst.mockResolvedValue(null);
   });
 
   it('should initialize successfully', async () => {
