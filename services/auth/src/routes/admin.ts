@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { db } from '@pcp/db/src/client';
-import { users, auditLogs } from '@pcp/db/src/schema';
+import { users, auditLogs, runtimeEvents } from '@pcp/db/src/schema';
 import { desc } from 'drizzle-orm';
 import { auditLogSchema, sendApiError } from '@pcp/shared';
 import { AuthService, SanitizedUser } from '../service';
@@ -102,13 +102,33 @@ export async function setupAdminRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Runtime events for admin monitoring
+  server.get('/admin/runtime-events', async (request, reply) => {
+    if (!(await checkIsAdmin(request, reply))) return;
+
+    const events = await db.query.runtimeEvents.findMany({
+      orderBy: [desc(runtimeEvents.createdAt)],
+      limit: 100,
+    });
+
+    return reply.code(200).send(events);
+  });
+
   // Simple health check
   server.get('/admin/health', async (request, reply) => {
     if (!(await checkIsAdmin(request, reply))) return;
 
+    let dbConnected = false;
+    try {
+      await db.execute('select 1');
+      dbConnected = true;
+    } catch (err) {
+      fastify.log.error(err, 'Admin health check DB ping failed');
+    }
+
     return reply.code(200).send({
-      status: 'healthy',
-      dbConnected: true,
+      status: dbConnected ? 'healthy' : 'degraded',
+      dbConnected,
       uptime: process.uptime(),
     });
   });

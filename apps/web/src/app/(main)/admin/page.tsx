@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
-import { Users, FileText, Activity, Loader2, ShieldCheck, Clock } from 'lucide-react';
+import { Users, FileText, Activity, Loader2, ShieldCheck, Clock, Server } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/status-badge';
 
-type AdminTab = 'users' | 'audit-logs' | 'health';
+type AdminTab = 'users' | 'audit-logs' | 'runtime-events' | 'health';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
@@ -37,6 +37,21 @@ export default function AdminPage() {
     enabled: activeTab === 'audit-logs',
   });
 
+  const { data: runtimeEventsData, isLoading: runtimeEventsLoading } = useQuery({
+    queryKey: ['admin-runtime-events'],
+    queryFn: async () => {
+      const res = await authApi.get('/admin/runtime-events');
+      return res.data as {
+        id: string;
+        runtimeId: string;
+        type: string;
+        payload: Record<string, unknown> | null;
+        createdAt: string;
+      }[];
+    },
+    enabled: activeTab === 'runtime-events',
+  });
+
   const { data: healthData, isLoading: healthLoading } = useQuery({
     queryKey: ['admin-health'],
     queryFn: async () => {
@@ -49,6 +64,7 @@ export default function AdminPage() {
   const tabs = [
     { id: 'users' as const, label: 'Users', icon: Users },
     { id: 'audit-logs' as const, label: 'Audit Logs', icon: FileText },
+    { id: 'runtime-events' as const, label: 'Runtime Events', icon: Server },
     { id: 'health' as const, label: 'System Health', icon: Activity },
   ];
 
@@ -161,6 +177,57 @@ export default function AdminPage() {
                   </div>
                   <div className="col-span-4 text-muted-foreground text-xs">
                     {new Date(log.createdAt).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Runtime Events Tab */}
+      {activeTab === 'runtime-events' && (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="grid grid-cols-12 gap-4 p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
+            <div className="col-span-2">Type</div>
+            <div className="col-span-3">Runtime ID</div>
+            <div className="col-span-5">Payload</div>
+            <div className="col-span-2">Time</div>
+          </div>
+          {runtimeEventsLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (runtimeEventsData || []).length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">No runtime events yet</div>
+          ) : (
+            <div className="divide-y divide-border max-h-[600px] overflow-y-auto">
+              {(runtimeEventsData || []).map((evt) => (
+                <div
+                  key={evt.id}
+                  className="grid grid-cols-12 gap-4 p-4 text-sm items-center hover:bg-muted/20 transition-colors"
+                >
+                  <div className="col-span-2">
+                    <StatusBadge
+                      variant={
+                        evt.type === 'failed' || evt.type === 'security_violation'
+                          ? 'error'
+                          : evt.type === 'exec'
+                            ? 'warning'
+                            : 'success'
+                      }
+                    >
+                      {evt.type}
+                    </StatusBadge>
+                  </div>
+                  <div className="col-span-3 text-muted-foreground font-mono text-xs truncate">
+                    {evt.runtimeId}
+                  </div>
+                  <div className="col-span-5 text-muted-foreground text-xs truncate">
+                    {evt.payload ? JSON.stringify(evt.payload) : '—'}
+                  </div>
+                  <div className="col-span-2 text-muted-foreground text-xs">
+                    {new Date(evt.createdAt).toLocaleString()}
                   </div>
                 </div>
               ))}
