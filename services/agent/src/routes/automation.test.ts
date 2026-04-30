@@ -185,6 +185,10 @@ describe('automation route tenant scope', () => {
         userId: USER_ID,
         workspaceId: WORKSPACE_ID,
       }),
+      expect.objectContaining({
+        attempts: expect.any(Number),
+        backoff: expect.any(Object),
+      }),
     );
 
     await app.close();

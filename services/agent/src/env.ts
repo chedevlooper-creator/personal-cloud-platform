@@ -43,6 +43,8 @@ const envSchema = z.object({
   WEB_SEARCH_API_KEY: z.string().optional(),
   WEB_FETCH_MAX_BYTES: z.coerce.number().int().positive().default(200_000),
   ENCRYPTION_KEY: z.string().optional(),
+  AUTOMATION_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
+  AUTOMATION_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -85,6 +87,8 @@ export const env = {
   WEB_SEARCH_API_KEY: parsed.WEB_SEARCH_API_KEY,
   WEB_FETCH_MAX_BYTES: parsed.WEB_FETCH_MAX_BYTES,
   ENCRYPTION_KEY: resolveAgentEncryptionKey(parsed.ENCRYPTION_KEY),
+  AUTOMATION_TIMEOUT_MS: parsed.AUTOMATION_TIMEOUT_MS,
+  AUTOMATION_MAX_RETRIES: parsed.AUTOMATION_MAX_RETRIES,
 };
 
 /**

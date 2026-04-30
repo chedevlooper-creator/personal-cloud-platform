@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'events';
 import pino from 'pino';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
@@ -69,6 +70,16 @@ vi.mock('drizzle-orm', () => ({
   isNull: (column: unknown) => ({ type: 'isNull', column }),
 }));
 
+function createMockOrchestrator() {
+  const emitter = new EventEmitter();
+  return {
+    createTask: vi.fn(async () => ({ id: TASK_ID })),
+    getTask: vi.fn().mockResolvedValue(null),
+    subscribeToTask: vi.fn(() => emitter),
+    _emitter: emitter,
+  };
+}
+
 describe('automation worker scheduled jobs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -89,9 +100,13 @@ describe('automation worker scheduled jobs', () => {
 
   it('loads scheduled automation data and creates a fresh run at execution time', async () => {
     const { setupAutomationWorker } = await import('./queue');
-    const orchestrator = {
-      createTask: vi.fn(async () => ({ id: TASK_ID })),
-    };
+    const orchestrator = createMockOrchestrator();
+    // Safety check returns completed immediately
+    orchestrator.getTask.mockResolvedValueOnce({
+      id: TASK_ID,
+      status: 'completed',
+      output: 'Done',
+    });
 
     await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
     await capturedWorker.processor?.({ data: { automationId: AUTOMATION_ID } });
@@ -104,9 +119,7 @@ describe('automation worker scheduled jobs', () => {
 
   it('does not run scheduled automations for unowned workspaces', async () => {
     const { setupAutomationWorker } = await import('./queue');
-    const orchestrator = {
-      createTask: vi.fn(async () => ({ id: TASK_ID })),
-    };
+    const orchestrator = createMockOrchestrator();
     mockDb.query.workspaces.findFirst.mockResolvedValueOnce(null);
 
     await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
@@ -120,9 +133,7 @@ describe('automation worker scheduled jobs', () => {
 
   it('does not run queued jobs carrying an unowned workspace id', async () => {
     const { setupAutomationWorker } = await import('./queue');
-    const orchestrator = {
-      createTask: vi.fn(async () => ({ id: TASK_ID })),
-    };
+    const orchestrator = createMockOrchestrator();
     mockDb.query.workspaces.findFirst.mockResolvedValueOnce(null);
 
     await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
@@ -141,15 +152,16 @@ describe('automation worker scheduled jobs', () => {
     expect(orchestrator.createTask).not.toHaveBeenCalled();
   });
 
-  it('polls for task completion and updates run status when task finishes', async () => {
-    vi.useFakeTimers();
+  it('waits for task event and updates run status when task finishes', async () => {
     const { setupAutomationWorker } = await import('./queue');
-    const orchestrator = {
-      createTask: vi.fn(async () => ({ id: TASK_ID })),
-      getTask: vi.fn()
-        .mockResolvedValueOnce({ id: TASK_ID, status: 'executing', output: null })
-        .mockResolvedValueOnce({ id: TASK_ID, status: 'completed', output: 'Summary done' }),
-    };
+    const orchestrator = createMockOrchestrator();
+
+    // Safety check: getTask returns already-completed task
+    orchestrator.getTask.mockResolvedValueOnce({
+      id: TASK_ID,
+      status: 'completed',
+      output: 'Summary done',
+    });
 
     await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
     const workerPromise = capturedWorker.processor?.({
@@ -162,15 +174,47 @@ describe('automation worker scheduled jobs', () => {
       },
     });
 
-    // Advance timers past the 3-second poll interval
-    await vi.advanceTimersByTimeAsync(3500);
     await workerPromise;
 
-    // Worker polled getTask twice (executing → completed)
-    expect(orchestrator.getTask).toHaveBeenCalledTimes(2);
-    // Worker updated the run record at least twice (running status + completed status)
+    // Safety check called once
+    expect(orchestrator.getTask).toHaveBeenCalledTimes(1);
+    // Worker updated: running status + taskId + completed status + lastRunAt
     expect(mockDb.update).toHaveBeenCalledTimes(4);
+  });
 
-    vi.useRealTimers();
+  it('handles task completion via event emitter', async () => {
+    const { setupAutomationWorker } = await import('./queue');
+    const orchestrator = createMockOrchestrator();
+
+    // Safety check returns non-terminal status
+    orchestrator.getTask.mockResolvedValueOnce({
+      id: TASK_ID,
+      status: 'executing',
+      output: null,
+    });
+
+    await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
+    const workerPromise = capturedWorker.processor?.({
+      data: {
+        runId: '550e8400-e29b-41d4-a716-446655440004',
+        automationId: AUTOMATION_ID,
+        userId: USER_ID,
+        workspaceId: WORKSPACE_ID,
+        prompt: 'Summarize',
+      },
+    });
+
+    // Simulate task completion event
+    setTimeout(() => {
+      orchestrator._emitter.emit('task', {
+        status: 'completed',
+        output: 'Event-driven result',
+      });
+    }, 10);
+
+    await workerPromise;
+
+    // Worker updated: running status + taskId + completed status + lastRunAt
+    expect(mockDb.update).toHaveBeenCalledTimes(4);
   });
 });

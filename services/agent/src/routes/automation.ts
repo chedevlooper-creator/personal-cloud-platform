@@ -10,6 +10,7 @@ import { automationRepeatKey, computeNextRunAt, resolveSchedule } from '../autom
 import { automationTriggerToken, verifyAutomationTriggerToken } from '../automation/notify';
 import { z } from 'zod';
 import { checkAgentRateLimit, AGENT_RATE_LIMITS } from '../rate-limit';
+import { env } from '../env';
 
 export async function setupAutomationRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -111,6 +112,8 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
               ...(schedule.timezone ? { tz: schedule.timezone } : {}),
             },
             jobId: automationRepeatKey(automation.id),
+            attempts: env.AUTOMATION_MAX_RETRIES + 1,
+            backoff: { type: 'exponential', delay: 2000 },
           },
         );
       }
@@ -176,6 +179,8 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
               ...(schedule.timezone ? { tz: schedule.timezone } : {}),
             },
             jobId: automationRepeatKey(updated.id),
+            attempts: env.AUTOMATION_MAX_RETRIES + 1,
+            backoff: { type: 'exponential', delay: 2000 },
           },
         );
       }
@@ -247,13 +252,20 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       if (!run) throw new Error('Failed to create run');
 
       // Add to BullMQ
-      await automationQueue.add('manual-run', {
-        runId: run.id,
-        automationId: automation.id,
-        userId,
-        workspaceId: automation.workspaceId,
-        prompt: automation.prompt,
-      });
+      await automationQueue.add(
+        'manual-run',
+        {
+          runId: run.id,
+          automationId: automation.id,
+          userId,
+          workspaceId: automation.workspaceId,
+          prompt: automation.prompt,
+        },
+        {
+          attempts: env.AUTOMATION_MAX_RETRIES + 1,
+          backoff: { type: 'exponential', delay: 2000 },
+        },
+      );
 
       return run;
     },
@@ -351,13 +363,20 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
         .returning();
       if (!run) throw new Error('Failed to create run');
 
-      await automationQueue.add('webhook-run', {
-        runId: run.id,
-        automationId: automation.id,
-        userId: automation.userId,
-        workspaceId: automation.workspaceId,
-        prompt: automation.prompt,
-      });
+      await automationQueue.add(
+        'webhook-run',
+        {
+          runId: run.id,
+          automationId: automation.id,
+          userId: automation.userId,
+          workspaceId: automation.workspaceId,
+          prompt: automation.prompt,
+        },
+        {
+          attempts: env.AUTOMATION_MAX_RETRIES + 1,
+          backoff: { type: 'exponential', delay: 2000 },
+        },
+      );
 
       return reply.code(202).send({ runId: run.id });
     },

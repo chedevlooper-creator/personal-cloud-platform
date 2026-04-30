@@ -20,10 +20,9 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
         job.data,
       );
 
-      logger.info({ runId, automationId }, 'Processing automation run');
+      logger.info({ runId, automationId, attempt: job.attemptsMade + 1 }, 'Processing automation run');
 
       const startedAt = new Date();
-      // Update run status to running
       await db
         .update(automationRuns)
         .set({ status: 'running', startedAt })
@@ -34,36 +33,19 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
       });
 
       try {
-        // Pass it to AgentOrchestrator to run
         const task = await orchestrator.createTask(userId, workspaceId, prompt);
 
-        // Update run with taskId
         await db
           .update(automationRuns)
           .set({ taskId: task.id })
           .where(eq(automationRuns.id, runId));
 
-        // Poll for task completion (max 10 minutes)
-        const maxPollMs = 10 * 60 * 1000;
-        const pollIntervalMs = 3000;
-        const deadline = Date.now() + maxPollMs;
-        let terminalTask = null;
-
-        while (Date.now() < deadline) {
-          const current = await orchestrator.getTask(task.id, userId);
-          if (!current) {
-            throw new Error('Task disappeared during automation execution');
-          }
-          if (['completed', 'failed', 'cancelled'].includes(current.status)) {
-            terminalTask = current;
-            break;
-          }
-          await new Promise((r) => setTimeout(r, pollIntervalMs));
-        }
-
-        if (!terminalTask) {
-          throw new Error('Automation task timed out after 10 minutes');
-        }
+        // Event-driven task completion with timeout
+        const terminalTask = await waitForTaskTerminalStatus(
+          orchestrator,
+          task.id,
+          env.AUTOMATION_TIMEOUT_MS,
+        );
 
         const finishedAt = new Date();
         const durationMs = finishedAt.getTime() - startedAt.getTime();
@@ -86,10 +68,11 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
           .set({ lastRunAt: finishedAt })
           .where(eq(automations.id, automationId));
 
-        logger.info({ runId, status }, 'Automation run finished');
+        logger.info({ runId, status, durationMs }, 'Automation run finished');
 
         if (automation) {
-          await dispatchAutomationRunNotification(
+          // Fire-and-forget notification delivery (never block worker)
+          dispatchAutomationRunNotification(
             {
               runId,
               automationId,
@@ -105,10 +88,12 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
               webhookUrl: automation.webhookUrl,
               logger,
             },
-          );
+          ).catch((err) => {
+            logger.warn({ err, runId }, 'Notification dispatch failed');
+          });
         }
       } catch (error) {
-        logger.error({ runId, error }, 'Automation run failed');
+        logger.error({ runId, error, attempt: job.attemptsMade + 1 }, 'Automation run failed');
         const finishedAt = new Date();
         const durationMs = finishedAt.getTime() - startedAt.getTime();
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -124,7 +109,8 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
           .where(eq(automationRuns.id, runId));
 
         if (automation) {
-          await dispatchAutomationRunNotification(
+          // Fire-and-forget notification delivery
+          dispatchAutomationRunNotification(
             {
               runId,
               automationId,
@@ -139,18 +125,74 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
               webhookUrl: automation.webhookUrl,
               logger,
             },
-          );
+          ).catch((err) => {
+            logger.warn({ err, runId }, 'Notification dispatch failed');
+          });
         }
+
+        // Re-throw so BullMQ can retry according to its config
+        throw error;
       }
     },
-    { connection },
+    {
+      connection,
+    },
   );
 
   worker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, err }, 'Automation job failed');
+    logger.error({ jobId: job?.id, err, attempts: job?.attemptsMade }, 'Automation job failed');
   });
 
   return worker;
+}
+
+/**
+ * Wait for a task to reach terminal status using EventEmitter (event-driven)
+ * instead of polling. Falls back to a one-time DB read if the emitter is not
+ * available or if the task already completed before we subscribed.
+ */
+function waitForTaskTerminalStatus(
+  orchestrator: AgentOrchestrator,
+  taskId: string,
+  timeoutMs: number,
+): Promise<{ status: string; output: string | null }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Automation task timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    function cleanup() {
+      clearTimeout(timer);
+      emitter.removeListener('task', onTask);
+    }
+
+    function onTask(data: unknown) {
+      const task = data as { status?: string; output?: string | null } | null;
+      if (task && ['completed', 'failed', 'cancelled'].includes(task.status ?? '')) {
+        cleanup();
+        resolve({ status: task.status!, output: task.output ?? null });
+      }
+    }
+
+    // Subscribe to real-time task events
+    const emitter = orchestrator.subscribeToTask(taskId);
+    emitter.on('task', onTask);
+
+    // Safety: do an immediate DB read in case the task already finished
+    // before we subscribed (race condition at subscription time).
+    orchestrator
+      .getTask(taskId, '')
+      .then((current) => {
+        if (current && ['completed', 'failed', 'cancelled'].includes(current.status)) {
+          cleanup();
+          resolve({ status: current.status, output: current.output ?? null });
+        }
+      })
+      .catch(() => {
+        // Ignore — the event stream or timeout will handle it.
+      });
+  });
 }
 
 async function resolveAutomationJobData(data: {
