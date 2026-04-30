@@ -52,7 +52,7 @@ export class ToolRegistry {
     const tool = this.get(name);
     if (!tool) throw new Error(`Tool not found: ${name}`);
 
-    const input = JSON.parse(inputStr);
+    const input = safeParseToolInput(inputStr, name);
     const validatedInput = tool.schema.parse(input);
 
     if (tool.requiresApproval) {
@@ -70,9 +70,21 @@ export class ToolRegistry {
     const tool = this.get(name);
     if (!tool) throw new Error(`Tool not found: ${name}`);
 
-    const input = JSON.parse(inputStr);
+    const input = safeParseToolInput(inputStr, name);
     const validatedInput = tool.schema.parse(input);
 
     return await tool.execute(validatedInput, context);
+  }
+}
+
+function safeParseToolInput(inputStr: string, toolName: string): unknown {
+  try {
+    return JSON.parse(inputStr);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    throw new Error(
+      `Invalid JSON arguments for tool "${toolName}": ${message}. ` +
+        `Please ensure the tool arguments are valid JSON.`,
+    );
   }
 }

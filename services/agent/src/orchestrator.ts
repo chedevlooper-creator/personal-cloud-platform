@@ -12,7 +12,7 @@ import {
   auditLogs,
 } from '@pcp/db/src/schema';
 import { validateSessionUserId } from '@pcp/db/src/session';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull, inArray, desc } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 import { LLMProvider, Message } from './llm/types';
 import { createLLMProvider } from './llm/provider';
@@ -445,6 +445,30 @@ export class AgentOrchestrator {
       { role: 'user', content: task.input },
     ];
 
+    const existingSteps = await db.query.taskSteps.findMany({
+      where: eq(taskSteps.taskId, taskId),
+      orderBy: (taskSteps, { asc }) => [asc(taskSteps.stepNumber)],
+    });
+
+    let lastActionToolName: string | undefined;
+    for (const step of existingSteps) {
+      if (step.type === 'thought' && step.content) {
+        messages.push({ role: 'assistant', content: step.content });
+      } else if (step.type === 'action' && step.toolName) {
+        messages.push({
+          role: 'assistant',
+          content: `Calling tool ${step.toolName}`,
+        });
+        lastActionToolName = step.toolName;
+      } else if (step.type === 'observation' && step.toolOutput) {
+        messages.push({
+          role: 'user',
+          content: step.toolOutput,
+          name: lastActionToolName,
+        });
+      }
+    }
+
     // Prefer the user's saved provider credential when available; otherwise
     // fall back to the service-wide default created in the constructor.
     const userProvider = await resolveUserProvider(userId).catch((err) => {
@@ -455,7 +479,6 @@ export class AgentOrchestrator {
     const providerName = userProvider?.providerName ?? llm.providerName ?? 'openai';
     const modelName = userProvider?.model ?? llm.modelName ?? 'gpt-4-turbo-preview';
 
-    let stepNumber = 1;
     const maxIterations = 15;
     const tools = this.registry.getAllDefinitions();
     const loopStartedAt = Date.now();
@@ -479,66 +502,79 @@ export class AgentOrchestrator {
 
       if (response.content) {
         messages.push({ role: 'assistant', content: response.content });
-        const [step] = await db.insert(taskSteps).values({
-          taskId,
-          stepNumber: stepNumber++,
+        const step = await this.appendTaskStep(taskId, {
           type: 'thought',
           content: response.content,
-        }).returning();
+        });
         this.emitTaskStep(taskId, step);
       }
 
       if (response.toolCalls && response.toolCalls.length > 0) {
-        // Just handle first tool call for simplicity
-        const toolCall = response.toolCalls[0];
-        if (!toolCall) continue;
+        // Process all tool calls. If any requires approval, pause on the first one
+        // after recording all action steps. Otherwise execute all and build a
+        // composite observation so the LLM sees every result in context.
+        const recordedCalls: { id: string; toolName: string; arguments: string }[] = [];
+        const approvalQueue: {
+          recordedCallId: string;
+          toolName: string;
+          toolArgs: Record<string, unknown>;
+        }[] = [];
 
-        const tool = this.registry.get(toolCall.name);
-        const requiresApproval = tool?.requiresApproval ?? false;
-        const toolArgs = parseToolArguments(toolCall.arguments);
+        for (const toolCall of response.toolCalls) {
+          const tool = this.registry.get(toolCall.name);
+          const requiresApproval = tool?.requiresApproval ?? false;
+          const toolArgs = parseToolArguments(toolCall.arguments);
 
-        const [recordedToolCall] = await db
-          .insert(toolCalls)
-          .values({
-            taskId,
-            userId,
-            providerCallId: toolCall.id,
-            toolName: toolCall.name,
-            args: toolArgs,
-            status: requiresApproval ? 'awaiting_approval' : 'running',
-          })
-          .returning();
-        if (!recordedToolCall) throw new Error('Failed to record tool call');
+          const [recorded] = await db
+            .insert(toolCalls)
+            .values({
+              taskId,
+              userId,
+              providerCallId: toolCall.id,
+              toolName: toolCall.name,
+              args: toolArgs,
+              status: requiresApproval ? 'awaiting_approval' : 'running',
+            })
+            .returning();
+          if (!recorded) throw new Error('Failed to record tool call');
 
-        const [actionStep] = await db
-          .insert(taskSteps)
-          .values({
-            taskId,
-            stepNumber: stepNumber++,
+          const actionStep = await this.appendTaskStep(taskId, {
             type: 'action',
             toolName: toolCall.name,
             toolInput: toolArgs,
-          })
-          .returning();
-        this.emitTaskStep(taskId, actionStep);
+          });
+          this.emitTaskStep(taskId, actionStep);
 
-        if (requiresApproval) {
+          recordedCalls.push({ id: recorded.id, toolName: toolCall.name, arguments: toolCall.arguments });
+
+          if (requiresApproval) {
+            approvalQueue.push({ recordedCallId: recorded.id, toolName: toolCall.name, toolArgs });
+          }
+        }
+
+        // If any tool requires approval, create the approval request for the first one
+        // and pause execution. The remaining tools (approval and non-approval) will be
+        // replayed after the user approves or rejects.
+        if (approvalQueue.length > 0) {
+          const firstApproval = approvalQueue[0]!;
           const approval = await this.createApprovalRequest(
             userId,
             taskId,
-            recordedToolCall.id,
-            toolCall.name,
-            toolArgs,
+            firstApproval.recordedCallId,
+            firstApproval.toolName,
+            firstApproval.toolArgs,
           );
           await db
             .update(toolCalls)
             .set({ approvalId: approval.id })
-            .where(and(eq(toolCalls.id, recordedToolCall.id), eq(toolCalls.userId, userId)));
+            .where(
+              and(eq(toolCalls.id, firstApproval.recordedCallId), eq(toolCalls.userId, userId)),
+            );
           await emitAudit(userId, 'TOOL_APPROVAL_REQUESTED', {
             taskId,
-            toolCallId: recordedToolCall.id,
+            toolCallId: firstApproval.recordedCallId,
             approvalId: approval.id,
-            tool: toolCall.name,
+            tool: firstApproval.toolName,
           });
           await db
             .update(tasks)
@@ -548,58 +584,63 @@ export class AgentOrchestrator {
           return; // Pause execution
         }
 
-        // Add assistant's tool call message
-        messages.push({
-          role: 'assistant',
-          content: `Calling tool ${toolCall.name}`,
-        });
-
-        let toolOutputStr = '';
+        // No approval required — execute all tools and build composite observation
         const ctx = this.buildToolContext(taskId, userId, task.workspaceId);
-        const startedAt = Date.now();
-        try {
-          const output = await this.registry.execute(toolCall.name, toolCall.arguments, ctx);
-          toolOutputStr = typeof output === 'string' ? output : JSON.stringify(output);
-          this.rememberRuntimeId(taskId, ctx);
-          await this.completeToolCall(recordedToolCall.id, userId, 'completed', {
-            result: toolOutputStr,
-            durationMs: String(Date.now() - startedAt),
+        const results: { name: string; output: string; ok: boolean }[] = [];
+
+        for (const recorded of recordedCalls) {
+          messages.push({
+            role: 'assistant',
+            content: `Calling tool ${recorded.toolName}`,
           });
-          await emitAudit(userId, 'TOOL_EXECUTE', {
-            tool: toolCall.name,
-            taskId,
-            ok: true,
-          });
-        } catch (error: any) {
-          toolOutputStr = `Error executing tool: ${error.message}`;
-          await this.completeToolCall(recordedToolCall.id, userId, 'failed', {
-            error: error?.message,
-            durationMs: String(Date.now() - startedAt),
-          });
-          await emitAudit(userId, 'TOOL_EXECUTE', {
-            tool: toolCall.name,
-            taskId,
-            ok: false,
-            error: error?.message,
+
+          let toolOutputStr = '';
+          const startedAt = Date.now();
+          try {
+            const output = await this.registry.execute(recorded.toolName, recorded.arguments, ctx);
+            toolOutputStr = typeof output === 'string' ? output : JSON.stringify(output);
+            this.rememberRuntimeId(taskId, ctx);
+            await this.completeToolCall(recorded.id, userId, 'completed', {
+              result: toolOutputStr,
+              durationMs: String(Date.now() - startedAt),
+            });
+            await emitAudit(userId, 'TOOL_EXECUTE', {
+              tool: recorded.toolName,
+              taskId,
+              ok: true,
+            });
+          } catch (error: any) {
+            toolOutputStr = `Error executing tool: ${error.message}`;
+            await this.completeToolCall(recorded.id, userId, 'failed', {
+              error: error?.message,
+              durationMs: String(Date.now() - startedAt),
+            });
+            await emitAudit(userId, 'TOOL_EXECUTE', {
+              tool: recorded.toolName,
+              taskId,
+              ok: false,
+              error: error?.message,
+            });
+          }
+
+          results.push({ name: recorded.toolName, output: toolOutputStr, ok: !toolOutputStr.startsWith('Error') });
+
+          messages.push({
+            role: 'user',
+            content: toolOutputStr,
+            name: recorded.toolName,
           });
         }
 
-        const [observationStep] = await db
-          .insert(taskSteps)
-          .values({
-            taskId,
-            stepNumber: stepNumber++,
-            type: 'observation',
-            toolOutput: toolOutputStr,
-          })
-          .returning();
-        this.emitTaskStep(taskId, observationStep);
+        const compositeOutput = results
+          .map((r) => `[${r.name}]: ${r.output}`)
+          .join('\n\n');
 
-        messages.push({
-          role: 'user', // Observation
-          content: toolOutputStr,
-          name: toolCall.name,
+        const observationStep = await this.appendTaskStep(taskId, {
+          type: 'observation',
+          toolOutput: compositeOutput,
         });
+        this.emitTaskStep(taskId, observationStep);
       } else {
         // No tool calls means the agent is done
         const existingMeta =
@@ -760,9 +801,7 @@ export class AgentOrchestrator {
       await this.completeToolCall(pendingCall.id, userId, 'rejected', {
         error: reason ?? 'Rejected by user',
       });
-      await db.insert(taskSteps).values({
-        taskId,
-        stepNumber: 999,
+      await this.appendTaskStep(taskId, {
         type: 'observation',
         toolOutput: `User rejected tool execution: ${reason || 'No reason provided'}`,
       });
@@ -790,9 +829,7 @@ export class AgentOrchestrator {
         );
         const toolOutput = typeof output === 'string' ? output : JSON.stringify(output);
         this.rememberRuntimeId(taskId, ctx);
-        await db.insert(taskSteps).values({
-          taskId,
-          stepNumber: 999,
+        await this.appendTaskStep(taskId, {
           type: 'observation',
           toolOutput,
         });
@@ -806,9 +843,7 @@ export class AgentOrchestrator {
           ok: true,
         });
       } catch (err: any) {
-        await db.insert(taskSteps).values({
-          taskId,
-          stepNumber: 999,
+        await this.appendTaskStep(taskId, {
           type: 'observation',
           toolOutput: `Error executing tool: ${err.message}`,
         });
@@ -832,6 +867,35 @@ export class AgentOrchestrator {
         this.failTaskFromError(taskId, userId, err),
       );
     }
+  }
+
+  private async appendTaskStep(
+    taskId: string,
+    stepData: {
+      type: string;
+      content?: string | null;
+      toolName?: string | null;
+      toolInput?: any | null;
+      toolOutput?: string | null;
+    },
+  ) {
+    return db.transaction(async (tx) => {
+      const lastStep = await tx.query.taskSteps.findFirst({
+        where: eq(taskSteps.taskId, taskId),
+        orderBy: (taskSteps, { desc }) => [desc(taskSteps.stepNumber)],
+      });
+      const stepNumber = (lastStep?.stepNumber ?? 0) + 1;
+
+      const [step] = await tx
+        .insert(taskSteps)
+        .values({
+          taskId,
+          stepNumber,
+          ...stepData,
+        })
+        .returning();
+      return step;
+    });
   }
 
   private async createApprovalRequest(

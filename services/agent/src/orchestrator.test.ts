@@ -33,7 +33,7 @@ const { mockDb, insertedValues, updatedValues } = vi.hoisted(() => {
       workspaces: { findFirst: vi.fn() },
       conversations: { findFirst: vi.fn(), findMany: vi.fn() },
       tasks: { findFirst: vi.fn(), findMany: vi.fn() },
-      taskSteps: { findMany: vi.fn() },
+      taskSteps: { findFirst: vi.fn(), findMany: vi.fn() },
       toolCalls: { findFirst: vi.fn(), findMany: vi.fn() },
       approvalRequests: { findFirst: vi.fn() },
       personas: { findFirst: vi.fn() },
@@ -64,6 +64,7 @@ const { mockDb, insertedValues, updatedValues } = vi.hoisted(() => {
         };
       }),
     })),
+    transaction: vi.fn(async (cb) => cb(mockDb)),
   };
 
   return { mockDb, insertedValues, updatedValues };
@@ -87,6 +88,7 @@ describe('AgentOrchestrator', () => {
       workspaceId: WORKSPACE_ID,
     });
     mockDb.query.tasks.findMany.mockResolvedValue([]);
+    mockDb.query.taskSteps.findFirst.mockResolvedValue(null);
     mockDb.query.taskSteps.findMany.mockResolvedValue([]);
     mockDb.query.toolCalls.findMany.mockResolvedValue([]);
     mockDb.query.approvalRequests.findFirst.mockResolvedValue(null);
@@ -265,6 +267,176 @@ describe('AgentOrchestrator', () => {
     expect(insertedValues.some((value) => value.action === 'TOOL_APPROVAL_EXPIRED')).toBe(true);
   });
 
+  it('rebuilds messages correctly from task steps and allocates monotonic step numbers on resume (approve)', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    mockDb.query.tasks.findFirst.mockImplementation(() => {
+      // Simulate that after submitToolApproval updates task status, it's executing
+      const hasUpdatedTask = updatedValues.some(v => v.status === 'executing');
+      return Promise.resolve({
+        id: TASK_ID,
+        userId: USER_ID,
+        workspaceId: WORKSPACE_ID,
+        status: hasUpdatedTask ? 'executing' : 'waiting_approval',
+        input: 'run tests',
+      });
+    });
+    mockDb.query.toolCalls.findFirst.mockResolvedValue({
+      id: TOOL_CALL_ID,
+      userId: USER_ID,
+      taskId: TASK_ID,
+      toolName: 'run_command',
+      args: { command: 'npm test' },
+      status: 'awaiting_approval',
+      approvalId: APPROVAL_ID,
+    });
+    mockDb.query.approvalRequests.findFirst.mockResolvedValue({
+      id: APPROVAL_ID,
+      userId: USER_ID,
+      taskId: TASK_ID,
+      toolCallId: TOOL_CALL_ID,
+      expiresAt: new Date(Date.now() + 100000), // not expired
+    });
+    
+    // Provide existing steps to simulate resume
+    mockDb.query.taskSteps.findMany.mockImplementation(() => {
+      return Promise.resolve([
+        { type: 'thought', content: 'I should run tests', stepNumber: 1 },
+        { type: 'action', toolName: 'run_command', toolInput: { command: 'npm test' }, stepNumber: 2 },
+        ...insertedValues.filter(v => v.type === 'observation')
+      ]);
+    });
+    mockDb.query.taskSteps.findFirst.mockImplementation(() => {
+      const insertedSteps = insertedValues.filter(v => v.stepNumber !== undefined).map(v => v.stepNumber as number);
+      const maxInserted = insertedSteps.length > 0 ? Math.max(...insertedSteps) : 0;
+      return Promise.resolve({ stepNumber: Math.max(2, maxInserted) });
+    });
+
+    const executeApproved = vi.fn(async () => 'tests passed');
+    const generate = vi.fn(async () => ({
+      content: 'All done',
+      toolCalls: [],
+    }));
+
+    const orchestrator = new AgentOrchestrator(logger) as unknown as {
+      registry: { executeApproved: ReturnType<typeof vi.fn>, getAllDefinitions: () => any[] };
+      llm: { generate: typeof generate };
+      submitToolApproval: (
+        taskId: string,
+        userId: string,
+        decision: 'approve' | 'reject',
+        reason?: string,
+      ) => Promise<void>;
+    };
+    orchestrator.registry = { executeApproved, getAllDefinitions: vi.fn(() => []) };
+    orchestrator.llm = { generate };
+
+    await orchestrator.submitToolApproval(TASK_ID, USER_ID, 'approve');
+
+    // Wait for the async runAgentLoop to finish
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // verify step 3 was inserted for observation
+    const obsStep = insertedValues.find(v => v.type === 'observation');
+    expect(obsStep).toMatchObject({ stepNumber: 3, toolOutput: 'tests passed' });
+
+    // verify step 4 was inserted for thought
+    const thoughtStep = insertedValues.find(v => v.type === 'thought' && v.content === 'All done');
+    expect(thoughtStep).toMatchObject({ stepNumber: 4 });
+
+    // verify generate was called with correct messages
+    const generateCall = generate.mock.calls[0][0];
+    expect(generateCall).toMatchObject([
+      { role: 'system', content: expect.any(String) },
+      { role: 'user', content: 'run tests' },
+      { role: 'assistant', content: 'I should run tests' },
+      { role: 'assistant', content: 'Calling tool run_command' },
+      { role: 'user', content: 'tests passed', name: 'run_command' },
+      { role: 'assistant', content: 'All done' },
+    ]);
+  });
+
+  it('rebuilds messages correctly from task steps and allocates monotonic step numbers on resume (reject)', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    mockDb.query.tasks.findFirst.mockImplementation(() => {
+      const hasUpdatedTask = updatedValues.some(v => v.status === 'executing');
+      return Promise.resolve({
+        id: TASK_ID,
+        userId: USER_ID,
+        workspaceId: WORKSPACE_ID,
+        status: hasUpdatedTask ? 'executing' : 'waiting_approval',
+        input: 'run tests',
+      });
+    });
+    mockDb.query.toolCalls.findFirst.mockResolvedValue({
+      id: TOOL_CALL_ID,
+      userId: USER_ID,
+      taskId: TASK_ID,
+      toolName: 'run_command',
+      args: { command: 'npm test' },
+      status: 'awaiting_approval',
+      approvalId: APPROVAL_ID,
+    });
+    mockDb.query.approvalRequests.findFirst.mockResolvedValue({
+      id: APPROVAL_ID,
+      userId: USER_ID,
+      taskId: TASK_ID,
+      toolCallId: TOOL_CALL_ID,
+      expiresAt: new Date(Date.now() + 100000), // not expired
+    });
+    
+    // Provide existing steps to simulate resume
+    mockDb.query.taskSteps.findMany.mockImplementation(() => {
+      return Promise.resolve([
+        { type: 'thought', content: 'I should run tests', stepNumber: 1 },
+        { type: 'action', toolName: 'run_command', toolInput: { command: 'npm test' }, stepNumber: 2 },
+        ...insertedValues.filter(v => v.type === 'observation')
+      ]);
+    });
+    mockDb.query.taskSteps.findFirst.mockImplementation(() => {
+      const insertedSteps = insertedValues.filter(v => v.stepNumber !== undefined).map(v => v.stepNumber as number);
+      const maxInserted = insertedSteps.length > 0 ? Math.max(...insertedSteps) : 0;
+      return Promise.resolve({ stepNumber: Math.max(2, maxInserted) });
+    });
+
+    const generate = vi.fn(async () => ({
+      content: 'I will stop',
+      toolCalls: [],
+    }));
+
+    const orchestrator = new AgentOrchestrator(logger) as unknown as {
+      registry: { getAllDefinitions: () => any[] };
+      llm: { generate: typeof generate };
+      submitToolApproval: (
+        taskId: string,
+        userId: string,
+        decision: 'approve' | 'reject',
+        reason?: string,
+      ) => Promise<void>;
+    };
+    orchestrator.registry = { getAllDefinitions: vi.fn(() => []) };
+    orchestrator.llm = { generate };
+
+    await orchestrator.submitToolApproval(TASK_ID, USER_ID, 'reject', 'Too dangerous');
+
+    // Wait for the async runAgentLoop to finish
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // verify step 3 was inserted for observation (rejection)
+    const obsStep = insertedValues.find(v => v.type === 'observation');
+    expect(obsStep).toMatchObject({ stepNumber: 3, toolOutput: 'User rejected tool execution: Too dangerous' });
+
+    // verify generate was called with correct messages
+    const generateCall = generate.mock.calls[0][0];
+    expect(generateCall).toMatchObject([
+      { role: 'system', content: expect.any(String) },
+      { role: 'user', content: 'run tests' },
+      { role: 'assistant', content: 'I should run tests' },
+      { role: 'assistant', content: 'Calling tool run_command' },
+      { role: 'user', content: 'User rejected tool execution: Too dangerous', name: 'run_command' },
+      { role: 'assistant', content: 'I will stop' },
+    ]);
+  });
+
   it('marks abandoned executing tasks and running tool calls failed during recovery', async () => {
     const { AgentOrchestrator } = await import('./orchestrator');
     mockDb.query.tasks.findMany.mockResolvedValueOnce([
@@ -409,5 +581,125 @@ describe('AgentOrchestrator', () => {
       TASK_ID,
       expect.objectContaining({ id: TASK_ID }),
     );
+  });
+
+  it('executes multiple tool calls in a single LLM response', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    mockDb.query.tasks.findFirst.mockResolvedValue({
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      conversationId: CONVERSATION_ID,
+      input: 'read and list',
+      output: null,
+      status: 'pending',
+      metadata: { personaId: null, skillIds: [] },
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    });
+
+    const generate = vi.fn(async () => {
+      // First call returns tool calls; subsequent calls return completion
+      if (generate.mock.calls.length > 1) {
+        return { content: 'All done', toolCalls: [] };
+      }
+      return {
+        content: null,
+        toolCalls: [
+          { id: 'tc-1', name: 'read_file', arguments: JSON.stringify({ path: '/README.md' }) },
+          { id: 'tc-2', name: 'list_files', arguments: JSON.stringify({ path: '/' }) },
+        ],
+      };
+    });
+
+    const execute = vi.fn(async (name: string) => {
+      if (name === 'read_file') return 'Hello world';
+      if (name === 'list_files') return JSON.stringify(['a.ts', 'b.ts']);
+      throw new Error('unknown');
+    });
+
+    const orchestrator = new AgentOrchestrator(logger) as unknown as {
+      llm: { generate: typeof generate };
+      registry: {
+        execute: typeof execute;
+        getAllDefinitions: () => any[];
+        get: (name: string) => { requiresApproval: boolean } | undefined;
+      };
+      runAgentLoop: (taskId: string, userId: string) => Promise<void>;
+    };
+    orchestrator.llm = { generate };
+    orchestrator.registry = {
+      execute,
+      getAllDefinitions: vi.fn(() => []),
+      get: () => ({ requiresApproval: false }),
+    };
+
+    await orchestrator.runAgentLoop(TASK_ID, USER_ID);
+
+    // Both tools should have been executed
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenCalledWith(
+      'read_file',
+      JSON.stringify({ path: '/README.md' }),
+      expect.anything(),
+    );
+    expect(execute).toHaveBeenCalledWith(
+      'list_files',
+      JSON.stringify({ path: '/' }),
+      expect.anything(),
+    );
+
+    // Should mark task completed after the second LLM call returns no tools
+    expect(updatedValues.some((v) => v.status === 'completed')).toBe(true);
+  });
+
+  it('pauses on approval even when multiple tools are requested', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    mockDb.query.tasks.findFirst.mockResolvedValue({
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      conversationId: CONVERSATION_ID,
+      input: 'run dangerous cmd',
+      output: null,
+      status: 'pending',
+      metadata: { personaId: null, skillIds: [] },
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    });
+
+    const generate = vi.fn(async () => ({
+      content: null,
+      toolCalls: [
+        { id: 'tc-1', name: 'read_file', arguments: JSON.stringify({ path: '/x' }) },
+        { id: 'tc-2', name: 'run_command', arguments: JSON.stringify({ command: 'rm -rf /' }) },
+      ],
+    }));
+
+    const execute = vi.fn(async () => 'file content');
+
+    const orchestrator = new AgentOrchestrator(logger) as unknown as {
+      llm: { generate: typeof generate };
+      registry: {
+        execute: typeof execute;
+        getAllDefinitions: () => any[];
+        get: (name: string) => { requiresApproval: boolean } | undefined;
+      };
+      runAgentLoop: (taskId: string, userId: string) => Promise<void>;
+    };
+    orchestrator.llm = { generate };
+    orchestrator.registry = {
+      execute,
+      getAllDefinitions: vi.fn(() => []),
+      get: (name: string) =>
+        name === 'run_command' ? { requiresApproval: true } : { requiresApproval: false },
+    };
+
+    await orchestrator.runAgentLoop(TASK_ID, USER_ID);
+
+    // run_command requires approval — loop should pause immediately
+    // and NOT execute any tools (even read_file)
+    expect(execute).not.toHaveBeenCalled();
+    expect(updatedValues.some((v) => v.status === 'waiting_approval')).toBe(true);
   });
 });

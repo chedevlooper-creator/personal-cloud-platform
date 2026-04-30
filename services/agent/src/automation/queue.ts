@@ -43,17 +43,40 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
           .set({ taskId: task.id })
           .where(eq(automationRuns.id, runId));
 
-        // In a real long-running scenario, we would wait for task completion.
-        // For now, since the task executes asynchronously or synchronously, we just mark it as completed.
-        // If we need the actual task output, we can poll or hook into task completion events.
+        // Poll for task completion (max 10 minutes)
+        const maxPollMs = 10 * 60 * 1000;
+        const pollIntervalMs = 3000;
+        const deadline = Date.now() + maxPollMs;
+        let terminalTask = null;
+
+        while (Date.now() < deadline) {
+          const current = await orchestrator.getTask(task.id, userId);
+          if (!current) {
+            throw new Error('Task disappeared during automation execution');
+          }
+          if (['completed', 'failed', 'cancelled'].includes(current.status)) {
+            terminalTask = current;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, pollIntervalMs));
+        }
+
+        if (!terminalTask) {
+          throw new Error('Automation task timed out after 10 minutes');
+        }
+
         const finishedAt = new Date();
         const durationMs = finishedAt.getTime() - startedAt.getTime();
+        const status = terminalTask.status as 'completed' | 'failed' | 'cancelled';
+
         await db
           .update(automationRuns)
           .set({
-            status: 'completed',
+            status,
             finishedAt,
             durationMs: durationMs.toString(),
+            output: terminalTask.output,
+            error: status === 'failed' ? terminalTask.output : null,
             notificationSent: true,
           })
           .where(eq(automationRuns.id, runId));
@@ -63,7 +86,7 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
           .set({ lastRunAt: finishedAt })
           .where(eq(automations.id, automationId));
 
-        logger.info({ runId }, 'Automation run completed');
+        logger.info({ runId, status }, 'Automation run finished');
 
         if (automation) {
           await dispatchAutomationRunNotification(
@@ -72,9 +95,10 @@ export async function setupAutomationWorker(orchestrator: AgentOrchestrator, log
               automationId,
               userId,
               title: automation.title,
-              status: 'completed',
+              status,
               durationMs,
-              output: null,
+              output: terminalTask.output,
+              error: status === 'failed' ? terminalTask.output : null,
             },
             {
               mode: automation.notificationMode,

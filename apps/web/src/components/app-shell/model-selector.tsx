@@ -18,13 +18,13 @@ export function ModelSelector({
       title="Select model"
       aria-label="Select model"
       className={cn(
-        'rounded-full border-[#60626A] bg-[#202126] text-[#F3F3F3] hover:bg-[#27282E] dark:border-[#60626A]',
-        compact ? 'h-7 px-2.5 text-xs font-extrabold' : 'h-8 px-3',
+        'rounded-full border-border bg-muted/50 text-foreground hover:bg-muted transition-all active:scale-[0.98]',
+        compact ? 'h-7 px-2.5 text-xs font-medium' : 'h-8 px-3 font-medium',
       )}
     >
-      <Cpu className={cn('text-[#F2F2F2]', compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
+      <Cpu className={cn('text-foreground/80', compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
       <span className="max-w-28 truncate">{model}</span>
-      <ChevronDown className={cn('text-[#C2C4C8]', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+      <ChevronDown className={cn('text-muted-foreground', compact ? 'h-3 w-3' : 'h-4 w-4')} />
     </Button>
   );
 }

@@ -88,9 +88,30 @@ export default function PersonasPage() {
             is selected.
           </p>
         </div>
-        <Button size="sm" onClick={() => setEditor({ ...empty })}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" /> New persona
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              const defaults = [
+                { slug: 'swe', name: 'Software Engineer', prompt: 'You are an expert software engineer. Write clean, concise code.' },
+                { slug: 'reviewer', name: 'Code Reviewer', prompt: 'You are a strict code reviewer. Focus on bugs, security, and performance.' },
+                { slug: 'ui-ux', name: 'UI/UX Pro Max', prompt: 'You are an elite UI/UX designer. Focus on accessibility, layout, and visual hierarchy.' },
+                { slug: 'researcher', name: 'Researcher', prompt: 'You are a deep-dive researcher. Use the browser to find factual, cited information.' }
+              ];
+              for (const p of defaults) {
+                await agentApi.post('/personas', { slug: p.slug, name: p.name, systemPrompt: p.prompt, isDefault: false });
+              }
+              qc.invalidateQueries({ queryKey: ['personas'] });
+              toast.success('Default sub-agents created!');
+            }}
+          >
+            <Bot className="mr-1.5 h-3.5 w-3.5" /> Generate Defaults
+          </Button>
+          <Button size="sm" onClick={() => setEditor({ ...empty })}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> New persona
+          </Button>
+        </div>
       </div>
 
       {editor && (
