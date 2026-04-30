@@ -47,12 +47,15 @@ None.
 | 2026-04-30 | Phase 5-03 token tracking committed | Monthly quota enforcement + usage persistence + /agent/usage endpoint |
 | 2026-04-30 | Phase 6-01 runtime hardening committed | Seccomp profile, configurable image whitelist, audit logging for runtime events |
 | 2026-04-30 | Phase 6-02 runtime health checks committed | Periodic container security inspection, auto-stop on policy violation, audit logging |
+| 2026-04-30 | Agent pre-existing failures fixed | env.test.ts now passes (set LLM_PROVIDER + OPENAI_API_KEY in tests); typecheck clean across all 10 packages |
 
 ## Notes
 
 - Brownfield project — code exists, needs production-readiness work
+- **Full monorepo status: typecheck clean + all tests passing**
+  - auth: 36 passed | workspace: 24 passed | runtime: 23 passed | agent: 56 passed
+  - memory: 15 passed | publish: 40 passed | browser: 9 passed
 - Agent service recently received multi-tool, automation polling, and safe parsing fixes (committed to master)
-- 3 pre-existing env.test.ts failures unrelated to current work
 
 ---
 *Last updated: 2026-04-30*
