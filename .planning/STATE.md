@@ -52,6 +52,7 @@ None.
 | 2026-04-30 | Dataset tools added to agent | list_datasets and describe_dataset tools for data discovery before querying |
 | 2026-04-30 | Parallel multi-tool execution | Non-approval tools now run via Promise.all instead of sequential for-loop |
 | 2026-04-30 | Automation worker polling verified | Test confirms worker polls getTask until terminal status before updating run |
+| 2026-04-30 | Snapshot system completed | Download endpoint, storage usage API, timeline UI with day grouping, storage indicator, warning variant for restore |
 
 ## Notes
 

@@ -88,11 +88,12 @@ This is a **brownfield TypeScript pnpm monorepo**. The major product modules alr
 - ✓ Automation worker waits for real task completion (polling loop)
 - ✓ All tests passing (204 total across 7 services)
 - ✓ Full monorepo typecheck clean (10 packages)
+- ✓ Snapshot system complete (create, list, restore, delete, download, storage usage)
+- ✓ Snapshot timeline UI with day grouping and storage indicator
 
 ### Active
 
 - [ ] Frontend notification system polish
-- [ ] Snapshot system completion
 
 ### Out of Scope
 
