@@ -117,23 +117,23 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
                 return sendApiError(
                   reply,
                   400,
-                  'INVALID_ATTACHMENT',
+                  'BAD_REQUEST',
                   err instanceof Error ? err.message : 'Failed to read attachment',
                 );
               }
             }
           }
           if (!inputField || inputField.length > 12000) {
-            return sendApiError(reply, 400, 'INVALID_INPUT', 'input is required (max 12000 chars)');
+            return sendApiError(reply, 400, 'BAD_REQUEST', 'input is required (max 12000 chars)');
           }
           userInput = inputField;
         } catch (err) {
-          return sendApiError(
-            reply,
-            400,
-            'INVALID_MULTIPART',
-            err instanceof Error ? err.message : 'Invalid multipart payload',
-          );
+            return sendApiError(
+              reply,
+              400,
+              'BAD_REQUEST',
+              err instanceof Error ? err.message : 'Invalid multipart payload',
+            );
         }
       } else {
         userInput = (request.body as { input: string }).input;

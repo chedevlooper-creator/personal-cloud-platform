@@ -26,7 +26,7 @@ const { mockDb, insertedValues, updatedValues } = vi.hoisted(() => {
     },
   ]);
 
-  const mockDb = {
+  const mockDb: any = {
     query: {
       sessions: { findFirst: vi.fn() },
       users: { findFirst: vi.fn() },
@@ -65,7 +65,7 @@ const { mockDb, insertedValues, updatedValues } = vi.hoisted(() => {
         };
       }),
     })),
-    transaction: vi.fn(async (cb) => cb(mockDb)),
+    transaction: vi.fn(async (cb: any) => cb(mockDb)),
   };
 
   return { mockDb, insertedValues, updatedValues };
@@ -329,7 +329,7 @@ describe('AgentOrchestrator', () => {
         reason?: string,
       ) => Promise<void>;
     };
-    orchestrator.registry = { executeApproved, getAllDefinitions: vi.fn(() => []) };
+    orchestrator.registry = { executeApproved: executeApproved as any, getAllDefinitions: vi.fn(() => []) };
     orchestrator.llm = { generate };
 
     await orchestrator.submitToolApproval(TASK_ID, USER_ID, 'approve');
@@ -346,7 +346,7 @@ describe('AgentOrchestrator', () => {
     expect(thoughtStep).toMatchObject({ stepNumber: 4 });
 
     // verify generate was called with correct messages
-    const generateCall = generate.mock.calls[0][0];
+    const generateCall = (generate.mock.calls[0] as any)?.[0];
     expect(generateCall).toMatchObject([
       { role: 'system', content: expect.any(String) },
       { role: 'user', content: 'run tests' },
@@ -428,7 +428,7 @@ describe('AgentOrchestrator', () => {
     expect(obsStep).toMatchObject({ stepNumber: 3, toolOutput: 'User rejected tool execution: Too dangerous' });
 
     // verify generate was called with correct messages
-    const generateCall = generate.mock.calls[0][0];
+    const generateCall = (generate.mock.calls[0] as any)?.[0];
     expect(generateCall).toMatchObject([
       { role: 'system', content: expect.any(String) },
       { role: 'user', content: 'run tests' },
