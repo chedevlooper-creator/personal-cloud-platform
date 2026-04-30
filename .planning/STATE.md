@@ -53,6 +53,7 @@ None.
 | 2026-04-30 | Parallel multi-tool execution | Non-approval tools now run via Promise.all instead of sequential for-loop |
 | 2026-04-30 | Automation worker polling verified | Test confirms worker polls getTask until terminal status before updating run |
 | 2026-04-30 | Snapshot system completed | Download endpoint, storage usage API, timeline UI with day grouping, storage indicator, warning variant for restore |
+| 2026-04-30 | Rate limiting unified across all services | Shared rate-limit module in packages/shared; memory service added; all 7 services now covered |
 
 ## Notes
 

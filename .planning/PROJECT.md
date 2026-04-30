@@ -80,6 +80,7 @@ This is a **brownfield TypeScript pnpm monorepo**. The major product modules alr
 - ✓ Audit logging
 - ✓ Runtime sandbox hardening (seccomp, cgroups, network isolation, health checks)
 - ✓ Rate limiting per user on agent endpoints
+- ✓ Rate limiting on all 7 services (auth, workspace, runtime, agent, memory, publish, browser)
 - ✓ Token usage tracking and limits
 - ✓ Cross-service authentication (shared session validation)
 - ✓ Admin dashboard surfaces (users, audit logs, runtime events, health)
