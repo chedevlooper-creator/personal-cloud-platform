@@ -262,8 +262,8 @@ export default function AdminPage() {
                   className={cn(
                     'mx-auto h-8 w-8 rounded-full mb-2 flex items-center justify-center',
                     healthData.dbConnected
-                      ? 'bg-green-500/10 text-green-500'
-                      : 'bg-red-500/10 text-red-500',
+                      ? 'bg-success/15 text-success'
+                      : 'bg-destructive/15 text-destructive',
                   )}
                 >
                   {healthData.dbConnected ? '✓' : '✗'}

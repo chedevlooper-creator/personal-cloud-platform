@@ -88,9 +88,9 @@ export default function SpacePage() {
 
   const breakdown = grandTotal > 0
     ? [
-        { label: 'Workspaces', bytes: totalWorkspaceUsed, color: 'bg-sky-500' },
-        { label: 'Datasets', bytes: totalDatasetBytes, color: 'bg-emerald-500' },
-        { label: 'Snapshots', bytes: totalSnapshotBytes, color: 'bg-amber-500' },
+        { label: 'Workspaces', bytes: totalWorkspaceUsed, color: 'bg-[var(--chart-1)]' },
+        { label: 'Datasets', bytes: totalDatasetBytes, color: 'bg-[var(--chart-2)]' },
+        { label: 'Snapshots', bytes: totalSnapshotBytes, color: 'bg-[var(--chart-3)]' },
       ]
     : [];
 
