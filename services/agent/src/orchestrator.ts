@@ -28,6 +28,8 @@ import { WebFetchTool } from './tools/web_fetch';
 import { SearchMemoryTool } from './tools/search_memory';
 import { AddMemoryTool } from './tools/add_memory';
 import { QueryDatasetTool } from './tools/query_dataset';
+import { ListDatasetsTool } from './tools/list_datasets';
+import { DescribeDatasetTool } from './tools/describe_dataset';
 import {
   BrowserOpenTool,
   BrowserExtractTool,
@@ -69,6 +71,8 @@ export class AgentOrchestrator {
     this.registry.register(new SearchMemoryTool());
     this.registry.register(new AddMemoryTool());
     this.registry.register(new QueryDatasetTool());
+    this.registry.register(new ListDatasetsTool());
+    this.registry.register(new DescribeDatasetTool());
     this.registry.register(new BrowserOpenTool());
     this.registry.register(new BrowserExtractTool());
     this.registry.register(new BrowserScreenshotTool());
