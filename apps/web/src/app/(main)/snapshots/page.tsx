@@ -222,12 +222,12 @@ export default function SnapshotsPage() {
         <div className="flex items-center gap-2">
           {usage && (
             <div className="hidden sm:block text-right">
-              <p className={`text-xs ${usageHigh ? 'text-amber-600' : 'text-muted-foreground'}`}>
+              <p className={`text-xs ${usageHigh ? 'text-warning-foreground dark:text-warning' : 'text-muted-foreground'}`}>
                 Using {formatBytes(usage.totalBytes)} of {formatBytes(SNAPSHOT_STORAGE_LIMIT)}
               </p>
               <div className="mt-1 h-1 w-32 rounded-full bg-muted">
                 <div
-                  className={`h-1 rounded-full transition-all ${usageHigh ? 'bg-amber-500' : 'bg-primary'}`}
+                  className={`h-1 rounded-full transition-all ${usageHigh ? 'bg-warning' : 'bg-primary'}`}
                   style={{ width: `${Math.min(usagePct, 100)}%` }}
                 />
               </div>
@@ -338,7 +338,7 @@ export default function SnapshotsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                                className="border-warning/40 text-warning-foreground hover:bg-warning/10 hover:text-warning-foreground dark:text-warning dark:hover:text-warning"
                                 onClick={() => setRestoreTarget(snap)}
                               >
                                 <RotateCcw className="mr-1 h-3.5 w-3.5" /> Restore

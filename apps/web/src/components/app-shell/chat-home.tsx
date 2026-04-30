@@ -170,7 +170,7 @@ export function ChatHome() {
       <DottedBackground className="opacity-30" />
       <input ref={fileInputRef} type="file" multiple className="hidden" aria-label="Upload files" />
       <div
-        className={`relative z-10 mx-auto flex w-[calc(100vw-3rem)] min-w-0 max-w-full flex-1 flex-col pb-20 pt-8 sm:w-full sm:max-w-[760px] ${
+        className={`relative z-10 mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col px-6 pb-20 pt-8 sm:max-w-[760px] sm:px-0 ${
           messages.length === 0 ? 'justify-center lg:pt-[27vh]' : 'justify-start lg:pt-12'
         }`}
       >
@@ -188,12 +188,12 @@ export function ChatHome() {
           onApproveTool={() => setToolApproval(null)}
           onRejectTool={() => setToolApproval(null)}
         />
-        <div className="mt-5 text-[10px] leading-tight text-[#777C85]">
-          <div className="font-extrabold text-[#B1B3B9]">Rewards</div>
+        <div className="mt-5 text-xs leading-tight text-muted-foreground">
+          <div className="font-extrabold text-foreground/80">Rewards</div>
           <div>Earn $10 / user</div>
         </div>
       </div>
-      <div className="relative z-10 mx-auto flex w-full max-w-[520px] flex-wrap items-center justify-center gap-x-5 gap-y-2 pb-1 text-xs text-[#A8A8A8]/80">
+      <div className="relative z-10 mx-auto flex w-full max-w-[520px] flex-wrap items-center justify-center gap-x-5 gap-y-2 pb-1 text-xs text-muted-foreground/80">
         <span>kafkasder.zo.computer</span>
         <span>kafkasder.zo.space</span>
         <span>kafkasder@zo.computer</span>

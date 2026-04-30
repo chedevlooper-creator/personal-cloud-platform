@@ -55,10 +55,10 @@ export function ConfirmDialog({
         <div className="flex items-start gap-3">
           {(variant === 'destructive' || variant === 'warning') && (
             <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-              variant === 'destructive' ? 'bg-destructive/10' : 'bg-amber-500/10'
+              variant === 'destructive' ? 'bg-destructive/10' : 'bg-warning/15'
             }`}>
               <AlertTriangle className={`h-5 w-5 ${
-                variant === 'destructive' ? 'text-destructive' : 'text-amber-500'
+                variant === 'destructive' ? 'text-destructive' : 'text-warning-foreground dark:text-warning'
               }`} />
             </div>
           )}
@@ -75,7 +75,7 @@ export function ConfirmDialog({
           <Button
             variant={variant === 'destructive' ? 'destructive' : 'default'}
             size="sm"
-            className={variant === 'warning' ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+            className={variant === 'warning' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : ''}
             onClick={handleConfirm}
             disabled={loading}
           >

@@ -198,7 +198,7 @@ export default function PersonasPage() {
                       {p.slug}
                     </span>
                     {p.isDefault && (
-                      <span className="flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                      <span className="flex items-center gap-1 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground dark:text-warning">
                         <Star className="h-2.5 w-2.5" /> Default
                       </span>
                     )}
