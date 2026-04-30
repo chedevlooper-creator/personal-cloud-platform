@@ -2,10 +2,10 @@
 
 ## Status
 
-**Current Phase:** 5 — Security & Reliability
+**Current Phase:** 6 — Runtime Hardening
 **Last Activity:** 2026-04-30
-**Current Focus:** Phase 5 complete — awaiting Phase 6 planning
-**Current Position:** Phase 5 execution done, Phase 6 queued
+**Current Focus:** Phase 6-01 runtime hardening complete
+**Current Position:** Phase 6-01 done, Phase 6-02 queued
 
 ## Phase Progress
 
@@ -16,7 +16,7 @@
 | 3 | Agent Ecosystem | ✅ Done | — | — |
 | 4 | Integration & Admin | ✅ Done | 1 | 100% |
 | 5 | Security & Reliability | ✅ Done | 3 | 100% |
-| 6 | Runtime Hardening | ⏳ Queued | TBD | 0% |
+| 6 | Runtime Hardening | 🔄 In Progress | 1 | 50% |
 
 ## Active Work
 
@@ -26,6 +26,8 @@
 - [x] Phase 5 execution: Tenant Isolation Audit (05-01)
 - [x] Phase 5 execution: Rate Limiting (05-02)
 - [x] Phase 5 execution: Token Usage Tracking (05-03)
+- [x] Phase 6 plan created (06-01: Runtime Hardening)
+- [x] Phase 6 execution: Runtime Hardening (06-01)
 
 ## Blockers
 
@@ -42,6 +44,7 @@ None.
 | 2026-04-30 | Phase 5-01 tenant audit committed | Documented intentional unscoped queries; added cross-tenant test |
 | 2026-04-30 | Phase 5-02 rate limiting committed | Per-user Redis-backed sliding window on agent endpoints |
 | 2026-04-30 | Phase 5-03 token tracking committed | Monthly quota enforcement + usage persistence + /agent/usage endpoint |
+| 2026-04-30 | Phase 6-01 runtime hardening committed | Seccomp profile, configurable image whitelist, audit logging for runtime events |
 
 ## Notes
 
