@@ -7,9 +7,9 @@
 | 1 | Foundation | Auth, workspace, runtime MVP | AUTH-01..05, WS-01..04, RUN-01 | ✅ Complete |
 | 2 | Agent Core | AI agent with tool calling | AGENT-01..02, AGENT-04..08, AGENT-12, RUN-01 | ✅ Complete |
 | 3 | Agent Ecosystem | Memory, browser, automations, channels | AGENT-09..11, AUTO-01..05, MEM-01..02, CHAN-01..02, PERSONA-01, SKILL-01..02, NOTIFY-01..02 | ✅ Complete |
-| 4 | Integration & Admin | Cross-service auth, publish, snapshots, admin | AUTH-05, PUB-01, SNAP-01..02, ADMIN-01..02, SEC-03 | 🔄 In Progress |
-| 5 | Security & Reliability | Hardening, tenant isolation, rate limits | AGENT-03, AUTO-02, SEC-01..02, PERF-01..02 | ⏳ Planned |
-| 6 | Runtime Hardening | Sandbox security, resource limits | RUN-02..03 | ⏳ Planned |
+| 4 | Integration & Admin | Cross-service auth, publish, snapshots, admin | AUTH-05, PUB-01, SNAP-01..02, ADMIN-01..02, SEC-03 | ✅ Complete |
+| 5 | Security & Reliability | Hardening, tenant isolation, rate limits | AGENT-03, AUTO-02, SEC-01..02, PERF-01..02 | ✅ Complete |
+| 6 | Runtime Hardening | Sandbox security, resource limits | RUN-02..03 | 🔄 In Progress |
 
 ---
 
@@ -79,7 +79,7 @@
 
 ---
 
-## Phase 4: Integration & Admin 🔄
+## Phase 4: Integration & Admin ✅
 
 **Goal:** Cross-service auth consistency, publishing, snapshots, admin surfaces.
 
@@ -89,20 +89,20 @@
 - **04-01** — Shared Auth Middleware (extract duplicated session validation)
 
 **Success Criteria:**
-1. Session validation is consistent across all 7 services
+1. Session validation is consistent across all 7 services ✅
 2. User can publish workspace apps to public URL
 3. User can create and restore workspace snapshots
 4. Admin dashboard shows user list and system health
 
 **Deliverables:**
-- Shared auth middleware / service token validation
+- Shared auth middleware / service token validation ✅
 - `services/publish` — app hosting via Traefik
 - Snapshot CRUD in workspace service
 - Admin UI in `apps/web`
 
 ---
 
-## Phase 5: Security & Reliability ⏳
+## Phase 5: Security & Reliability ✅
 
 **Goal:** Production readiness — tenant isolation, rate limits, correct async behavior.
 
@@ -114,26 +114,29 @@
 - **05-03** — Token Usage Tracking (monthly quotas, usage dashboard)
 
 **Success Criteria:**
-1. Agent processes all tool calls in a single LLM response
-2. Automation worker accurately reports task success/failure
-3. Every DB query is tenant-scoped
-4. Per-user rate limits prevent abuse
-5. Token usage is tracked and limited
+1. Agent processes all tool calls in a single LLM response ✅
+2. Automation worker accurately reports task success/failure ✅
+3. Every DB query is tenant-scoped ✅
+4. Per-user rate limits prevent abuse ✅
+5. Token usage is tracked and limited ✅
 
 **Deliverables:**
 - Multi-tool execution loop refactor ✅ (already done)
 - Automation polling + timeout handling ✅ (already done)
-- Tenant scoping audit across all services
-- Rate limiting middleware (per user)
-- Token quota tracking
+- Tenant scoping audit across all services ✅
+- Rate limiting middleware (per user) ✅
+- Token quota tracking ✅
 
 ---
 
-## Phase 6: Runtime Hardening ⏳
+## Phase 6: Runtime Hardening 🔄
 
 **Goal:** Untrusted code execution without host escape.
 
 **Requirements:** RUN-02..03
+
+**Plans:**
+- **06-01** — Runtime Hardening (seccomp, image whitelist, audit logging)
 
 **Success Criteria:**
 1. Docker containers cannot access host filesystem
@@ -142,10 +145,11 @@
 4. Privilege escalation is blocked
 
 **Deliverables:**
-- Seccomp profiles for runtime containers
+- Seccomp profiles for runtime containers ✅
 - cgroup resource limits
-- Network namespace isolation
-- Image whitelist / policy
+- Network namespace isolation ✅
+- Image whitelist / policy ✅
+- Security audit logging ✅
 
 ---
 
