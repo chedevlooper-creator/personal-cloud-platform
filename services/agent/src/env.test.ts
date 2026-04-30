@@ -21,6 +21,8 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     process.env.DATABASE_URL = 'postgres://x:y@localhost/db';
     process.env.COOKIE_SECRET = 'a'.repeat(32);
     process.env.INTERNAL_SERVICE_TOKEN = 'b'.repeat(32);
+    process.env.LLM_PROVIDER = 'openai';
+    process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
     delete process.env.ENCRYPTION_KEY;
 
     await expect(import('./env')).rejects.toThrow(/ENCRYPTION_KEY/);
@@ -31,6 +33,8 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     process.env.DATABASE_URL = 'postgres://x:y@localhost/db';
     process.env.COOKIE_SECRET = 'a'.repeat(32);
     process.env.INTERNAL_SERVICE_TOKEN = 'b'.repeat(32);
+    process.env.LLM_PROVIDER = 'openai';
+    process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
     process.env.ENCRYPTION_KEY = 'changeme-changeme-changeme-1234';
 
     await expect(import('./env')).rejects.toThrow(/ENCRYPTION_KEY/);
@@ -41,6 +45,8 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     process.env.DATABASE_URL = 'postgres://x:y@localhost/db';
     process.env.COOKIE_SECRET = 'a'.repeat(32);
     process.env.INTERNAL_SERVICE_TOKEN = 'b'.repeat(32);
+    process.env.LLM_PROVIDER = 'openai';
+    process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
     process.env.ENCRYPTION_KEY = 'X9k2Ll7vQ8mZpRtY3wN6cF1jB4hG5dKa';
 
     const mod = await import('./env');
