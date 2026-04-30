@@ -72,6 +72,51 @@ export async function setupSnapshotRoutes(
     },
   );
 
+  server.get(
+    '/snapshots/:id/download',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+
+      const snapshot = await workspaceService.getSnapshot(request.params.id, userId);
+      if (!snapshot) return sendApiError(reply, 404, 'NOT_FOUND');
+      if (snapshot.status !== 'ready') return sendApiError(reply, 400, 'BAD_REQUEST');
+
+      const buffer = await workspaceService.getSnapshotBuffer(snapshot.storageKey);
+      const safeName = snapshot.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+
+      return reply
+        .header('Content-Type', 'application/gzip')
+        .header('Content-Disposition', `attachment; filename="${safeName}.tar.gz"`)
+        .send(buffer);
+    },
+  );
+
+  server.get(
+    '/snapshots/usage',
+    {
+      schema: {
+        response: {
+          200: z.object({
+            totalBytes: z.number(),
+            count: z.number(),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+
+      return workspaceService.getUserSnapshotStorageUsage(userId);
+    },
+  );
+
   server.post(
     '/snapshots/:id/restore',
     {

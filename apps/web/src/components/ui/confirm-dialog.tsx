@@ -12,7 +12,7 @@ interface ConfirmDialogProps {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'default' | 'destructive';
+  variant?: 'default' | 'destructive' | 'warning';
   onConfirm: () => void | Promise<void>;
   children?: React.ReactNode;
 }
@@ -53,9 +53,13 @@ export function ConfirmDialog({
       />
       <div className="relative z-10 mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start gap-3">
-          {variant === 'destructive' && (
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
+          {(variant === 'destructive' || variant === 'warning') && (
+            <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+              variant === 'destructive' ? 'bg-destructive/10' : 'bg-amber-500/10'
+            }`}>
+              <AlertTriangle className={`h-5 w-5 ${
+                variant === 'destructive' ? 'text-destructive' : 'text-amber-500'
+              }`} />
             </div>
           )}
           <div className="min-w-0 flex-1">
@@ -71,6 +75,7 @@ export function ConfirmDialog({
           <Button
             variant={variant === 'destructive' ? 'destructive' : 'default'}
             size="sm"
+            className={variant === 'warning' ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
             onClick={handleConfirm}
             disabled={loading}
           >

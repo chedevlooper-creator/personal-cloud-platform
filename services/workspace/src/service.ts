@@ -895,6 +895,16 @@ export class WorkspaceService {
     }
   }
 
+  async getSnapshot(snapshotId: string, userId: string) {
+    return db.query.snapshots.findFirst({
+      where: and(eq(snapshots.id, snapshotId), eq(snapshots.userId, userId), isNull(snapshots.deletedAt)),
+    });
+  }
+
+  async getSnapshotBuffer(storageKey: string): Promise<Buffer> {
+    return this.storage.getBuffer(storageKey);
+  }
+
   async getSnapshots(workspaceId: string, userId: string): Promise<any[]> {
     return db.query.snapshots.findMany({
       where: and(
@@ -904,6 +914,15 @@ export class WorkspaceService {
       ),
       orderBy: [desc(snapshots.createdAt)],
     });
+  }
+
+  async getUserSnapshotStorageUsage(userId: string): Promise<{ totalBytes: number; count: number }> {
+    const rows = await db.query.snapshots.findMany({
+      where: and(eq(snapshots.userId, userId), isNull(snapshots.deletedAt), eq(snapshots.status, 'ready')),
+      columns: { sizeBytes: true },
+    });
+    const totalBytes = rows.reduce((sum, r) => sum + Number(r.sizeBytes ?? 0), 0);
+    return { totalBytes, count: rows.length };
   }
 
   async deleteSnapshot(snapshotId: string, userId: string): Promise<void> {

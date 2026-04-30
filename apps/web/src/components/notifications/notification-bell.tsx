@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, AlertTriangle, Bell, Check, CheckCheck, CheckCircle2, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Bell, Check, CheckCheck, CheckCircle2, Info, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,6 +10,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { agentApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 type Notification = {
   id: string;
@@ -36,6 +39,8 @@ function timeAgo(iso: string) {
 
 export function NotificationBell() {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
 
   const { data: countData } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -53,7 +58,7 @@ export function NotificationBell() {
       const res = await agentApi.get('/notifications', { params: { limit: 20 } });
       return res.data as { notifications: Notification[] };
     },
-    refetchInterval: 30_000,
+    refetchInterval: open ? 10_000 : 30_000,
   });
 
   const markRead = useMutation({
@@ -62,6 +67,9 @@ export function NotificationBell() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: () => {
+      toast.error('Failed to mark notification as read');
     },
   });
 
@@ -72,13 +80,26 @@ export function NotificationBell() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
+    onError: () => {
+      toast.error('Failed to mark all as read');
+    },
   });
 
   const unread = countData?.count ?? 0;
   const items = data?.notifications ?? [];
 
+  function handleNotificationClick(n: Notification) {
+    if (!n.readAt) {
+      markRead.mutate(n.id);
+    }
+    if (n.link) {
+      setOpen(false);
+      router.push(n.link);
+    }
+  }
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         render={(props) => (
           <Button
@@ -102,15 +123,17 @@ export function NotificationBell() {
       <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <span className="text-sm font-medium text-foreground">Notifications</span>
-          {unread > 0 && (
-            <button
-              type="button"
-              onClick={() => markAll.mutate()}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <CheckCheck className="h-3.5 w-3.5" /> Mark all read
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {unread > 0 && (
+              <button
+                type="button"
+                onClick={() => markAll.mutate()}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+              </button>
+            )}
+          </div>
         </div>
         <div className="max-h-96 overflow-y-auto">
           {isLoading ? (
@@ -145,12 +168,23 @@ export function NotificationBell() {
                     : n.severity === 'warning'
                       ? 'Warning'
                       : 'Info';
+              const isClickable = Boolean(n.link);
               return (
                 <div
                   key={n.id}
+                  role={isClickable ? 'button' : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                  onClick={() => isClickable && handleNotificationClick(n)}
+                  onKeyDown={(e) => {
+                    if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleNotificationClick(n);
+                    }
+                  }}
                   className={cn(
-                    'group flex items-start gap-2 border-b border-border/50 px-3 py-2.5 last:border-0 hover:bg-muted/50',
+                    'group flex items-start gap-2 border-b border-border/50 px-3 py-2.5 last:border-0',
                     !n.readAt && 'bg-muted/30',
+                    isClickable && 'cursor-pointer hover:bg-muted/50',
                   )}
                 >
                   <SeverityIcon
@@ -168,12 +202,9 @@ export function NotificationBell() {
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.body}</p>
                     )}
                     {n.link && (
-                      <a
-                        href={n.link}
-                        className="mt-1 inline-block text-[11px] text-primary hover:underline"
-                      >
-                        Open
-                      </a>
+                      <span className="mt-1 inline-block text-[11px] text-primary">
+                        Open →
+                      </span>
                     )}
                   </div>
                   {!n.readAt && (
@@ -181,7 +212,10 @@ export function NotificationBell() {
                       type="button"
                       title="Mark as read"
                       aria-label="Mark as read"
-                      onClick={() => markRead.mutate(n.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markRead.mutate(n.id);
+                      }}
                       className="opacity-0 transition-opacity group-hover:opacity-100"
                     >
                       <Check className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
