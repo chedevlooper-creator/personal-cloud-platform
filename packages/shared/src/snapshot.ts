@@ -18,5 +18,5 @@ export const snapshotResponseSchema = z.object({
   kind: z.string(),
   status: z.string(),
   error: z.string().nullable(),
-  createdAt: z.date(),
+  createdAt: z.coerce.date(),
 });

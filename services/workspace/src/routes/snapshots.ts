@@ -92,7 +92,7 @@ export async function setupSnapshotRoutes(
 
       return reply
         .header('Content-Type', 'application/gzip')
-        .header('Content-Disposition', `attachment; filename="${safeName}.tar.gz"`)
+        .header('Content-Disposition', `attachment; filename="${safeName}.json.gz"`)
         .send(buffer);
     },
   );

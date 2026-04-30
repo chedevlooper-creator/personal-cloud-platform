@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, RotateCcw, Trash2, Loader2, AlertCircle, CheckCircle2, Download, Settings, MoreVertical } from 'lucide-react';
+import { Camera, RotateCcw, Trash2, Loader2, AlertCircle, CheckCircle2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { workspaceApi, toastApiError } from '@/lib/api';
-import { formatDate } from '@/lib/format';
 
 type WorkspacesResponse = {
   workspaces?: { id: string; name: string }[];
@@ -26,7 +25,6 @@ type Snapshot = {
   fileCount?: number | null;
   sizeBytes?: string | null;
   kind?: string;
-  workspaceName?: string;
   createdAt: string;
 };
 
@@ -195,7 +193,7 @@ export default function SnapshotsPage() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${snap.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}.tar.gz`);
+      link.setAttribute('download', `${snap.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}.json.gz`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -327,10 +325,10 @@ export default function SnapshotsPage() {
                                   <span>{snap.fileCount} files</span>
                                 </>
                               )}
-                              {snap.workspaceName && (
+                              {snap.kind === 'auto-pre-restore' && (
                                 <>
                                   <span>·</span>
-                                  <span>{snap.workspaceName}</span>
+                                  <span>Auto backup</span>
                                 </>
                               )}
                             </div>
@@ -362,7 +360,7 @@ export default function SnapshotsPage() {
                                 variant="ghost"
                                 onClick={() => setDeleteTarget(snap)}
                               >
-                                <MoreVertical className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
                               </Button>
                             </div>
                           )}
