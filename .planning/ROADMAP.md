@@ -85,6 +85,9 @@
 
 **Requirements:** AUTH-05, PUB-01, SNAP-01..02, ADMIN-01..02, SEC-03
 
+**Plans:**
+- **04-01** — Shared Auth Middleware (extract duplicated session validation)
+
 **Success Criteria:**
 1. Session validation is consistent across all 7 services
 2. User can publish workspace apps to public URL
@@ -105,6 +108,11 @@
 
 **Requirements:** AGENT-03, AUTO-02, SEC-01..02, PERF-01..02
 
+**Plans:**
+- **05-01** — Tenant Isolation Audit (fix missing user_id filters)
+- **05-02** — Rate Limiting (per-user limits on agent endpoints)
+- **05-03** — Token Usage Tracking (monthly quotas, usage dashboard)
+
 **Success Criteria:**
 1. Agent processes all tool calls in a single LLM response
 2. Automation worker accurately reports task success/failure
@@ -113,8 +121,8 @@
 5. Token usage is tracked and limited
 
 **Deliverables:**
-- Multi-tool execution loop refactor
-- Automation polling + timeout handling
+- Multi-tool execution loop refactor ✅ (already done)
+- Automation polling + timeout handling ✅ (already done)
 - Tenant scoping audit across all services
 - Rate limiting middleware (per user)
 - Token quota tracking

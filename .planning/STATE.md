@@ -14,16 +14,18 @@
 | 1 | Foundation | ✅ Done | — | — |
 | 2 | Agent Core | ✅ Done | — | — |
 | 3 | Agent Ecosystem | ✅ Done | — | — |
-| 4 | Integration & Admin | 🔄 In Progress | TBD | 0% |
-| 5 | Security & Reliability | ⏳ Queued | TBD | 0% |
+| 4 | Integration & Admin | 🔄 In Progress | 1 | 0% |
+| 5 | Security & Reliability | 📋 Planned | 3 | 0% |
 | 6 | Runtime Hardening | ⏳ Queued | TBD | 0% |
 
 ## Active Work
 
-- [ ] Phase 4 plan creation
-- [ ] Cross-service auth consistency audit
-- [ ] Publish service integration
-- [ ] Snapshot system completion
+- [x] Phase 4 plan created (04-01: Shared Auth Middleware)
+- [x] Phase 5 plans created (05-01..03: Tenant Audit, Rate Limiting, Token Tracking)
+- [ ] Phase 4 execution: Shared Auth Middleware
+- [ ] Phase 5 execution: Tenant Isolation Audit
+- [ ] Phase 5 execution: Rate Limiting
+- [ ] Phase 5 execution: Token Usage Tracking
 
 ## Blockers
 
