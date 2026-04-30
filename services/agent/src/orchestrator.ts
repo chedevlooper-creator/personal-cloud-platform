@@ -623,13 +623,6 @@ export class AgentOrchestrator {
             .returning();
           if (!recorded) throw new Error('Failed to record tool call');
 
-          const actionStep = await this.appendTaskStep(taskId, {
-            type: 'action',
-            toolName: toolCall.name,
-            toolInput: toolArgs,
-          });
-          this.emitTaskStep(taskId, actionStep);
-
           recordedCalls.push({ id: recorded.id, toolName: toolCall.name, arguments: toolCall.arguments });
 
           if (requiresApproval) {
@@ -641,6 +634,16 @@ export class AgentOrchestrator {
         // and pause execution. The remaining tools (approval and non-approval) will be
         // replayed after the user approves or rejects.
         if (approvalQueue.length > 0) {
+          // Emit action steps for all tools so the UI shows them before pausing
+          for (const recorded of recordedCalls) {
+            const actionStep = await this.appendTaskStep(taskId, {
+              type: 'action',
+              toolName: recorded.toolName,
+              toolInput: JSON.parse(recorded.arguments),
+            });
+            this.emitTaskStep(taskId, actionStep);
+          }
+
           const firstApproval = approvalQueue[0]!;
           const approval = await this.createApprovalRequest(
             userId,
@@ -669,57 +672,74 @@ export class AgentOrchestrator {
           return; // Pause execution
         }
 
-        // No approval required — execute all tools and build composite observation
+        // No approval required — execute all tools in parallel and build composite observation
         const ctx = this.buildToolContext(taskId, userId, task.workspaceId);
-        const results: { name: string; output: string; ok: boolean }[] = [];
 
+        // Emit action steps for all tools before parallel execution so the UI
+        // shows them as "running" immediately.
+        for (const recorded of recordedCalls) {
+          const actionStep = await this.appendTaskStep(taskId, {
+            type: 'action',
+            toolName: recorded.toolName,
+            toolInput: JSON.parse(recorded.arguments),
+          });
+          this.emitTaskStep(taskId, actionStep);
+        }
+
+        const results = await Promise.all(
+          recordedCalls.map(async (recorded) => {
+            let toolOutputStr = '';
+            const startedAt = Date.now();
+            try {
+              const output = await this.registry.execute(recorded.toolName, recorded.arguments, ctx);
+              toolOutputStr = typeof output === 'string' ? output : JSON.stringify(output);
+              this.rememberRuntimeId(taskId, ctx);
+              await this.completeToolCall(recorded.id, userId, 'completed', {
+                result: toolOutputStr,
+                durationMs: String(Date.now() - startedAt),
+              });
+              await emitAudit(userId, 'TOOL_EXECUTE', {
+                tool: recorded.toolName,
+                taskId,
+                ok: true,
+              });
+            } catch (error: any) {
+              toolOutputStr = `Error executing tool: ${error.message}`;
+              await this.completeToolCall(recorded.id, userId, 'failed', {
+                error: error?.message,
+                durationMs: String(Date.now() - startedAt),
+              });
+              await emitAudit(userId, 'TOOL_EXECUTE', {
+                tool: recorded.toolName,
+                taskId,
+                ok: false,
+                error: error?.message,
+              });
+            }
+
+            return { name: recorded.toolName, output: toolOutputStr, ok: !toolOutputStr.startsWith('Error') };
+          }),
+        );
+
+        // Build composite observation with all results
+        const compositeOutput = results
+          .map((r) => `[${r.name}]: ${r.output}`)
+          .join('\n\n');
+
+        // Push assistant messages for each tool call, then user messages with results
         for (const recorded of recordedCalls) {
           messages.push({
             role: 'assistant',
             content: `Calling tool ${recorded.toolName}`,
           });
-
-          let toolOutputStr = '';
-          const startedAt = Date.now();
-          try {
-            const output = await this.registry.execute(recorded.toolName, recorded.arguments, ctx);
-            toolOutputStr = typeof output === 'string' ? output : JSON.stringify(output);
-            this.rememberRuntimeId(taskId, ctx);
-            await this.completeToolCall(recorded.id, userId, 'completed', {
-              result: toolOutputStr,
-              durationMs: String(Date.now() - startedAt),
-            });
-            await emitAudit(userId, 'TOOL_EXECUTE', {
-              tool: recorded.toolName,
-              taskId,
-              ok: true,
-            });
-          } catch (error: any) {
-            toolOutputStr = `Error executing tool: ${error.message}`;
-            await this.completeToolCall(recorded.id, userId, 'failed', {
-              error: error?.message,
-              durationMs: String(Date.now() - startedAt),
-            });
-            await emitAudit(userId, 'TOOL_EXECUTE', {
-              tool: recorded.toolName,
-              taskId,
-              ok: false,
-              error: error?.message,
-            });
-          }
-
-          results.push({ name: recorded.toolName, output: toolOutputStr, ok: !toolOutputStr.startsWith('Error') });
-
+        }
+        for (const r of results) {
           messages.push({
             role: 'user',
-            content: toolOutputStr,
-            name: recorded.toolName,
+            content: r.output,
+            name: r.name,
           });
         }
-
-        const compositeOutput = results
-          .map((r) => `[${r.name}]: ${r.output}`)
-          .join('\n\n');
 
         const observationStep = await this.appendTaskStep(taskId, {
           type: 'observation',
