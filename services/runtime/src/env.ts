@@ -16,6 +16,14 @@ const envSchema = z.object({
   WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
   RUNTIME_SECCOMP_PROFILE: z.string().optional(),
   RUNTIME_APPARMOR_PROFILE: z.string().optional(),
+  RUNTIME_IMAGE_ALLOWLIST: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value
+        ? value.split(',').map((s) => s.trim())
+        : ['node:20-alpine'],
+    ),
   RUNTIME_TERMINAL_ENABLED: z
     .string()
     .optional()
@@ -40,6 +48,7 @@ export const env = {
   WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
   RUNTIME_SECCOMP_PROFILE: parsed.RUNTIME_SECCOMP_PROFILE,
   RUNTIME_APPARMOR_PROFILE: parsed.RUNTIME_APPARMOR_PROFILE,
+  RUNTIME_IMAGE_ALLOWLIST: parsed.RUNTIME_IMAGE_ALLOWLIST,
   RUNTIME_TERMINAL_ENABLED:
     parsed.RUNTIME_TERMINAL_ENABLED ?? parsed.NODE_ENV !== 'production',
 };

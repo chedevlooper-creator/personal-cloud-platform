@@ -31,7 +31,10 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { workspaceId, image, options } = request.body;
-      const runtime = await runtimeService.createRuntime(userId, workspaceId, image, options);
+      const runtime = await runtimeService.createRuntime(userId, workspaceId, image, options, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
       return reply.code(201).send(runtime);
     }
   );
@@ -86,7 +89,10 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
-      const result = await runtimeService.execCommand(request.params.id, userId, request.body.command);
+      const result = await runtimeService.execCommand(request.params.id, userId, request.body.command, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
       return result;
     }
   );
@@ -142,6 +148,10 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
         workspaceId,
         image,
         options ?? {},
+        {
+          ipAddress: request.ip,
+          userAgent: request.headers['user-agent'],
+        },
       );
       return runtime;
     },

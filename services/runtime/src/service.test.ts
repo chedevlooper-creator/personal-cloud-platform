@@ -137,7 +137,7 @@ describe('RuntimeService workspace ownership', () => {
       service.createRuntime(USER_ID, WORKSPACE_ID, 'busybox:latest', {}),
     ).rejects.toThrow('Runtime image is not allowed');
 
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockDb.insert).toHaveBeenCalledTimes(1);
     expect(providerCreate).not.toHaveBeenCalled();
   });
 
@@ -330,6 +330,43 @@ describe('RuntimeService workspace ownership', () => {
       stage: 'create',
       error: 'docker daemon unreachable',
     });
+  });
+
+  it('writes an audit log when a command is blocked by security policy', async () => {
+    const { RuntimeService } = await import('./service');
+    mockDb.query.runtimes.findFirst.mockResolvedValue({
+      id: 'runtime-1',
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      containerId: 'container-1',
+      status: 'running',
+    });
+    const service = new RuntimeService(logger);
+
+    await expect(
+      service.execCommand('runtime-1', USER_ID, ['/bin/sh', '-c', 'sudo id']),
+    ).rejects.toThrow('Command blocked by security policy');
+
+    expect(mockDb.insert).toHaveBeenCalled();
+    expect(providerExec).not.toHaveBeenCalled();
+  });
+
+  it('writes an audit log on successful command execution', async () => {
+    const { RuntimeService } = await import('./service');
+    mockDb.query.runtimes.findFirst.mockResolvedValue({
+      id: 'runtime-1',
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      containerId: 'container-1',
+      status: 'running',
+    });
+    providerExec.mockResolvedValue({ stdout: 'ok', stderr: '', exitCode: 0 });
+    const service = new RuntimeService(logger);
+
+    await service.execCommand('runtime-1', USER_ID, ['node', '--version']);
+
+    expect(providerExec).toHaveBeenCalled();
+    expect(mockDb.insert).toHaveBeenCalled();
   });
 });
 

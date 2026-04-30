@@ -1,5 +1,5 @@
 import { db } from '@pcp/db/src/client';
-import { runtimes, runtimeLogs, runtimeEvents, workspaces } from '@pcp/db/src/schema';
+import { runtimes, runtimeLogs, runtimeEvents, workspaces, auditLogs } from '@pcp/db/src/schema';
 import {
   validateSessionUserId,
   verifyUserExists as verifySharedUserExists,
@@ -39,6 +39,25 @@ export class RuntimeService {
     return verifySharedUserExists(userId);
   }
 
+  private async auditLog(
+    userId: string,
+    action: string,
+    details: Record<string, unknown>,
+    clientInfo?: { ipAddress?: string; userAgent?: string },
+  ) {
+    try {
+      await db.insert(auditLogs).values({
+        userId,
+        action,
+        details,
+        ipAddress: clientInfo?.ipAddress ?? null,
+        userAgent: clientInfo?.userAgent ?? null,
+      });
+    } catch (err) {
+      this.logger.warn({ err, userId, action }, 'Failed to write audit log');
+    }
+  }
+
   private async resolveWorkspaceHostPath(userId: string, workspaceId: string): Promise<string> {
     const root = env.WORKSPACE_HOST_ROOT;
     const dir = join(root, userId, workspaceId);
@@ -50,9 +69,20 @@ export class RuntimeService {
     return dir;
   }
 
-  async createRuntime(userId: string, workspaceId: string, image: string, options: any) {
+  async createRuntime(
+    userId: string,
+    workspaceId: string,
+    image: string,
+    options: any,
+    clientInfo?: { ipAddress?: string; userAgent?: string },
+  ) {
     await this.assertWorkspaceOwned(workspaceId, userId);
-    assertRuntimeImageAllowed(image);
+    try {
+      assertRuntimeImageAllowed(image);
+    } catch (err) {
+      await this.auditLog(userId, 'runtime.image_denied', { image, workspaceId, reason: (err as Error).message }, clientInfo);
+      throw err;
+    }
 
     const [runtime] = await db
       .insert(runtimes)
@@ -115,6 +145,8 @@ export class RuntimeService {
       payload: { containerId, options },
     });
 
+    await this.auditLog(userId, 'runtime.create', { runtimeId: runtime.id, workspaceId, image, containerId }, clientInfo);
+
     return { ...runtime, containerId };
   }
 
@@ -166,13 +198,23 @@ export class RuntimeService {
     });
   }
 
-  async execCommand(runtimeId: string, userId: string, command: string[]) {
+  async execCommand(
+    runtimeId: string,
+    userId: string,
+    command: string[],
+    clientInfo?: { ipAddress?: string; userAgent?: string },
+  ) {
     const runtime = await this.getRuntime(runtimeId, userId);
     if (!runtime || !runtime.containerId || runtime.status !== 'running') {
       throw new Error('Runtime not running or container not found');
     }
 
-    assertRuntimeCommandAllowed(command);
+    try {
+      assertRuntimeCommandAllowed(command);
+    } catch (err) {
+      await this.auditLog(userId, 'runtime.command_denied', { runtimeId, command, reason: (err as Error).message }, clientInfo);
+      throw err;
+    }
 
     // Sync workspace files into the host-mounted directory so the container sees
     // the latest content. Failures here are logged but non-fatal.
@@ -207,6 +249,8 @@ export class RuntimeService {
       type: 'exec',
       payload: { command, exitCode: result.exitCode },
     });
+
+    await this.auditLog(userId, 'runtime.exec', { runtimeId, command, exitCode: result.exitCode }, clientInfo);
 
     return result;
   }
@@ -259,6 +303,7 @@ export class RuntimeService {
     workspaceId: string,
     image: string,
     options: any = {},
+    clientInfo?: { ipAddress?: string; userAgent?: string },
   ) {
     const existing = await this.findActiveRuntimeForWorkspace(workspaceId, userId);
     if (existing) {
@@ -277,7 +322,7 @@ export class RuntimeService {
       if (refreshed && refreshed.status === 'running') return refreshed;
     }
 
-    const created = await this.createRuntime(userId, workspaceId, image, options);
+    const created = await this.createRuntime(userId, workspaceId, image, options, clientInfo);
     await this.startRuntime(created.id, userId);
     const hostPath = await this.resolveWorkspaceHostPath(userId, workspaceId);
     await this.materializeWorkspace(userId, workspaceId, hostPath);

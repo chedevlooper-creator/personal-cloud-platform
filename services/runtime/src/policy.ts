@@ -1,4 +1,4 @@
-export const RUNTIME_IMAGE_ALLOWLIST = ['node:20-alpine'] as const;
+import { env } from './env';
 
 type DockerSecurityProfileConfig = {
   seccompProfile?: string;
@@ -33,8 +33,12 @@ export const RUNTIME_COMMAND_POLICY = {
   blockedCategories: BLOCKED_COMMANDS.map((rule) => rule.category),
 } as const;
 
+export function getRuntimeImageAllowlist(): string[] {
+  return env.RUNTIME_IMAGE_ALLOWLIST;
+}
+
 export function assertRuntimeImageAllowed(image: string): void {
-  if (!RUNTIME_IMAGE_ALLOWLIST.includes(image as (typeof RUNTIME_IMAGE_ALLOWLIST)[number])) {
+  if (!getRuntimeImageAllowlist().includes(image)) {
     throw new Error('Runtime image is not allowed');
   }
 }
