@@ -66,7 +66,7 @@ This is a **brownfield TypeScript pnpm monorepo**. The major product modules alr
 
 - ✓ Multi-tenant user auth (email/password + OAuth)
 - ✓ Persistent workspaces with file storage (MinIO)
-- ✓ AI agent with tool calling (15 tools including list_datasets, describe_dataset)
+- ✓ AI agent with tool calling (15 tools, parallel execution)
 - ✓ Agent task lifecycle (pending → executing → completed/failed/cancelled)
 - ✓ Tool approval flow for destructive operations
 - ✓ Multi-LLM provider support (OpenAI, Anthropic, MiniMax)
@@ -84,12 +84,12 @@ This is a **brownfield TypeScript pnpm monorepo**. The major product modules alr
 - ✓ Cross-service authentication (shared session validation)
 - ✓ Admin dashboard surfaces (users, audit logs, runtime events, health)
 - ✓ Dataset query tool expansion (list_datasets, describe_dataset, query_dataset)
+- ✓ Parallel multi-tool execution in single LLM response (Promise.all)
 - ✓ All tests passing (203 total across 7 services)
 - ✓ Full monorepo typecheck clean (10 packages)
 
 ### Active
 
-- [ ] Multi-tool execution in single LLM response (partial — sequential only)
 - [ ] Automation worker waits for real task completion
 - [ ] Frontend notification system polish
 - [ ] Snapshot system completion

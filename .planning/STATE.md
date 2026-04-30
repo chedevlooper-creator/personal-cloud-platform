@@ -50,6 +50,7 @@ None.
 | 2026-04-30 | Agent pre-existing failures fixed | env.test.ts now passes (set LLM_PROVIDER + OPENAI_API_KEY in tests); typecheck clean across all 10 packages |
 | 2026-04-30 | Admin dashboard improvements | Real DB health check + runtime events tab with color-coded event badges |
 | 2026-04-30 | Dataset tools added to agent | list_datasets and describe_dataset tools for data discovery before querying |
+| 2026-04-30 | Parallel multi-tool execution | Non-approval tools now run via Promise.all instead of sequential for-loop |
 
 ## Notes
 
