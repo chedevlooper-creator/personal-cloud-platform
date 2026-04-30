@@ -9,7 +9,7 @@
 | 3 | Agent Ecosystem | Memory, browser, automations, channels | AGENT-09..11, AUTO-01..05, MEM-01..02, CHAN-01..02, PERSONA-01, SKILL-01..02, NOTIFY-01..02 | ✅ Complete |
 | 4 | Integration & Admin | Cross-service auth, publish, snapshots, admin | AUTH-05, PUB-01, SNAP-01..02, ADMIN-01..02, SEC-03 | ✅ Complete |
 | 5 | Security & Reliability | Hardening, tenant isolation, rate limits | AGENT-03, AUTO-02, SEC-01..02, PERF-01..02 | ✅ Complete |
-| 6 | Runtime Hardening | Sandbox security, resource limits | RUN-02..03 | 🔄 In Progress |
+| 6 | Runtime Hardening | Sandbox security, resource limits | RUN-02..03 | ✅ Complete |
 
 ---
 
@@ -129,7 +129,7 @@
 
 ---
 
-## Phase 6: Runtime Hardening 🔄
+## Phase 6: Runtime Hardening ✅
 
 **Goal:** Untrusted code execution without host escape.
 
@@ -137,19 +137,22 @@
 
 **Plans:**
 - **06-01** — Runtime Hardening (seccomp, image whitelist, audit logging)
+- **06-02** — Runtime Health Checks (periodic container security inspection)
 
 **Success Criteria:**
-1. Docker containers cannot access host filesystem
-2. Network is isolated or disabled by default
-3. CPU/memory limits are enforced
-4. Privilege escalation is blocked
+1. Docker containers cannot access host filesystem ✅
+2. Network is isolated or disabled by default ✅
+3. CPU/memory limits are enforced ✅
+4. Privilege escalation is blocked ✅
+5. Security policy violations are auto-detected and remediated ✅
 
 **Deliverables:**
 - Seccomp profiles for runtime containers ✅
-- cgroup resource limits
+- cgroup resource limits ✅
 - Network namespace isolation ✅
 - Image whitelist / policy ✅
 - Security audit logging ✅
+- Periodic health check with auto-stop on violation ✅
 
 ---
 
