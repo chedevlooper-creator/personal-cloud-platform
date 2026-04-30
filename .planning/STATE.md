@@ -2,10 +2,10 @@
 
 ## Status
 
-**Current Phase:** 4 — Integration & Admin
+**Current Phase:** 5 — Security & Reliability
 **Last Activity:** 2026-04-30
-**Current Focus:** Cross-service auth, publish service, snapshots, admin dashboard
-**Current Position:** Phase 4 planning / Phase 5 preparation
+**Current Focus:** Tenant isolation audit, rate limiting, token usage tracking
+**Current Position:** Phase 5 plan 01 execution
 
 ## Phase Progress
 
@@ -14,18 +14,18 @@
 | 1 | Foundation | ✅ Done | — | — |
 | 2 | Agent Core | ✅ Done | — | — |
 | 3 | Agent Ecosystem | ✅ Done | — | — |
-| 4 | Integration & Admin | 🔄 In Progress | 1 | 0% |
-| 5 | Security & Reliability | 📋 Planned | 3 | 0% |
+| 4 | Integration & Admin | ✅ Done | 1 | 100% |
+| 5 | Security & Reliability | 🔄 In Progress | 3 | 0% |
 | 6 | Runtime Hardening | ⏳ Queued | TBD | 0% |
 
 ## Active Work
 
 - [x] Phase 4 plan created (04-01: Shared Auth Middleware)
+- [x] Phase 4 execution: Shared Auth Middleware
 - [x] Phase 5 plans created (05-01..03: Tenant Audit, Rate Limiting, Token Tracking)
-- [ ] Phase 4 execution: Shared Auth Middleware
-- [ ] Phase 5 execution: Tenant Isolation Audit
-- [ ] Phase 5 execution: Rate Limiting
-- [ ] Phase 5 execution: Token Usage Tracking
+- [ ] Phase 5 execution: Tenant Isolation Audit (05-01)
+- [ ] Phase 5 execution: Rate Limiting (05-02)
+- [ ] Phase 5 execution: Token Usage Tracking (05-03)
 
 ## Blockers
 
