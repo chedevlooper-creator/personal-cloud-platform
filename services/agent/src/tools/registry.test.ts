@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ToolRegistry, Tool, ToolContext } from './registry';
 import { z } from 'zod';
 

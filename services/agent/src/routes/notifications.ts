@@ -6,15 +6,15 @@ import { validateSessionUserId } from '@pcp/db/src/session';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { env } from '../env';
-import { sendApiError } from '@pcp/shared';
+import { sendApiError, createAuthMiddleware } from '@pcp/shared';
 
 export async function setupNotificationRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
 
-  async function getAuthenticatedUserId(sessionId: string | undefined): Promise<string | null> {
-    if (env.AUTH_BYPASS) return 'local-dev-user';
-    return validateSessionUserId(sessionId);
-  }
+  const getAuthenticatedUserId = createAuthMiddleware({
+    authBypass: env.AUTH_BYPASS,
+    validateSession: validateSessionUserId,
+  });
 
   server.get(
     '/notifications',

@@ -10,18 +10,11 @@ import {
 import { MemoryService } from './service';
 import { z } from 'zod';
 import { env } from './env';
-import type { FastifyRequest } from 'fastify';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
 export async function setupMemoryRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const memoryService = new MemoryService(fastify.log);
-
-  async function getAuthenticatedUserId(request: FastifyRequest): Promise<string | null> {
-    return resolveAuthenticatedUserId(request, {
-      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
-    });
-  }
 
   server.post(
     '/memory/entries',
@@ -34,7 +27,9 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { type, content, metadata, workspaceId } = request.body;
@@ -52,7 +47,9 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { query, limit, type, workspaceId, minSimilarity } = request.body;
@@ -79,7 +76,9 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const updated = await memoryService.updateMemory(request.params.id, userId, request.body);
@@ -97,7 +96,9 @@ export async function setupMemoryRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await memoryService.deleteMemory(request.params.id, userId);

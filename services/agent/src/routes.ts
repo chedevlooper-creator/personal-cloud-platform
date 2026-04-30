@@ -9,7 +9,9 @@ import {
   toolApprovalSchema,
   taskEventStreamQuerySchema,
   sendApiError,
+  createAuthMiddleware,
 } from '@pcp/shared';
+import { validateSessionUserId } from '@pcp/db/src/session';
 import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
 import { z } from 'zod';
@@ -22,11 +24,10 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     fastify.log.error({ err }, 'Failed to recover interrupted agent work');
   });
 
-  async function getAuthenticatedUserId(sessionId: string | undefined): Promise<string | null> {
-    if (env.AUTH_BYPASS) return 'local-dev-user';
-    if (!sessionId) return null;
-    return orchestrator.validateUserFromCookie(sessionId);
-  }
+  const getAuthenticatedUserId = createAuthMiddleware({
+    authBypass: env.AUTH_BYPASS,
+    validateSession: validateSessionUserId,
+  });
 
   server.post(
     '/agent/chat',

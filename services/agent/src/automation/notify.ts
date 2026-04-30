@@ -8,7 +8,7 @@ export interface AutomationRunSummary {
   automationId: string;
   userId: string;
   title: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'cancelled';
   durationMs?: number;
   error?: string | null;
   output?: string | null;

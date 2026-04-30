@@ -4,7 +4,6 @@ import { createRuntimeSchema, execCommandSchema, runtimeResponseSchema, sendApiE
 import { RuntimeService } from './service';
 import { z } from 'zod';
 import { env } from './env';
-import type { FastifyRequest } from 'fastify';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
 type RuntimeTerminalParams = {
@@ -14,12 +13,6 @@ type RuntimeTerminalParams = {
 export async function setupRuntimeRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const runtimeService = new RuntimeService(fastify.log);
-
-  async function getAuthenticatedUserId(request: FastifyRequest): Promise<string | null> {
-    return resolveAuthenticatedUserId(request, {
-      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
-    });
-  }
 
   server.post(
     '/runtimes',
@@ -32,7 +25,9 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { workspaceId, image, options } = request.body;
@@ -49,7 +44,9 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await runtimeService.startRuntime(request.params.id, userId);
@@ -65,7 +62,9 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await runtimeService.stopRuntime(request.params.id, userId);
@@ -82,7 +81,9 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const result = await runtimeService.execCommand(request.params.id, userId, request.body.command);
@@ -98,7 +99,9 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await runtimeService.deleteRuntime(request.params.id, userId);
@@ -128,7 +131,9 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const { workspaceId, image, options } = request.body;
@@ -147,7 +152,9 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     '/runtimes/:id/terminal',
     { websocket: true },
     async (connection, request) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) {
         connection.socket.send(JSON.stringify({ error: 'Unauthorized' }));
         connection.socket.close();

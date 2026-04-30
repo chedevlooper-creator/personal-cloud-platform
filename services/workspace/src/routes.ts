@@ -16,7 +16,6 @@ import { z } from 'zod';
 import { setupSnapshotRoutes } from './routes/snapshots';
 import { setupDatasetsRoutes } from './routes/datasets';
 import { env } from './env';
-import type { FastifyRequest } from 'fastify';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 
 type WildcardFileParams = {
@@ -31,12 +30,6 @@ type MultipartFieldWithValue = {
 export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const workspaceService = new WorkspaceService(fastify.log);
-
-  async function getAuthenticatedUserId(request: FastifyRequest): Promise<string | null> {
-    return resolveAuthenticatedUserId(request, {
-      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
-    });
-  }
 
   // Register sub-routes
   await setupSnapshotRoutes(fastify, workspaceService);
@@ -54,7 +47,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -83,7 +78,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -108,7 +105,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -133,7 +132,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -159,7 +160,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -185,7 +188,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -227,7 +232,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
@@ -279,7 +286,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
@@ -316,7 +325,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -359,7 +370,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -392,7 +405,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -424,7 +439,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -481,7 +498,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -507,7 +526,9 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await getAuthenticatedUserId(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');

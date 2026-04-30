@@ -29,6 +29,13 @@ vi.mock('./orchestrator', () => ({
   AgentOrchestrator: vi.fn(() => orchestratorMethods),
 }));
 
+vi.mock('@pcp/db/src/session', () => ({
+  validateSessionUserId: vi.fn(async (sessionId: string) => {
+    if (sessionId === 'session-1') return USER_ID;
+    return null;
+  }),
+}));
+
 async function buildApp() {
   const { setupAgentRoutes } = await import('./routes');
   const app = Fastify();

@@ -1,12 +1,10 @@
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { browserSessionSchema, navigateSchema, clickSchema, fillSchema, sendApiError } from '@pcp/shared';
 import { BrowserService, type BrowserSessionInfo } from './service';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
 import { env } from './env';
-
-const AUTH_BYPASS = env.AUTH_BYPASS;
 
 function toJson(s: BrowserSessionInfo) {
   return {
@@ -21,13 +19,6 @@ function toJson(s: BrowserSessionInfo) {
 export async function setupBrowserRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const browserService = new BrowserService(fastify.log);
-
-  async function authUser(request: FastifyRequest): Promise<string | null> {
-    if (AUTH_BYPASS) return 'local-dev-user';
-    return resolveAuthenticatedUserId(request, {
-      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
-    });
-  }
 
   function handle(err: any, reply: any, fallback = 'Internal error') {
     const status = err?.statusCode ?? 500;
@@ -55,7 +46,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       return { sessions: browserService.list(userId).map(toJson) };
     },
@@ -65,7 +59,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     '/browser/sessions',
     { schema: { response: { 201: browserSessionSchema } } },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.createSession(userId);
@@ -80,7 +77,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
     '/browser/sessions/:id',
     { schema: { params: z.object({ id: z.string().uuid() }) } },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         await browserService.close(userId, request.params.id);
@@ -101,7 +101,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.navigate(userId, request.params.id, request.body.url);
@@ -122,7 +125,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.click(userId, request.params.id, request.body.selector);
@@ -143,7 +149,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         const s = await browserService.fill(
@@ -168,7 +177,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await browserService.screenshot(userId, request.params.id);
@@ -194,7 +206,10 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+      authBypass: env.AUTH_BYPASS,
+      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+    });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await browserService.extract(userId, request.params.id);

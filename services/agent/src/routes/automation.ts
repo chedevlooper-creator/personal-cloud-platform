@@ -4,7 +4,7 @@ import { db } from '@pcp/db/src/client';
 import { automations, automationRuns, workspaces } from '@pcp/db/src/schema';
 import { validateSessionUserId } from '@pcp/db/src/session';
 import { and, eq, desc, isNull } from 'drizzle-orm';
-import { createAutomationSchema, updateAutomationSchema, sendApiError } from '@pcp/shared';
+import { createAutomationSchema, updateAutomationSchema, sendApiError, createAuthMiddleware } from '@pcp/shared';
 import { automationQueue } from '../automation/queue';
 import { automationRepeatKey, computeNextRunAt, resolveSchedule } from '../automation/schedule';
 import { automationTriggerToken, verifyAutomationTriggerToken } from '../automation/notify';
@@ -13,9 +13,9 @@ import { z } from 'zod';
 export async function setupAutomationRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
 
-  async function getAuthenticatedUserId(sessionId: string | undefined): Promise<string | null> {
-    return validateSessionUserId(sessionId);
-  }
+  const getAuthenticatedUserId = createAuthMiddleware({
+    validateSession: validateSessionUserId,
+  });
 
   async function assertWorkspaceOwned(workspaceId: string | undefined | null, userId: string) {
     if (!workspaceId) return true;

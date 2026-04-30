@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { promises as fs } from 'node:fs';
@@ -46,12 +46,6 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const datasetsService = new DatasetsService(fastify.log);
 
-  async function authUser(request: FastifyRequest): Promise<string | null> {
-    return resolveAuthenticatedUserId(request, {
-      internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
-    });
-  }
-
   server.get(
     '/datasets',
     {
@@ -62,7 +56,9 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const rows = await datasetsService.list(userId);
       return { datasets: rows.map(toResponse) };
@@ -75,7 +71,9 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       schema: { params: z.object({ id: z.string().uuid() }) },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         await datasetsService.remove(userId, request.params.id);
@@ -102,7 +100,9 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const ds = await datasetsService.get(userId, request.params.id);
       if (!ds) return sendApiError(reply, 404, 'NOT_FOUND', 'Dataset not found');
@@ -134,7 +134,9 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await datasetsService.query({
@@ -165,7 +167,9 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const userId = await authUser(request);
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
         return await datasetsService.preview(userId, request.params.id, request.query.limit);
@@ -184,7 +188,9 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
   // Multipart upload + import. Field name for the file part is "file"; an optional
   // text field "name" overrides the dataset display name.
   server.post('/datasets/import', async (request, reply) => {
-    const userId = await authUser(request);
+    const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+      });
     if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
     if (!request.isMultipart()) {

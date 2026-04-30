@@ -18,6 +18,10 @@ export interface ResolveAuthOptions {
    * is disabled and only the cookie session is honored.
    */
   internalServiceToken?: string;
+  /** Development bypass: return this user id immediately without checking credentials. */
+  authBypass?: boolean;
+  /** User id returned when authBypass is true. Defaults to 'local-dev-user'. */
+  bypassUserId?: string;
 }
 
 function readHeader(
@@ -45,6 +49,10 @@ export async function resolveAuthenticatedUserId(
   request: AuthRequestLike,
   options: ResolveAuthOptions = {},
 ): Promise<string | null> {
+  if (options.authBypass) {
+    return options.bypassUserId ?? 'local-dev-user';
+  }
+
   const internalToken = options.internalServiceToken;
   if (internalToken) {
     const auth = readHeader(request.headers, 'authorization');
