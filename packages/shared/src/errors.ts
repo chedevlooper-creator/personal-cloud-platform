@@ -7,6 +7,7 @@ export const apiErrorCodeSchema = z.enum([
   'NOT_FOUND',
   'CONFLICT',
   'VALIDATION_ERROR',
+  'RATE_LIMITED',
   'INTERNAL_ERROR',
 ]);
 
@@ -46,6 +47,7 @@ export function apiErrorCodeFromStatus(
   if (statusCode === 403) return 'FORBIDDEN';
   if (statusCode === 404) return 'NOT_FOUND';
   if (statusCode === 409) return 'CONFLICT';
+  if (statusCode === 429) return 'RATE_LIMITED';
   return 'INTERNAL_ERROR';
 }
 
@@ -63,6 +65,8 @@ export function defaultApiErrorMessage(code: ApiErrorCode): string {
       return 'Conflict';
     case 'BAD_REQUEST':
       return 'Bad request';
+    case 'RATE_LIMITED':
+      return 'Rate limit exceeded';
     default:
       return 'Internal server error';
   }

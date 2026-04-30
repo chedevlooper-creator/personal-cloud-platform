@@ -16,6 +16,7 @@ import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
 import { z } from 'zod';
 import { extractAttachment, buildAttachmentContext, type ExtractedAttachment } from './attachments';
+import { checkRateLimit, AGENT_RATE_LIMITS } from './rate-limit';
 
 export async function setupAgentRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -28,6 +29,24 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     authBypass: env.AUTH_BYPASS,
     validateSession: validateSessionUserId,
   });
+
+  async function enforceRateLimit(
+    reply: any,
+    userId: string,
+    action: keyof typeof AGENT_RATE_LIMITS,
+  ): Promise<boolean> {
+    const { windowMs, maxRequests } = AGENT_RATE_LIMITS[action];
+    const result = await checkRateLimit(userId, action, windowMs, maxRequests);
+    reply.header('X-RateLimit-Limit', maxRequests);
+    reply.header('X-RateLimit-Remaining', Math.max(0, result.remaining));
+    reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
+    if (!result.allowed) {
+      reply.header('Retry-After', Math.ceil((result.resetAt - Date.now()) / 1000));
+      sendApiError(reply, 429, 'RATE_LIMITED', 'Rate limit exceeded. Please try again later.');
+      return false;
+    }
+    return true;
+  }
 
   server.post(
     '/agent/chat',
@@ -62,6 +81,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      if (!(await enforceRateLimit(reply, userId, 'chat'))) return;
 
       const contentType = request.headers['content-type'] || '';
       let userInput: string;
@@ -144,6 +164,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      if (!(await enforceRateLimit(reply, userId, 'taskCreate'))) return;
 
       const { workspaceId, conversationId, input, personaId, skillIds } = request.body;
       const task = await orchestrator.createTask(userId, workspaceId, input, conversationId, {
@@ -263,6 +284,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      if (!(await enforceRateLimit(reply, userId, 'toolApproval'))) return;
 
       await orchestrator.submitToolApproval(
         request.params.id,
@@ -300,6 +322,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+      if (!(await enforceRateLimit(reply, userId, 'events'))) return;
 
       const { id } = request.params;
       const { snapshot } = request.query;
