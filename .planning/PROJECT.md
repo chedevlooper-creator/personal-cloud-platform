@@ -66,7 +66,7 @@ This is a **brownfield TypeScript pnpm monorepo**. The major product modules alr
 
 - ✓ Multi-tenant user auth (email/password + OAuth)
 - ✓ Persistent workspaces with file storage (MinIO)
-- ✓ AI agent with tool calling (13 tools)
+- ✓ AI agent with tool calling (15 tools including list_datasets, describe_dataset)
 - ✓ Agent task lifecycle (pending → executing → completed/failed/cancelled)
 - ✓ Tool approval flow for destructive operations
 - ✓ Multi-LLM provider support (OpenAI, Anthropic, MiniMax)
@@ -78,20 +78,21 @@ This is a **brownfield TypeScript pnpm monorepo**. The major product modules alr
 - ✓ Telegram channel integration
 - ✓ Persona and skill system
 - ✓ Audit logging
+- ✓ Runtime sandbox hardening (seccomp, cgroups, network isolation, health checks)
+- ✓ Rate limiting per user on agent endpoints
+- ✓ Token usage tracking and limits
+- ✓ Cross-service authentication (shared session validation)
+- ✓ Admin dashboard surfaces (users, audit logs, runtime events, health)
+- ✓ Dataset query tool expansion (list_datasets, describe_dataset, query_dataset)
+- ✓ All tests passing (203 total across 7 services)
+- ✓ Full monorepo typecheck clean (10 packages)
 
 ### Active
 
 - [ ] Multi-tool execution in single LLM response (partial — sequential only)
 - [ ] Automation worker waits for real task completion
-- [ ] Rate limiting per user on agent endpoints
-- [ ] Token usage tracking and limits
-- [ ] Runtime sandbox hardening (seccomp, cgroups, network isolation)
-- [ ] Cross-service authentication (shared session validation duplicated)
-- [ ] Test coverage gaps (env.test.ts failures, missing integration tests)
 - [ ] Frontend notification system polish
-- [ ] Admin dashboard surfaces
 - [ ] Snapshot system completion
-- [ ] Dataset query tool expansion
 
 ### Out of Scope
 
