@@ -19,7 +19,7 @@ import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
 import { z } from 'zod';
 import { extractAttachment, buildAttachmentContext, type ExtractedAttachment } from './attachments';
-import { checkRateLimit, AGENT_RATE_LIMITS } from './rate-limit';
+import { checkAgentRateLimit, AGENT_RATE_LIMITS } from './rate-limit';
 
 export async function setupAgentRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
@@ -39,7 +39,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
     action: keyof typeof AGENT_RATE_LIMITS,
   ): Promise<boolean> {
     const { windowMs, maxRequests } = AGENT_RATE_LIMITS[action];
-    const result = await checkRateLimit(userId, action, windowMs, maxRequests);
+    const result = await checkAgentRateLimit(userId, action, windowMs, maxRequests);
     reply.header('X-RateLimit-Limit', maxRequests);
     reply.header('X-RateLimit-Remaining', Math.max(0, result.remaining));
     reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));

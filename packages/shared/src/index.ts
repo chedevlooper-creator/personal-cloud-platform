@@ -16,3 +16,4 @@ export * from './errors';
 export * from './env-helpers';
 export * from './observability';
 export * from './cors';
+export * from './rate-limit';

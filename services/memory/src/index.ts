@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import {
   createApiErrorHandler,
   createCorsOptions,
@@ -41,6 +42,8 @@ server.addHook('onRequest', (request, reply, done) => {
 server.register(cors, {
   ...createCorsOptions(env.NODE_ENV),
 });
+
+server.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 
 server.register(cookie, {
   secret: env.COOKIE_SECRET,
