@@ -29,9 +29,12 @@ vi.mock('./orchestrator', () => ({
   AgentOrchestrator: vi.fn(() => orchestratorMethods),
 }));
 
+const OTHER_USER_ID = '550e8400-e29b-41d4-a716-446655440002';
+
 vi.mock('@pcp/db/src/session', () => ({
   validateSessionUserId: vi.fn(async (sessionId: string) => {
     if (sessionId === 'session-1') return USER_ID;
+    if (sessionId === 'session-2') return OTHER_USER_ID;
     return null;
   }),
 }));
@@ -107,6 +110,26 @@ describe('agent task event stream routes', () => {
     expect(response.body).toContain('"content":"Working"');
     expect(orchestratorMethods.getTask).toHaveBeenCalledWith(TASK_ID, USER_ID);
     expect(orchestratorMethods.getTaskSteps).toHaveBeenCalledWith(TASK_ID, USER_ID);
+
+    await app.close();
+  });
+
+  it('does not stream task data when a different user tries to access the event stream', async () => {
+    const app = await buildApp();
+
+    // getTask returns null for the other user, simulating tenant isolation
+    orchestratorMethods.getTask.mockResolvedValueOnce(null);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/agent/tasks/${TASK_ID}/events?snapshot=true`,
+      headers: { cookie: 'sessionId=session-2' },
+    });
+
+    // SSE opens 200 immediately; tenant isolation is enforced by omitting data.
+    expect(response.statusCode).toBe(200);
+    expect(orchestratorMethods.getTask).toHaveBeenCalledWith(TASK_ID, OTHER_USER_ID);
+    expect(response.body).not.toContain('event: task');
 
     await app.close();
   });

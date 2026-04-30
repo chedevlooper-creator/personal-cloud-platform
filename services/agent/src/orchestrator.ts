@@ -298,6 +298,9 @@ export class AgentOrchestrator {
   }
 
   async recoverInterruptedWork() {
+    // Intentionally unscoped: background recovery must find ALL interrupted
+    // work across every tenant. Each update below re-validates ownership via
+    // the userId stored on the row itself.
     const interruptedTasks = await db.query.tasks.findMany({
       where: eq(tasks.status, 'executing'),
     });

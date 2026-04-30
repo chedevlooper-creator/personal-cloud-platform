@@ -306,6 +306,8 @@ export async function setupAutomationRoutes(fastify: FastifyInstance) {
       }
 
       const automation = await db.query.automations.findFirst({
+        // Unscoped by userId: this is a public webhook endpoint authenticated
+        // by HMAC token (verifyAutomationTriggerToken above), not session.
         where: eq(automations.id, id),
       });
       if (!automation || !automation.enabled) {
