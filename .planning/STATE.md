@@ -48,6 +48,7 @@ None.
 | 2026-04-30 | Phase 6-01 runtime hardening committed | Seccomp profile, configurable image whitelist, audit logging for runtime events |
 | 2026-04-30 | Phase 6-02 runtime health checks committed | Periodic container security inspection, auto-stop on policy violation, audit logging |
 | 2026-04-30 | Agent pre-existing failures fixed | env.test.ts now passes (set LLM_PROVIDER + OPENAI_API_KEY in tests); typecheck clean across all 10 packages |
+| 2026-04-30 | Admin dashboard improvements | Real DB health check + runtime events tab with color-coded event badges |
 
 ## Notes
 
