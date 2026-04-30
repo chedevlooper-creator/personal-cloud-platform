@@ -13,7 +13,7 @@ import {
   tokenUsage,
 } from '@pcp/db/src/schema';
 import { validateSessionUserId } from '@pcp/db/src/session';
-import { eq, and, isNull, inArray, desc, sql } from 'drizzle-orm';
+import { eq, and, isNull, inArray, desc } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 import { LLMProvider, Message } from './llm/types';
 import { createLLMProvider } from './llm/provider';

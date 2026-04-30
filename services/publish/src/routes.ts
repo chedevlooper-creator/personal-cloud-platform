@@ -9,7 +9,7 @@ import {
   hostedServiceResponseSchema,
 } from '@pcp/shared';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply } from 'fastify';
 
 function sendUnauthorized(reply: FastifyReply) {
   return reply.code(401).send(createApiErrorResponse('UNAUTHORIZED', 'Unauthorized'));
