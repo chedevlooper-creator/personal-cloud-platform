@@ -1,167 +1,82 @@
-# Requirements: CloudMind OS Production Readiness
+# CloudMind OS — v1 Requirements
 
-**Defined:** 2026-04-28
-**Core Value:** Users can safely run and automate useful work inside persistent
-cloud workspaces without leaking tenant data, credentials, or host resources.
+## Requirement Quality Standards
 
-## v1 Requirements
-
-### Security And Isolation
-
-- [x] **SEC-01**: User session validation is centralized or contract-compatible
-      across all services so auth behavior cannot drift per service.
-- [x] **SEC-02**: Every DB-backed resource read/write enforces `userId`,
-      `organizationId`, or workspace ownership at the persistence boundary. Phase
-      2 plan 02-01 added representative scoped DB mutation/read coverage for
-      datasets, runtime lifecycle, publish lifecycle, and channel task polling.
-      Plan 02-03 added regression coverage for snapshot lifecycle and workspace
-      metadata updates, and tightened the missing predicates found there.
-- [x] **SEC-03**: File storage keys, snapshot paths, runtime labels, and hosted
-      app labels are tenant-prefixed and path traversal safe. Phase 2 plan 02-02
-      added tenant-prefixed snapshot keys, runtime host paths, runtime labels, and
-      hosted-app labels. Plan 02-03 added service-level traversal regression
-      coverage for workspace writes.
-- [x] **SEC-04**: Privileged actions are audit logged without leaking PII,
-      secrets, or plaintext credentials. Phase 2 plan 02-02 normalized snapshot
-      audit failure handling and kept touched audit details allow-listed. Plan
-      02-03 added route coverage that snapshot audit details stay limited to
-      `snapshotId`.
-
-### Config And API Contracts
-
-- [x] **CONF-01**: Every service validates required environment variables at
-      startup with Zod or equivalent schema validation.
-- [x] **CONF-02**: Production startup refuses dummy or development secrets,
-      including invalid `COOKIE_SECRET` and `ENCRYPTION_KEY` values.
-- [ ] **API-01**: Services return a consistent API error envelope through a
-      Fastify error handler without leaking internal stack details. Phase 1 added
-      the shared envelope and publish-service vertical slice; full service rollout
-      remains.
-- [ ] **API-02**: Shared request/response contracts live in `@pcp/shared` and
-      route schemas avoid new `any`, `as any`, or broad `z.any()` shortcuts. Phase
-      1 added the shared error contract and avoided new shortcuts in touched files.
-
-### Sandbox And Runtime
-
-- [x] **SBOX-01**: Runtime and publish containers enforce non-root execution,
-      read-only rootfs, dropped capabilities, no-new-privileges, tmpfs `/tmp`, and
-      CPU/RAM/pid/wall-clock limits. Phase 3 plan 03-01 made runtime/publish
-      Docker HostConfig defaults explicit and test-covered, including
-      `Privileged: false`, `Init: true`, `OomKillDisable: false`, and
-      `MemorySwap` capped to memory. Plan 03-03 added broader regression
-      coverage through runtime/publish sandbox tests.
-- [x] **SBOX-02**: Runtime and publish workloads use seccomp/AppArmor or an
-      equivalent hardened profile plus an image allow-list for untrusted
-      execution. Phase 3 plan 03-02 added runtime and publish image allow-list
-      enforcement. Plan 03-03 added validated, optional seccomp/AppArmor profile
-      wiring for runtime and publish Docker launch paths.
-- [x] **SBOX-03**: Terminal and `run_command` tool execution surfaces policy
-      decisions, resource limits, and approval requirements before side effects.
-      Phase 3 plan 03-02 added structured `run_command` policy metadata for
-      approval, timeout, network, output truncation, and blocked command
-      categories. Plan 03-03 added regression coverage for shell-wrapped
-      privilege escalation patterns.
-- [x] **SBOX-04**: Hosted-service environment variables remain encrypted at rest,
-      masked in client responses, and decrypted only for container launch. Phase
-      3 plan 03-03 added service-level coverage for create/update encryption,
-      masked responses, launch-time decryption, and invalid env-name filtering.
-
-### Agent And Automation
-
-- [x] **AGT-01**: High-risk tools, including `run_command`, browser click, and
-      browser fill, require approval with expiry and auditable outcomes. Phase 4
-      plan 04-01 added durable approval request rows with expiry, scoped
-      decisions, expired-approval blocking, and audit events for request,
-      decision, and expiry.
-- [x] **AGT-02**: Agent tasks, task steps, and tool calls recover or fail safely
-      after process restart without double-executing side effects. Phase 4 plan
-      04-01 added startup recovery that marks abandoned `executing` tasks and
-      `running` tool calls failed instead of replaying side effects silently.
-- [ ] **AGT-03**: Chat and task progress can stream to the frontend through
-      WebSocket or SSE instead of relying only on polling.
-- [ ] **AGT-04**: Token usage, model choice, provider, latency, and cost metadata
-      are persisted for agent runs.
-- [ ] **MEM-01**: Memory search uses a pgvector production index and a documented
-      retrieval/reranking strategy.
-
-### Observability, Delivery, And Frontend
-
-- [ ] **OBS-01**: Pino logs consistently include `correlationId`, `userId`, and
-      `service` fields with redaction for secrets and PII. Phase 1 added the
-      publish-service slice and removed workspace session-cookie logging; full
-      service rollout remains.
-- [ ] **OBS-02**: Services expose metrics and propagate traces across service and
-      agent-loop boundaries.
-- [ ] **CI-01**: CI runs `pnpm typecheck`, `pnpm lint`, `pnpm test`, and a smoke
-      gate before merge.
-- [ ] **TST-01**: Critical services have tests for tenant isolation, env
-      validation, API errors, and sandbox policy; `apps/web` and `packages/shared`
-      have baseline coverage. Phase 2 plan 02-01 added focused tenant isolation
-      regression tests for DB/resource scoping. Plan 02-03 expanded tenant
-      isolation regression coverage across workspace, runtime, publish, and agent
-      channel flows; web/shared baseline coverage remains future work.
-- [ ] **FE-01**: Frontend chat, tool approval, and async mutation states are
-      accessible, realtime-aware, and invalidated predictably.
-- [ ] **FE-02**: The web UI has an accessibility and mixed TR/EN copy pass for
-      focus handling, contrast, dialogs, and user-facing labels.
-
-## v2 Requirements
-
-### Runtime Isolation
-
-- **VM-01**: Runtime provider can swap Docker for Firecracker, Kata, gVisor, or
-  another stronger isolation layer without rewriting route contracts.
-
-### Product Expansion
-
-- **PROD-01**: New user-facing modules can be added after the safety and
-  delivery gates for this milestone are stable.
-
-## Out of Scope
-
-| Feature                      | Reason                                                                           |
-| ---------------------------- | -------------------------------------------------------------------------------- |
-| Full microVM migration       | Important but larger than this hardening milestone; Docker remains MVP boundary. |
-| Single API gateway rewrite   | Current architecture intentionally uses independent Fastify services.            |
-| `@pcp/shared` build artifact | Source-only shared contracts are an explicit repo invariant.                     |
-| Broad Vitest unification     | Test versions differ by service and should be upgraded intentionally.            |
-| New major product modules    | Production-readiness work has priority over scope expansion.                     |
+All requirements are:
+- **Specific and testable** — "User can X" with observable outcome
+- **User-centric** — describes user capability, not system action
+- **Atomic** — one capability per requirement
+- **Independent** — minimal dependencies on other requirements
 
 ## Traceability
 
-| Requirement | Phase   | Status   |
-| ----------- | ------- | -------- |
-| SEC-01      | Phase 1 | Complete |
-| CONF-01     | Phase 1 | Complete |
-| CONF-02     | Phase 1 | Complete |
-| API-01      | Phase 1 | Partial  |
-| API-02      | Phase 1 | Partial  |
-| OBS-01      | Phase 1 | Partial  |
-| SEC-02      | Phase 2 | Complete |
-| SEC-03      | Phase 2 | Complete |
-| SEC-04      | Phase 2 | Complete |
-| TST-01      | Phase 2 | Partial  |
-| SBOX-01     | Phase 3 | Complete |
-| SBOX-02     | Phase 3 | Complete |
-| SBOX-03     | Phase 3 | Complete |
-| SBOX-04     | Phase 3 | Complete |
-| AGT-01      | Phase 4 | Complete |
-| AGT-02      | Phase 4 | Complete |
-| AGT-03      | Phase 4 | Pending  |
-| AGT-04      | Phase 4 | Pending  |
-| MEM-01      | Phase 4 | Pending  |
-| OBS-02      | Phase 5 | Pending  |
-| CI-01       | Phase 5 | Pending  |
-| FE-01       | Phase 5 | Pending  |
-| FE-02       | Phase 5 | Pending  |
+| REQ-ID | Requirement | Phase | Status |
+|--------|-------------|-------|--------|
+| AUTH-01 | User can register with email/password | 1 | Validated |
+| AUTH-02 | User can log in and stay logged in across sessions | 1 | Validated |
+| AUTH-03 | User can log out from any page | 1 | Validated |
+| AUTH-04 | User can connect OAuth providers (Google, GitHub) | 1 | Validated |
+| AUTH-05 | Session validation works across all services | 4 | Active |
+| WS-01 | User can create a workspace | 1 | Validated |
+| WS-02 | User can upload files to workspace | 1 | Validated |
+| WS-03 | User can browse workspace file tree | 1 | Validated |
+| WS-04 | User can read and edit text files in workspace | 1 | Validated |
+| AGENT-01 | User can send a chat message to AI agent | 2 | Validated |
+| AGENT-02 | Agent can execute tool calls (read/write files, run commands) | 2 | Validated |
+| AGENT-03 | Agent loop processes multiple tool calls in single response | 5 | Active |
+| AGENT-04 | Destructive tools require user approval | 2 | Validated |
+| AGENT-05 | Agent persists task history and steps | 2 | Validated |
+| AGENT-06 | Agent streams live updates via SSE | 2 | Validated |
+| AGENT-07 | Agent supports multiple LLM providers (OpenAI, Anthropic, MiniMax) | 2 | Validated |
+| AGENT-08 | User can save their own API credentials (BYOK) encrypted | 2 | Validated |
+| AGENT-09 | Agent can search and add to long-term memory | 3 | Validated |
+| AGENT-10 | Agent can browse web pages and extract content | 3 | Validated |
+| AGENT-11 | Agent can search the web | 3 | Validated |
+| AGENT-12 | Agent can run shell commands in sandboxed runtime | 2 | Validated |
+| AUTO-01 | User can create scheduled automations | 3 | Validated |
+| AUTO-02 | Automation worker waits for task real completion | 5 | Active |
+| AUTO-03 | Automations support cron expressions | 3 | Validated |
+| AUTO-04 | Automations can trigger via inbound webhook | 3 | Validated |
+| AUTO-05 | Automation runs send notifications on completion/failure | 3 | Validated |
+| MEM-01 | Memory service stores vector embeddings (pgvector) | 3 | Validated |
+| MEM-02 | User can search memory by semantic similarity | 3 | Validated |
+| RUN-01 | Runtime service creates Docker containers per workspace | 2 | Validated |
+| RUN-02 | Runtime sandbox prevents host escape | 6 | Active |
+| RUN-03 | Runtime enforces resource limits (CPU, memory, network) | 6 | Active |
+| PUB-01 | User can publish/host apps from workspace | 4 | Active |
+| SNAP-01 | User can create workspace snapshots | 4 | Active |
+| SNAP-02 | User can restore workspace from snapshot | 4 | Active |
+| CHAN-01 | User can link Telegram account to agent | 3 | Validated |
+| CHAN-02 | Agent can receive and reply to Telegram messages | 3 | Validated |
+| PERSONA-01 | User can create and manage agent personas | 3 | Validated |
+| SKILL-01 | User can create custom skills (SKILL.md) | 3 | Validated |
+| SKILL-02 | User can install skills from community registry (skills.sh) | 3 | Validated |
+| NOTIFY-01 | User receives in-app notifications | 3 | Validated |
+| NOTIFY-02 | Notification bell shows unread count | 3 | Validated |
+| ADMIN-01 | Admin can view all users | 4 | Active |
+| ADMIN-02 | Admin can view system health | 4 | Active |
+| SEC-01 | Every DB query filters by user_id or organization_id | 5 | Active |
+| SEC-02 | Storage paths are tenant-prefixed | 5 | Active |
+| SEC-03 | Cross-service auth uses validated tokens | 4 | Active |
+| PERF-01 | Agent endpoints have per-user rate limiting | 5 | Active |
+| PERF-02 | Token usage is tracked and limited per user | 5 | Active |
 
-**Coverage:**
+## v2 Requirements (Deferred)
 
-- v1 requirements: 23 total
-- Mapped to phases: 23
-- Unmapped: 0
+- OAuth providers beyond Google/GitHub (Twitter, Discord, etc.)
+- Real-time collaborative workspace editing
+- GPU-backed local model inference
+- Mobile PWA offline support
+- Multi-region deployment
+- Advanced RBAC with teams/organizations
+
+## Out of Scope
+
+- Mobile native apps — browser PWA is the target
+- Multi-region deployment — single-region MVP
+- GPU acceleration for local models — cloud API only
+- Real-time collaborative editing — single-user workspace focus
+- Public marketplace for skills — community registry only
 
 ---
-
-_Requirements defined: 2026-04-28_
-_Last updated: 2026-04-29 after Phase 4 plan 04-01 execution_
+*Last updated: 2026-04-30*

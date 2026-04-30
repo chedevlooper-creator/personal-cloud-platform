@@ -1,133 +1,121 @@
-# CloudMind OS
+# CloudMind OS — Personal AI Cloud Computer
 
 ## What This Is
 
-CloudMind OS is a brownfield, multi-tenant personal AI cloud computer. Users get
-persistent browser workspaces, file management, terminal access, AI agent tool
-calling, automation scheduling, browser sessions, hosted apps, snapshots,
-settings, and admin surfaces through a Next.js frontend backed by independent
-Fastify services.
-
-This milestone is not about inventing the product from scratch. It is about
-making the existing product safer and more production-ready so users can run and
-automate useful work without leaking tenant data, credentials, or host resources.
+CloudMind OS is a **multi-tenant, browser-based personal AI cloud computer**. Users get persistent workspaces, file management, an AI agent with tool calling, browser terminal access, automation scheduling, app hosting, snapshots, settings, and admin surfaces through a Next.js frontend backed by independent Fastify services.
 
 ## Core Value
 
-Users can safely run and automate useful work inside persistent cloud workspaces
-without leaking tenant data, credentials, or host resources.
+Users can safely run and automate useful work inside persistent cloud workspaces without leaking tenant data, credentials, or host resources.
+
+## Context
+
+This is a **brownfield TypeScript pnpm monorepo**. The major product modules already exist, but the implementation still needs production-readiness work around security hardening, tenant isolation, runtime sandboxing, agent durability, test coverage, and deployment reliability.
+
+### Constraints
+
+- **Runtime**: Node.js 20+ and pnpm 9+ required.
+- **Database**: PostgreSQL with pgvector required; memory service depends on vector support.
+- **Architecture**: No cross-service DB ownership changes; schema and migrations stay in `packages/db`.
+- **Frontend**: Next.js 16 and React 19 differ from older conventions.
+- **Security**: Every resource query and storage path must be tenant scoped by user/workspace/organization context.
+- **Sandbox**: Docker is the MVP runtime boundary; production-readiness work must reduce host escape and resource exhaustion risk before enabling untrusted execution broadly.
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16.2.4, React 19.2.4, Tailwind CSS 4, shadcn/ui |
+| API Services | Fastify 4.26.x, `fastify-type-provider-zod` |
+| ORM | Drizzle ORM 0.45.x |
+| Database | PostgreSQL 16 + pgvector |
+| Cache/Queue | Redis 7, BullMQ + ioredis |
+| Storage | MinIO (S3-compatible) |
+| Reverse Proxy | Traefik 3 |
+| LLM | OpenAI SDK, Anthropic SDK (incl. MiniMax) |
+| Testing | Vitest |
+| Package Manager | pnpm 9 |
+
+## Services
+
+| Service | Port | Responsibility |
+|---------|------|---------------|
+| `apps/web` | 3000 | Next.js frontend — App Router, authenticated shell |
+| `services/auth` | 3001 | Auth, sessions, OAuth |
+| `services/workspace` | 3002 | File management, workspace CRUD |
+| `services/runtime` | 3003 | Docker runtime for sandboxed execution |
+| `services/agent` | 3004 | AI agent, task orchestration, tool calling, automations |
+| `services/memory` | 3005 | Vector memory, embeddings (pgvector) |
+| `services/publish` | 3006 | App hosting, deployment |
+| `services/browser` | 3007 | Headless browser automation |
+
+## Key Decisions
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| Independent services over monolith | Isolation, independent deploy, per-service scaling | Working well — 7 services running independently |
+| pnpm workspace | Unified dependency management, shared packages (`@pcp/db`, `@pcp/shared`) | Working well |
+| Drizzle ORM over Prisma | SQL-first, lightweight, no schema DSL lock-in | Working well |
+| Docker for runtime sandboxing | MVP boundary, easy to reason about | Needs hardening for untrusted code |
+| SSE for agent task streaming | Simple push for live task updates | Working well |
+| BYOK for LLM credentials | Users bring their own API keys | Implemented with AES-256-GCM encryption |
 
 ## Requirements
 
 ### Validated
 
-- [x] pnpm workspace exists with `apps/*`, `services/*`, and `packages/*`.
-- [x] Next.js 16 and React 19 web app exists in `apps/web`.
-- [x] Seven Fastify services exist for auth, workspace, runtime, agent, memory,
-      publish, and browser.
-- [x] PostgreSQL/pgvector, Redis, MinIO, Traefik, and Mailhog local infra exists.
-- [x] `@pcp/db` owns schema, migrations, seed, and DB client.
-- [x] `@pcp/shared` provides source-only Zod DTOs with no build artifact.
-- [x] Existing docs describe agent tools, BYOK, data model, production guidance,
-      and current open work.
-- [x] Phase 2 validated representative tenant isolation for DB predicates,
-      storage paths, runtime/publish container metadata, channel task polling, and
-      snapshot audit details.
+- ✓ Multi-tenant user auth (email/password + OAuth)
+- ✓ Persistent workspaces with file storage (MinIO)
+- ✓ AI agent with tool calling (13 tools)
+- ✓ Agent task lifecycle (pending → executing → completed/failed/cancelled)
+- ✓ Tool approval flow for destructive operations
+- ✓ Multi-LLM provider support (OpenAI, Anthropic, MiniMax)
+- ✓ BYOK credential encryption
+- ✓ Automation scheduling (BullMQ + cron)
+- ✓ Webhook triggers for automations
+- ✓ Browser automation (open, extract, screenshot, click, fill)
+- ✓ Vector memory with pgvector
+- ✓ Telegram channel integration
+- ✓ Persona and skill system
+- ✓ Audit logging
 
 ### Active
 
-- [ ] Centralize and harden authentication/session validation across services.
-- [ ] Validate service environment configuration at startup and reject dummy
-      production secrets.
-- [ ] Standardize API error envelopes, logging fields, and audit coverage.
-- [ ] Harden Docker runtime and publish sandboxes for untrusted execution.
-- [ ] Make agent approvals, task durability, streaming, memory, and telemetry
-      production-ready.
-- [ ] Add CI, targeted test coverage, metrics, traces, and frontend polish.
+- [ ] Multi-tool execution in single LLM response (partial — sequential only)
+- [ ] Automation worker waits for real task completion
+- [ ] Rate limiting per user on agent endpoints
+- [ ] Token usage tracking and limits
+- [ ] Runtime sandbox hardening (seccomp, cgroups, network isolation)
+- [ ] Cross-service authentication (shared session validation duplicated)
+- [ ] Test coverage gaps (env.test.ts failures, missing integration tests)
+- [ ] Frontend notification system polish
+- [ ] Admin dashboard surfaces
+- [ ] Snapshot system completion
+- [ ] Dataset query tool expansion
 
 ### Out of Scope
 
-- Replacing Docker with Firecracker/Kata in this milestone - Docker is the MVP
-  boundary; this milestone hardens the abstraction and keeps a future migration
-  path open.
-- Rewriting the service architecture into a single API gateway - existing
-  independent services are the chosen shape for now.
-- Adding a `dist/` build contract for `@pcp/shared` - consumers import from
-  source by design.
-- Broad dependency unification, including Vitest versions - auth/workspace and
-  other services intentionally differ today and should be upgraded deliberately.
-- Product expansion beyond production-readiness - new user-facing modules should
-  wait until safety, reliability, and delivery gates are stronger.
-
-## Context
-
-The repo is a TypeScript pnpm monorepo requiring Node.js 20+ and pnpm 9+.
-Frontend code is in `apps/web` and uses Next.js 16, React 19, Tailwind v4,
-shadcn/Base UI primitives, TanStack Query, Zustand, Monaco, and xterm.js.
-
-Backend code is split across independent Fastify services under `services/*`.
-Services import `@pcp/db` and `@pcp/shared`; DB ownership stays in
-`packages/db`. `packages/shared` is intentionally source-only.
-
-The strongest recurring risks in the docs are tenant isolation, Docker host
-escape, duplicated auth/session logic, fallback secrets, ad hoc error responses,
-type-system bypasses, uneven logging, agent durability gaps, missing CI, and
-thin test coverage for frontend/shared/cross-service behavior.
-
-There are stale-documentation conflicts. Current executable config wins over
-older prose: root `package.json` includes `browser-service` and defines
-`typecheck` across all packages; some `.planning/codebase` notes still mention
-six services or a no-op typecheck.
-
-## Constraints
-
-- **Runtime**: Node.js 20+ and pnpm 9+ are required by package metadata.
-- **Database**: PostgreSQL with pgvector is required because memory search uses
-  `vector(1536)`.
-- **Architecture**: DB schema and migrations stay in `packages/db`; services
-  must not claim their own schema ownership.
-- **Shared contracts**: `@pcp/shared` stays source-only with Zod as its runtime
-  dependency.
-- **Frontend**: Next.js 16 and React 19 differ from older conventions; consult
-  local Next docs before routing, server component, or config changes.
-- **Security**: Every resource operation must be tenant scoped and storage paths
-  must be tenant-prefixed.
-- **Sandbox**: Docker remains the current runtime boundary, but production work
-  must reduce host escape and resource exhaustion risk.
-- **Docs**: When docs conflict, trust executable config and source code first.
-- **Workflow**: Repo instructions require GSD workflow artifacts before direct
-  edits unless the user explicitly bypasses GSD.
-
-## Key Decisions
-
-| Decision                                                | Rationale                                                                             | Outcome              |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------- |
-| Keep pnpm monorepo                                      | Shared types and atomic cross-service changes are valuable.                           | Pending              |
-| Keep Drizzle as DB layer                                | SQL-first schema ownership already exists in `@pcp/db`.                               | Pending              |
-| Harden Docker before microVM migration                  | Docker is the current implementation and fastest path to safer MVP.                   | Pending              |
-| Keep pgvector for memory                                | Avoids a second vector database while scale is modest.                                | Pending              |
-| Treat GSD as production-readiness tracker               | Existing codebase already exists; roadmap should focus on hardening and verification. | Active               |
-| Use representative predicate tests for tenant isolation | They catch regressions without introducing a broad repository rewrite.                | Validated in Phase 2 |
+- Mobile native apps — browser PWA is the target
+- Multi-region deployment — single-region MVP
+- GPU acceleration for local models — cloud API only
+- Real-time collaborative editing — single-user workspace focus
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-After each phase transition:
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
 
-1. Requirements invalidated? Move to Out of Scope with reason.
-2. Requirements validated? Move to Validated with phase reference.
-3. New requirements emerged? Add to Active.
-4. Decisions to log? Add to Key Decisions.
-5. What This Is still accurate? Update if drifted.
-
-After each milestone:
-
-1. Full review of all sections.
-2. Core Value check - still the right priority?
-3. Audit Out of Scope - reasons still valid?
-4. Update Context with current state.
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
 
 ---
-
-_Last updated: 2026-04-29 after Phase 2 tenant isolation completion_
+*Last updated: 2026-04-30 after GSD initialization*

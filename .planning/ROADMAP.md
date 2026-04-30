@@ -1,168 +1,171 @@
-# Roadmap: CloudMind OS Production Readiness
+# CloudMind OS — Roadmap
 
-## Overview
+## Phase Overview
 
-This roadmap turns the existing CloudMind OS brownfield codebase into a safer
-production-ready platform. The milestone starts by tightening shared contracts,
-startup config, auth, errors, and logs; then audits tenant boundaries; then
-hardens runtime/publish sandboxes; then makes agent execution durable and
-observable; and finally adds delivery gates, metrics, tracing, and frontend
-polish.
+| # | Phase | Goal | Requirements | Status |
+|---|-------|------|--------------|--------|
+| 1 | Foundation | Auth, workspace, runtime MVP | AUTH-01..05, WS-01..04, RUN-01 | ✅ Complete |
+| 2 | Agent Core | AI agent with tool calling | AGENT-01..02, AGENT-04..08, AGENT-12, RUN-01 | ✅ Complete |
+| 3 | Agent Ecosystem | Memory, browser, automations, channels | AGENT-09..11, AUTO-01..05, MEM-01..02, CHAN-01..02, PERSONA-01, SKILL-01..02, NOTIFY-01..02 | ✅ Complete |
+| 4 | Integration & Admin | Cross-service auth, publish, snapshots, admin | AUTH-05, PUB-01, SNAP-01..02, ADMIN-01..02, SEC-03 | 🔄 In Progress |
+| 5 | Security & Reliability | Hardening, tenant isolation, rate limits | AGENT-03, AUTO-02, SEC-01..02, PERF-01..02 | ⏳ Planned |
+| 6 | Runtime Hardening | Sandbox security, resource limits | RUN-02..03 | ⏳ Planned |
 
-## Phases
+---
 
-**Phase Numbering:**
+## Phase 1: Foundation ✅
 
-- Integer phases (1, 2, 3): Planned milestone work.
-- Decimal phases (2.1, 2.2): Urgent insertions, marked with INSERTED.
+**Goal:** Core platform with auth, workspace file management, and runtime creation.
 
-- [x] **Phase 1: Contracts, Config, And Auth Foundation** - Make service startup,
-      auth/session validation, API errors, DTOs, and logging safer and consistent.
-      Completed as a foundation slice; API/OBS rollout follow-ups remain tracked in
-      requirements.
-- [x] **Phase 2: Tenant Isolation And Audit Hardening** - Verify and enforce
-      tenant scoping across data, storage, audit, and tests.
-      Completed 2026-04-29 with representative tenant predicate, storage path,
-      container label, channel polling, and snapshot audit regression coverage.
-- [x] **Phase 3: Runtime And Publish Sandbox Hardening** - Reduce host escape
-      and resource-exhaustion risk for workspace and hosted-app containers.
-      Completed 2026-04-29 with explicit Docker sandbox defaults, image
-      allow-lists, command policy metadata, hosted secret regression tests, and
-      configurable seccomp/AppArmor profile wiring.
-- [ ] **Phase 4: Agent Durability, Approval, And Memory** - Make agent execution,
-      approvals, streaming, telemetry, and memory retrieval production-ready.
-- [ ] **Phase 5: Delivery, Observability, And Frontend Polish** - Add CI gates,
-      metrics/traces, and frontend realtime/accessibility/i18n polish.
+**Requirements:** AUTH-01..05, WS-01..04, RUN-01
 
-## Phase Details
+**Success Criteria:**
+1. User can register, log in, and manage sessions
+2. User can create workspace and upload files
+3. Runtime service creates Docker containers on demand
+4. All endpoints return proper HTTP status codes
 
-### Phase 1: Contracts, Config, And Auth Foundation
+**Deliverables:**
+- `services/auth` — full auth service
+- `services/workspace` — file CRUD + MinIO storage
+- `services/runtime` — Docker container lifecycle
+- `apps/web` — basic app shell + workspace UI
 
-**Goal**: Services fail fast on unsafe config and expose consistent auth,
-error, DTO, logging, health, and shutdown behavior.
-**Depends on**: Nothing (first phase)
-**Requirements**: [SEC-01, CONF-01, CONF-02, API-01, API-02, OBS-01]
-**Success Criteria** (what must be TRUE):
+---
 
-1. Services reject missing or dummy production secrets at startup.
-2. Session validation behavior is shared or contract-compatible across services.
-3. API clients receive a consistent error envelope without internal stack leaks.
-4. Logs include required context fields and redact secrets/PII.
-   **Plans**: 3 plans
+## Phase 2: Agent Core ✅
 
-Plans:
-**Wave 1**
+**Goal:** AI agent that can reason, call tools, and execute in workspace.
 
-- [x] 01-01: Centralize session/env validation patterns.
+**Requirements:** AGENT-01..02, AGENT-04..08, AGENT-12, RUN-01
 
-**Wave 2** _(blocked on Wave 1 completion)_
+**Success Criteria:**
+1. User can chat with agent and get responses
+2. Agent can read/write workspace files
+3. Agent can run shell commands (with approval)
+4. Multiple LLM providers work (OpenAI, Anthropic, MiniMax)
+5. BYOK credentials encrypt and decrypt correctly
+6. Task lifecycle is observable via SSE
 
-- [x] 01-02: Standardize API errors and shared DTO contracts.
-- [x] 01-03: Normalize logging, health checks, and shutdown behavior.
+**Deliverables:**
+- `services/agent` — orchestrator, LLM providers, tool registry
+- 13 tools: read_file, write_file, list_files, run_command, web_search, web_fetch, browser_*, search_memory, add_memory, query_dataset
+- `apps/web` — chat UI with SSE streaming
 
-Cross-cutting constraints:
+---
 
-- Preserve HTTP-only cookie sessions; no JWT auth rewrite in this phase.
-- Production must reject missing, dummy, or development-marked secrets.
-- Client-facing errors and logs must not leak internal details, secrets, or PII.
+## Phase 3: Agent Ecosystem ✅
 
-### Phase 2: Tenant Isolation And Audit Hardening
+**Goal:** Memory, browser, automations, personas, skills, channels.
 
-**Goal**: Data, storage, and audit behavior consistently prove tenant isolation
-at the boundary where side effects happen.
-**Depends on**: Phase 1
-**Requirements**: [SEC-02, SEC-03, SEC-04, TST-01]
-**Success Criteria** (what must be TRUE):
+**Requirements:** AGENT-09..11, AUTO-01..05, MEM-01..02, CHAN-01..02, PERSONA-01, SKILL-01..02, NOTIFY-01..02
 
-1. Resource queries are scoped by user, organization, or workspace ownership.
-2. Storage paths, runtime labels, and hosted-app labels are tenant-prefixed.
-3. Privileged actions write audit rows without PII or plaintext secrets.
-4. Tests fail if representative tenant scoping checks are removed.
-   **Plans**: 3 plans
+**Success Criteria:**
+1. Agent recalls previous work via vector memory
+2. Agent can browse web pages and extract data
+3. Automations run on schedule and trigger via webhook
+4. Telegram messages route to agent and receive replies
+5. Personas and skills customize agent behavior
+6. Notifications inform user of automation results
 
-Plans:
+**Deliverables:**
+- `services/memory` — vector embeddings + semantic search
+- `services/browser` — headless browser automation
+- `services/agent/automation` — BullMQ scheduler + worker
+- `services/agent/channels` — Telegram webhook adapter
+- `services/agent/personas` — persona CRUD
+- `services/agent/skills` — skill CRUD + skills.sh registry
+- `apps/web` — automations page, channels page, personas page, skills page
 
-- [x] 02-01: Audit and enforce DB/resource scoping.
-- [x] 02-02: Harden storage paths, runtime labels, and audit coverage.
-- [x] 02-03: Add tenant isolation and contract regression tests.
+---
 
-### Phase 3: Runtime And Publish Sandbox Hardening
+## Phase 4: Integration & Admin 🔄
 
-**Goal**: Workspace runtimes and hosted app containers run with stricter Docker
-boundaries, resource limits, and tool policy visibility.
-**Depends on**: Phase 2
-**Requirements**: [SBOX-01, SBOX-02, SBOX-03, SBOX-04]
-**Success Criteria** (what must be TRUE):
+**Goal:** Cross-service auth consistency, publishing, snapshots, admin surfaces.
 
-1. Runtime and publish containers are non-root, read-only, capability-dropped,
-   and resource-limited by default.
-2. Hardened seccomp/AppArmor or equivalent profiles and image allow-listing are
-   wired into container launch paths.
-3. Terminal and `run_command` policy decisions expose limits and approval needs.
-4. Hosted-service env vars stay encrypted at rest and masked in API responses.
-   **Plans**: 3 plans
+**Requirements:** AUTH-05, PUB-01, SNAP-01..02, ADMIN-01..02, SEC-03
 
-Plans:
+**Success Criteria:**
+1. Session validation is consistent across all 7 services
+2. User can publish workspace apps to public URL
+3. User can create and restore workspace snapshots
+4. Admin dashboard shows user list and system health
 
-- [x] 03-01: Harden Docker provider defaults for runtime and publish.
-- [x] 03-02: Add execution policy, limits, and approval visibility.
-- [x] 03-03: Verify hosted-service secret handling and sandbox tests.
+**Deliverables:**
+- Shared auth middleware / service token validation
+- `services/publish` — app hosting via Traefik
+- Snapshot CRUD in workspace service
+- Admin UI in `apps/web`
 
-### Phase 4: Agent Durability, Approval, And Memory
+---
 
-**Goal**: Agent tasks can survive failure modes, gate high-risk tools, stream
-progress, record cost telemetry, and use production-grade memory retrieval.
-**Depends on**: Phase 3
-**Requirements**: [AGT-01, AGT-02, AGT-03, AGT-04, MEM-01]
-**Success Criteria** (what must be TRUE):
+## Phase 5: Security & Reliability ⏳
 
-1. High-risk tool calls require approval, expire predictably, and are audited.
-2. Process restart cannot silently lose or double-execute side-effectful tool
-   calls.
-3. Chat and task progress stream to the web UI.
-4. Agent runs persist provider/model/token/latency/cost metadata.
-5. Memory search uses a documented pgvector index and retrieval strategy.
-   **Plans**: 3 plans
+**Goal:** Production readiness — tenant isolation, rate limits, correct async behavior.
 
-Plans:
+**Requirements:** AGENT-03, AUTO-02, SEC-01..02, PERF-01..02
 
-- [x] 04-01: Harden tool approval and task recovery semantics.
-- [ ] 04-02: Add streaming and token/cost telemetry.
-- [ ] 04-03: Add pgvector memory indexing and retrieval improvements.
+**Success Criteria:**
+1. Agent processes all tool calls in a single LLM response
+2. Automation worker accurately reports task success/failure
+3. Every DB query is tenant-scoped
+4. Per-user rate limits prevent abuse
+5. Token usage is tracked and limited
 
-### Phase 5: Delivery, Observability, And Frontend Polish
+**Deliverables:**
+- Multi-tool execution loop refactor
+- Automation polling + timeout handling
+- Tenant scoping audit across all services
+- Rate limiting middleware (per user)
+- Token quota tracking
 
-**Goal**: The platform has merge gates, operational visibility, and a frontend
-that exposes realtime work safely and accessibly.
-**Depends on**: Phase 4
-**Requirements**: [OBS-02, CI-01, FE-01, FE-02]
-**Success Criteria** (what must be TRUE):
+---
 
-1. CI runs typecheck, lint, tests, and smoke checks before merge.
-2. Services expose metrics and propagate traces across request/agent paths.
-3. Frontend async states and tool approval flows handle streaming and failures.
-4. Focus, contrast, dialog behavior, and mixed TR/EN copy receive an
-   accessibility and copy pass.
-   **Plans**: 2 plans
+## Phase 6: Runtime Hardening ⏳
 
-Plans:
+**Goal:** Untrusted code execution without host escape.
 
-- [ ] 05-01: Add CI, metrics, and trace propagation.
-- [ ] 05-02: Polish frontend realtime, accessibility, and i18n surfaces.
+**Requirements:** RUN-02..03
 
-## Progress
+**Success Criteria:**
+1. Docker containers cannot access host filesystem
+2. Network is isolated or disabled by default
+3. CPU/memory limits are enforced
+4. Privilege escalation is blocked
 
-**Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+**Deliverables:**
+- Seccomp profiles for runtime containers
+- cgroup resource limits
+- Network namespace isolation
+- Image whitelist / policy
 
-| Phase                                           | Plans Complete | Status      | Completed  |
-| ----------------------------------------------- | -------------- | ----------- | ---------- |
-| 1. Contracts, Config, And Auth Foundation       | 3/3            | Complete    | 2026-04-28 |
-| 2. Tenant Isolation And Audit Hardening         | 3/3            | Complete    | 2026-04-29 |
-| 3. Runtime And Publish Sandbox Hardening        | 3/3            | Complete    | 2026-04-29 |
-| 4. Agent Durability, Approval, And Memory       | 1/3            | In progress | -          |
-| 5. Delivery, Observability, And Frontend Polish | 0/2            | Not started | -          |
+---
 
-## Backlog
+## Requirement Traceability
 
-No deferred phase work yet.
+| REQ-ID | Phase |
+|--------|-------|
+| AUTH-01..04 | 1 |
+| AUTH-05 | 4 |
+| WS-01..04 | 1 |
+| AGENT-01..02, AGENT-04..08, AGENT-12 | 2 |
+| AGENT-03 | 5 |
+| AGENT-09..11 | 3 |
+| AUTO-01, AUTO-03..05 | 3 |
+| AUTO-02 | 5 |
+| MEM-01..02 | 3 |
+| RUN-01 | 1 |
+| RUN-02..03 | 6 |
+| PUB-01 | 4 |
+| SNAP-01..02 | 4 |
+| CHAN-01..02 | 3 |
+| PERSONA-01 | 3 |
+| SKILL-01..02 | 3 |
+| NOTIFY-01..02 | 3 |
+| ADMIN-01..02 | 4 |
+| SEC-01..02 | 5 |
+| SEC-03 | 4 |
+| PERF-01..02 | 5 |
+
+---
+*Last updated: 2026-04-30*
