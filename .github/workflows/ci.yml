@@ -16,7 +16,7 @@ jobs:
       DATABASE_URL: postgres://pcp:pcp@localhost:5432/pcp_test
       SESSION_SECRET: ci-session-secret-not-used-in-prod-32b
       JWT_SECRET: ci-jwt-secret-not-used-in-prod-32bytes
-      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
       NODE_ENV: test
 
     steps:
