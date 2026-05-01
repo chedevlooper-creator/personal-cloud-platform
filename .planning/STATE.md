@@ -33,6 +33,7 @@
 - [x] Quick task 260501-uiq: UI/UX Pro Max chat quality pass
 - [x] Quick task 260501-log: Login copy update
 - [x] Quick task 260501-chat: Global chat workspace context fix
+- [x] Quick task 260501-hosting: Hosting UI quality pass
 
 ## Blockers
 
@@ -62,6 +63,7 @@ None.
 | 2026-05-01 | UI/UX Pro Max chat quality pass | `chat-core.tsx` lint warnings cleared; attachment previews use `next/image`; chat micro-labels follow `text-xs` floor |
 | 2026-05-01 | Login copy update | `/login` heading and primary submit button now display `Login` per browser diff comment |
 | 2026-05-01 | Global chat context fix | `/terminal` chat resolves fallback workspace, provider auth failures are readable, and first saved provider becomes default |
+| 2026-05-01 | Hosting UI quality pass | `/hosting` deployment console tightened for touch targets, focus states, and responsive service actions |
 
 ## Notes
 
