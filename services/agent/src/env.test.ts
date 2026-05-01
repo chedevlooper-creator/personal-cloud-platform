@@ -21,6 +21,7 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     process.env.DATABASE_URL = 'postgres://x:y@localhost/db';
     process.env.COOKIE_SECRET = 'a'.repeat(32);
     process.env.INTERNAL_SERVICE_TOKEN = 'b'.repeat(32);
+    process.env.AUTH_BYPASS = '0';
     process.env.LLM_PROVIDER = 'openai';
     process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
     delete process.env.ENCRYPTION_KEY;
@@ -33,6 +34,7 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     process.env.DATABASE_URL = 'postgres://x:y@localhost/db';
     process.env.COOKIE_SECRET = 'a'.repeat(32);
     process.env.INTERNAL_SERVICE_TOKEN = 'b'.repeat(32);
+    process.env.AUTH_BYPASS = '0';
     process.env.LLM_PROVIDER = 'openai';
     process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
     process.env.ENCRYPTION_KEY = 'changeme-changeme-changeme-1234';
@@ -45,6 +47,7 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     process.env.DATABASE_URL = 'postgres://x:y@localhost/db';
     process.env.COOKIE_SECRET = 'a'.repeat(32);
     process.env.INTERNAL_SERVICE_TOKEN = 'b'.repeat(32);
+    process.env.AUTH_BYPASS = '0';
     process.env.LLM_PROVIDER = 'openai';
     process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
     process.env.ENCRYPTION_KEY = 'X9k2Ll7vQ8mZpRtY3wN6cF1jB4hG5dKa';
@@ -53,8 +56,22 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     expect(mod.env.ENCRYPTION_KEY).toBe('X9k2Ll7vQ8mZpRtY3wN6cF1jB4hG5dKa');
   });
 
+  it('rejects AUTH_BYPASS in production', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = 'postgres://x:y@localhost/db';
+    process.env.COOKIE_SECRET = 'a'.repeat(32);
+    process.env.INTERNAL_SERVICE_TOKEN = 'b'.repeat(32);
+    process.env.AUTH_BYPASS = '1';
+    process.env.LLM_PROVIDER = 'openai';
+    process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
+    process.env.ENCRYPTION_KEY = 'X9k2Ll7vQ8mZpRtY3wN6cF1jB4hG5dKa';
+
+    await expect(import('./env')).rejects.toThrow(/AUTH_BYPASS/);
+  });
+
   it('permits absent ENCRYPTION_KEY in development (or accepts dev-supplied key)', async () => {
     process.env.NODE_ENV = 'development';
+    process.env.AUTH_BYPASS = '0';
     delete process.env.ENCRYPTION_KEY;
 
     const mod = await import('./env');
