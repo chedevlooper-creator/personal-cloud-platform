@@ -17,14 +17,10 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { agentApi, apiEndpoints, toastApiError} from '@/lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { agentApi, apiEndpoints, toastApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { CreateAutomationDialog } from '@/components/automations/create-automation-dialog';
 import {
@@ -66,6 +62,27 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'history', label: 'Geçmiş' },
 ];
 
+const scheduleLabels: Record<Automation['scheduleType'], string> = {
+  manual: 'Elle tetiklenir',
+  hourly: 'Saatlik',
+  daily: 'Her gün 09:00 UTC',
+  weekly: 'Her hafta pazartesi 09:00 UTC',
+  cron: 'Özel zamanlama',
+};
+
+const notificationLabels: Record<string, string> = {
+  'in-app': 'Uygulama içi',
+  'email-mock': 'E-posta',
+  webhook: 'Webhook',
+};
+
+const runStatusLabels: Record<AutomationRun['status'], string> = {
+  queued: 'Sırada',
+  running: 'Çalışıyor',
+  completed: 'Tamamlandı',
+  failed: 'Başarısız',
+};
+
 function formatRelative(value: string | null | undefined) {
   if (!value) return '—';
   const diff = new Date(value).getTime() - Date.now();
@@ -80,8 +97,17 @@ function formatRelative(value: string | null | undefined) {
 }
 
 function describeSchedule(a: Automation) {
-  if (a.scheduleType === 'cron' && a.cronExpression) return `cron · ${a.cronExpression}`;
-  return a.scheduleType;
+  return scheduleLabels[a.scheduleType] ?? a.scheduleType;
+}
+
+function describeNotification(mode: string | null | undefined) {
+  if (!mode || mode === 'none') return null;
+  return notificationLabels[mode] ?? mode;
+}
+
+function formatRunDuration(value: string | null) {
+  if (!value) return '—';
+  return `${(Number(value) / 1000).toFixed(1)} sn`;
 }
 
 export default function AutomationsPage() {
@@ -90,7 +116,12 @@ export default function AutomationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: automations, isLoading, isError } = useQuery({
+  const {
+    data: automations,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['automations'],
     queryFn: async () => {
       const res = await agentApi.get('/automations');
@@ -105,9 +136,9 @@ export default function AutomationsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
-      toast.success('Automation updated');
+      toast.success('Otomasyon güncellendi');
     },
-    onError: (e) => toastApiError(e, 'Failed to update'),
+    onError: (e) => toastApiError(e, 'Otomasyon güncellenemedi'),
   });
 
   const deleteMutation = useMutation({
@@ -116,9 +147,9 @@ export default function AutomationsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
-      toast.success('Automation deleted');
+      toast.success('Otomasyon silindi');
     },
-    onError: (e) => toastApiError(e, 'Failed to delete'),
+    onError: (e) => toastApiError(e, 'Otomasyon silinemedi'),
   });
 
   const runMutation = useMutation({
@@ -126,9 +157,9 @@ export default function AutomationsPage() {
       await agentApi.post(`/automations/${id}/run`);
     },
     onSuccess: () => {
-      toast.success('Automation triggered');
+      toast.success('Otomasyon çalıştırıldı');
     },
-    onError: (e) => toastApiError(e, 'Failed to run'),
+    onError: (e) => toastApiError(e, 'Otomasyon çalıştırılamadı'),
   });
 
   const copyWebhookUrl = useMutation({
@@ -139,8 +170,8 @@ export default function AutomationsPage() {
       await navigator.clipboard.writeText(url);
       return url;
     },
-    onSuccess: () => toast.success('Webhook URL copied'),
-    onError: (e) => toastApiError(e, 'Failed to fetch token'),
+    onSuccess: () => toast.success('Webhook URL kopyalandı'),
+    onError: (e) => toastApiError(e, 'Tetikleme tokenı alınamadı'),
   });
 
   const all = automations || [];
@@ -152,29 +183,32 @@ export default function AutomationsPage() {
         : all;
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="mx-auto flex w-full max-w-6xl flex-col p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-foreground">Otomasyonlar</h2>
-          <p className="text-sm text-muted-foreground">AI görevlerini otomatik çalışacak şekilde planlayın</p>
+          <p className="text-sm text-muted-foreground">
+            AI görevlerini otomatik çalışacak şekilde planlayın
+          </p>
         </div>
-        <Button size="touch" className="md:h-7 md:px-2.5 md:text-[0.8rem]" onClick={() => setCreateOpen(true)}>
+        <Button size="touch" className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Otomasyon oluştur
         </Button>
       </div>
 
-      <div className="mt-4 flex gap-1 border-b border-border">
+      <div className="mt-4 flex gap-1 overflow-x-auto rounded-lg bg-muted p-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
+            aria-pressed={activeTab === tab.id}
             className={cn(
-              'border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+              'min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:flex-none',
               activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
             )}
           >
             {tab.label}
@@ -184,27 +218,36 @@ export default function AutomationsPage() {
 
       <div className="mt-6">
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="space-y-3">
+            <LoadingSkeleton variant="card" />
+            <LoadingSkeleton variant="card" />
           </div>
         ) : isError ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
-            Agent servisine ulaşılamıyor. Otomasyonlar şu anda yüklenemiyor.
+          <div className="flex flex-col gap-4 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+            <span>Agent servisine ulaşılamıyor. Otomasyonlar şu anda yüklenemiyor.</span>
+            <Button
+              size="touch"
+              variant="outline"
+              className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
+              onClick={() => void refetch()}
+            >
+              Yeniden dene
+            </Button>
           </div>
         ) : filtered.length > 0 ? (
           <div className="space-y-3">
             {filtered.map((auto) => (
               <div
                 key={auto.id}
-                className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
+                className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:ring-1 hover:ring-ring/30 sm:flex-row sm:items-start sm:justify-between"
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                     <Zap className="h-5 w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="truncate font-medium text-foreground">{auto.title}</h3>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <h3 className="min-w-0 truncate font-medium text-foreground">{auto.title}</h3>
                       <StatusBadge variant={auto.enabled ? 'success' : 'stopped'} dot>
                         {auto.enabled ? 'Aktif' : 'Duraklatıldı'}
                       </StatusBadge>
@@ -213,42 +256,50 @@ export default function AutomationsPage() {
                       {describeSchedule(auto)}
                       {auto.prompt ? ` · ${auto.prompt.slice(0, 60)}…` : ''}
                     </p>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span title={auto.nextRunAt ?? undefined}>
-                        Sıradaki: <span className="text-foreground/80">{formatRelative(auto.nextRunAt)}</span>
+                        Sıradaki:{' '}
+                        <span className="text-foreground/80">{formatRelative(auto.nextRunAt)}</span>
                       </span>
                       <span title={auto.lastRunAt ?? undefined}>
-                        Son: <span className="text-foreground/80">{formatRelative(auto.lastRunAt)}</span>
+                        Son:{' '}
+                        <span className="text-foreground/80">{formatRelative(auto.lastRunAt)}</span>
                       </span>
-                      {auto.notificationMode && auto.notificationMode !== 'none' && (
-                        <span>Notify: {auto.notificationMode}</span>
+                      {describeNotification(auto.notificationMode) && (
+                        <span>Bildirim: {describeNotification(auto.notificationMode)}</span>
                       )}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="grid w-full grid-cols-[1fr_auto] gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end">
                   <Button
-                    size="sm"
+                    size="touch"
                     variant="outline"
+                    className="w-full sm:w-auto"
                     onClick={() => runMutation.mutate(auto.id)}
                     disabled={runMutation.isPending}
                   >
-                        <Play className="mr-1 h-3.5 w-3.5" /> Çalıştır
+                    <Play className="mr-1 h-3.5 w-3.5" /> Çalıştır
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       render={(props) => (
-                        <Button {...props} size="sm" variant="ghost">
+                        <Button
+                          {...props}
+                          size="icon-touch"
+                          variant="ghost"
+                          aria-label={`${auto.title} aksiyonları`}
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       )}
                     />
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setHistoryId(auto.id)}>
-                        <History className="mr-2 h-4 w-4" /> View history
+                        <History className="mr-2 h-4 w-4" /> Geçmişi görüntüle
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => copyWebhookUrl.mutate(auto.id)}>
-                        <Webhook className="mr-2 h-4 w-4" /> Copy webhook URL
+                        <Webhook className="mr-2 h-4 w-4" /> Webhook URL kopyala
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() =>
@@ -257,19 +308,19 @@ export default function AutomationsPage() {
                       >
                         {auto.enabled ? (
                           <>
-                            <Pause className="mr-2 h-4 w-4" /> Pause
+                            <Pause className="mr-2 h-4 w-4" /> Duraklat
                           </>
                         ) : (
                           <>
-                            <Play className="mr-2 h-4 w-4" /> Resume
+                            <Play className="mr-2 h-4 w-4" /> Sürdür
                           </>
                         )}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        className="text-destructive"
+                        variant="destructive"
                         onClick={() => deleteMutation.mutate(auto.id)}
                       >
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        <Trash2 className="mr-2 h-4 w-4" /> Sil
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -322,7 +373,7 @@ function RunHistoryDialog({
     <Dialog open={!!automationId} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Run history</DialogTitle>
+          <DialogTitle>Çalışma geçmişi</DialogTitle>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto">
           {isLoading ? (
@@ -340,35 +391,30 @@ function RunHistoryDialog({
                       : run.status === 'running'
                         ? 'info'
                         : 'stopped';
-                const duration = run.durationMs
-                  ? `${(Number(run.durationMs) / 1000).toFixed(1)}s`
-                  : '—';
+                const duration = run.durationMs ? formatRunDuration(run.durationMs) : '—';
                 return (
-                  <div
-                    key={run.id}
-                    className="rounded-lg border border-border bg-card p-3 text-xs"
-                  >
-                    <div className="flex items-center justify-between">
+                  <div key={run.id} className="rounded-lg border border-border bg-card p-3 text-xs">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2">
                         <StatusBadge variant={variant} dot>
-                          {run.status}
+                          {runStatusLabels[run.status]}
                         </StatusBadge>
                         <span className="text-muted-foreground">{run.trigger}</span>
                       </div>
-                      <span className="text-muted-foreground">
-                        {new Date(run.createdAt).toLocaleString()}
+                      <span className="text-muted-foreground tabular-nums">
+                        {new Date(run.createdAt).toLocaleString('tr-TR')}
                       </span>
                     </div>
-                    <div className="mt-1 flex gap-3 text-[11px] text-muted-foreground">
-                      <span>Duration: {duration}</span>
+                    <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                      <span>Süre: {duration}</span>
                     </div>
                     {run.error && (
-                      <pre className="mt-2 max-h-32 overflow-auto rounded bg-destructive/10 p-2 text-[11px] text-destructive">
+                      <pre className="mt-2 max-h-32 overflow-auto rounded bg-destructive/10 p-2 text-xs text-destructive">
                         {run.error}
                       </pre>
                     )}
                     {run.output && (
-                      <pre className="mt-2 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[11px] text-foreground/80">
+                      <pre className="mt-2 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-xs text-foreground/80">
                         {run.output}
                       </pre>
                     )}
@@ -377,7 +423,9 @@ function RunHistoryDialog({
               })}
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">No runs yet.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Henüz çalışma kaydı yok.
+            </p>
           )}
         </div>
       </DialogContent>
