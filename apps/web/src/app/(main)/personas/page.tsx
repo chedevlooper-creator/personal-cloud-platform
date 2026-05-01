@@ -121,7 +121,7 @@ export default function PersonasPage() {
             if (!editor.name.trim() || !editor.slug.trim() || !editor.systemPrompt.trim()) return;
             save.mutate(editor);
           }}
-          className="mt-4 space-y-3 rounded-xl border border-border bg-card p-4"
+          className="mt-4 space-y-3 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4"
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
@@ -185,7 +185,7 @@ export default function PersonasPage() {
           personas.map((p) => (
             <div
               key={p.id}
-              className="flex items-start justify-between rounded-xl border border-border bg-card p-4"
+              className="flex items-start justify-between rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4"
             >
               <div className="flex min-w-0 gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">

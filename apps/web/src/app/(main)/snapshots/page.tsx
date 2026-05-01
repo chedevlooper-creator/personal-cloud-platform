@@ -254,7 +254,7 @@ export default function SnapshotsPage() {
             e.preventDefault();
             if (name.trim()) createMutation.mutate();
           }}
-          className="mt-4 grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_1fr_auto] md:items-end"
+          className="mt-4 grid gap-4 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4 md:grid-cols-[1fr_1fr_auto] md:items-end"
         >
           <div className="space-y-1.5">
             <Label htmlFor="snap-name">Name</Label>

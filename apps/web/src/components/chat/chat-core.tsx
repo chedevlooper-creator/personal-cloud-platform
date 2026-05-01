@@ -438,7 +438,7 @@ export function ChatCore({
       <div
         ref={messagesContainerRef}
         className={cn(
-          'relative min-h-0 flex-1 overflow-y-auto p-3 space-y-4',
+          'relative min-h-0 flex-1 overflow-y-auto scroll-elegant p-3 space-y-4',
           isDragOver && 'bg-primary/5 ring-2 ring-primary/20 ring-inset',
         )}
         onDragOver={handleDragOver}
@@ -446,8 +446,8 @@ export function ChatCore({
         onDrop={handleDrop}
       >
         {isDragOver && (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/5">
-            <div className="rounded-xl bg-card p-6 text-center shadow-lg ring-1 ring-border">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/5 backdrop-blur-[2px] animate-fade-in-soft">
+            <div className="rounded-2xl bg-card/90 p-6 text-center shadow-xl ring-1 ring-primary/30 backdrop-blur-md animate-scale-in">
               <Paperclip className="mx-auto mb-2 h-8 w-8 text-primary" />
               <p className="text-sm font-medium text-foreground">Dosyaları buraya bırakın</p>
               <p className="text-xs text-muted-foreground">Resim, PDF, kod dosyaları ve daha fazlası</p>
@@ -456,16 +456,17 @@ export function ChatCore({
         )}
 
         {!conversationId && messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50 mb-3">
-              <Bot className="h-7 w-7 text-muted-foreground/70" />
+          <div className="flex h-full flex-col items-center justify-center px-4 text-muted-foreground animate-fade-up">
+            <div className="relative mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 via-primary/8 to-transparent ring-1 ring-primary/20">
+              <Bot className="h-8 w-8 text-primary" />
+              <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(120%_120%_at_30%_20%,white/15,transparent_55%)]" />
             </div>
-            <p className="text-sm font-medium">Bugün ne yapalım?</p>
-            <p className="text-xs mt-1 text-muted-foreground/60 text-center max-w-[200px]">
+            <p className="text-base font-semibold text-foreground">Bugün ne yapalım?</p>
+            <p className="mt-1.5 max-w-[260px] text-center text-xs leading-relaxed text-muted-foreground/80">
               Kod yazdırın, komut çalıştırın veya çalışma alanındaki dosyaları düzenletin.
             </p>
-            <p className="text-xs mt-2 text-muted-foreground/40 text-center">
-              Dosyaları sürükleyip bırakarak da ekleyebilirsiniz.
+            <p className="mt-3 text-[11px] text-muted-foreground/50">
+              Dosyaları sürükleyip bırakabilirsiniz.
             </p>
           </div>
         ) : isLoading && messages.length === 0 ? (
@@ -509,7 +510,7 @@ export function ChatCore({
               isNearBottomRef.current = true;
               setShowScrollButton(false);
             }}
-            className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+            className="press absolute bottom-4 right-4 z-20 flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-[0_8px_24px_-6px_color-mix(in_oklch,var(--primary)_60%,transparent)] hover:bg-primary/90 animate-fade-up"
           >
             <ChevronDown className="h-3.5 w-3.5" />
             En alta git
@@ -518,10 +519,10 @@ export function ChatCore({
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-border p-3">
+      <div className="shrink-0 border-t border-border/60 bg-background/40 p-3 backdrop-blur-md">
         {/* Attachment previews */}
         {attachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
+          <div className="mb-2 flex flex-wrap gap-2 animate-fade-up">
             {attachments.map((a) => (
               <AttachmentChip
                 key={a.path}
@@ -532,7 +533,12 @@ export function ChatCore({
           </div>
         )}
         <div className="space-y-2">
-          <div className="flex items-end gap-2 rounded-xl border border-border bg-card p-2 shadow-sm">
+          <div
+            className={cn(
+              'group/composer relative flex items-end gap-2 rounded-2xl border border-border/70 bg-card/80 p-2 shadow-sm backdrop-blur-md transition-[border-color,box-shadow] duration-200',
+              'focus-within:border-primary/40 focus-within:shadow-[0_0_0_4px_color-mix(in_oklch,var(--primary)_15%,transparent),0_8px_28px_-10px_color-mix(in_oklch,var(--primary)_30%,transparent)]',
+            )}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -544,7 +550,7 @@ export function ChatCore({
               type="button"
               onClick={handleFilePick}
               disabled={attachments.some((a) => a.uploading) || sendMutation.isPending}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="press flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
               aria-label="Dosya ekle"
               title="Dosya ekle (sürükleyip bırakabilirsiniz)"
             >
@@ -566,16 +572,21 @@ export function ChatCore({
               placeholder={workspaceId ? "Agent'a görev ver..." : 'Dosya yüklemek için çalışma alanına gidin'}
               rows={1}
               disabled={sendMutation.isPending || !workspaceId}
-              className="min-h-[36px] max-h-24 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              className="min-h-[40px] max-h-32 flex-1 resize-none bg-transparent px-1 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 scroll-elegant"
               aria-label="Chat message input"
             />
             <button
               type="button"
               onClick={handleSend}
               disabled={(!input.trim() && attachments.length === 0) || sendMutation.isPending || !workspaceId}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+              className={cn(
+                'press relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl text-primary-foreground transition-[background,box-shadow,opacity] duration-200',
+                'bg-[linear-gradient(120deg,var(--chart-1),var(--chart-4)_60%,var(--chart-1))] bg-[length:200%_100%] bg-[position:0%_50%] hover:bg-[position:100%_50%]',
+                'shadow-[0_4px_14px_-4px_color-mix(in_oklch,var(--primary)_55%,transparent)]',
+                'disabled:bg-none disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none',
+              )}
               aria-label="Mesaj gönder"
-              title="Mesaj gönder"
+              title="Mesaj gönder (Enter)"
             >
               {sendMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -679,22 +690,22 @@ function MessageBubble({
   return (
     <div
       className={cn(
-        'group flex w-full gap-2.5',
+        'group flex w-full gap-2.5 animate-fade-up',
         isUser ? 'justify-end' : 'justify-start',
       )}
     >
       {!isUser && (
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <div className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 via-primary/8 to-transparent ring-1 ring-primary/15">
           <Bot className="h-4 w-4 text-primary" />
         </div>
       )}
       <div className={cn('flex max-w-[85%] flex-col', isUser ? 'items-end' : 'items-start')}>
         <div
           className={cn(
-            'relative break-words rounded-2xl px-4 py-2.5 text-sm leading-[1.7]',
+            'relative break-words rounded-2xl px-4 py-2.5 text-sm leading-[1.7] shadow-sm',
             isUser
-              ? 'rounded-tr-md bg-primary text-primary-foreground'
-              : 'rounded-tl-md bg-muted text-foreground ring-1 ring-border/60',
+              ? 'rounded-tr-md bg-[linear-gradient(135deg,var(--primary),color-mix(in_oklch,var(--primary)_82%,var(--chart-4)))] text-primary-foreground shadow-[0_4px_18px_-6px_color-mix(in_oklch,var(--primary)_55%,transparent)]'
+              : 'rounded-tl-md bg-muted/85 text-foreground ring-1 ring-border/60 backdrop-blur-sm',
           )}
         >
           {/* Attached files display */}
@@ -824,7 +835,7 @@ function MessageBubble({
         </div>
       </div>
       {isUser && (
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted ring-1 ring-border/60">
           <User className="h-4 w-4 text-muted-foreground" />
         </div>
       )}
@@ -834,11 +845,11 @@ function MessageBubble({
 
 function TypingIndicator() {
   return (
-    <div className="flex items-start gap-2.5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+    <div className="flex items-start gap-2.5 animate-fade-up">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 via-primary/8 to-transparent ring-1 ring-primary/15">
         <Bot className="h-4 w-4 text-primary" />
       </div>
-      <div className="rounded-xl rounded-tl-sm bg-muted px-4 py-3 ring-1 ring-border/60" role="status" aria-live="polite">
+      <div className="rounded-2xl rounded-tl-md bg-muted/85 px-4 py-3 ring-1 ring-border/60 backdrop-blur-sm" role="status" aria-live="polite">
         <div className="flex items-center gap-1.5">
           <span className="h-1 w-1 rounded-full bg-muted-foreground animate-bounce" />
           <span className="h-1 w-1 rounded-full bg-muted-foreground animate-bounce [animation-delay:140ms]" />

@@ -107,7 +107,7 @@ export default function SpacePage() {
         </div>
       </header>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -154,7 +154,7 @@ export default function SpacePage() {
       </section>
 
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
@@ -201,7 +201,7 @@ export default function SpacePage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Database className="h-4 w-4 text-muted-foreground" />
@@ -238,7 +238,7 @@ export default function SpacePage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card lg:col-span-2">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md lg:col-span-2">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Camera className="h-4 w-4 text-muted-foreground" />

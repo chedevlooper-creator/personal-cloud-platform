@@ -184,20 +184,22 @@ export default function AutomationsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col p-4 sm:p-6 lg:p-8">
-      <div className="flex flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-foreground">Otomasyonlar</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-2xl font-semibold tracking-tight text-transparent">
+            Otomasyonlar
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             AI görevlerini otomatik çalışacak şekilde planlayın
           </p>
         </div>
-        <Button size="touch" className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
+        <Button size="touch" variant="gradient" className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Otomasyon oluştur
         </Button>
       </div>
 
-      <div className="mt-4 flex gap-1 overflow-x-auto rounded-lg bg-muted p-1">
+      <div className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-border/60 bg-muted/60 p-1 backdrop-blur-md">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -205,9 +207,9 @@ export default function AutomationsPage() {
             onClick={() => setActiveTab(tab.id)}
             aria-pressed={activeTab === tab.id}
             className={cn(
-              'min-h-11 flex-1 rounded-md px-4 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:flex-none',
+              'press relative min-h-11 flex-1 rounded-lg px-4 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none',
               activeTab === tab.id
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-[0_2px_8px_-2px_color-mix(in_oklch,var(--foreground)_15%,transparent)]'
                 : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
             )}
           >
@@ -239,11 +241,11 @@ export default function AutomationsPage() {
             {filtered.map((auto) => (
               <div
                 key={auto.id}
-                className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:ring-1 hover:ring-ring/30 sm:flex-row sm:items-start sm:justify-between"
+                className="group/auto flex animate-fade-up flex-col gap-4 rounded-2xl border border-border/70 bg-card/70 p-4 backdrop-blur-md transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_12px_32px_-12px_color-mix(in_oklch,var(--primary)_25%,transparent)] sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <Zap className="h-5 w-5 text-primary" />
+                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 via-primary/8 to-transparent text-primary ring-1 ring-primary/15 transition-transform group-hover/auto:scale-105">
+                    <Zap className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">

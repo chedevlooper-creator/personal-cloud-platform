@@ -71,7 +71,7 @@ function StatTile({
   caption?: string;
 }) {
   const inner = (
-    <div className="flex items-start gap-4 rounded-xl border border-border bg-card p-4 transition hover:border-foreground/30">
+    <div className="flex items-start gap-4 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4 transition hover:border-foreground/30">
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <Icon className="h-5 w-5" />
       </div>
@@ -215,7 +215,7 @@ export default function ComputerPage() {
       </section>
 
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Globe2 className="h-4 w-4 text-muted-foreground" />
@@ -266,7 +266,7 @@ export default function ComputerPage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 text-muted-foreground" />
@@ -301,7 +301,7 @@ export default function ComputerPage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-muted-foreground" />
@@ -349,7 +349,7 @@ export default function ComputerPage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Cpu className="h-4 w-4 text-muted-foreground" />

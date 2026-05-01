@@ -138,7 +138,7 @@ export default function DatasetsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
-        <aside className="rounded-xl border border-border bg-card p-3">
+        <aside className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-3">
           <h3 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Catalog
           </h3>
@@ -194,7 +194,7 @@ export default function DatasetsPage() {
 
         <main className="space-y-4">
           {active ? (
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <h3 className="font-medium text-foreground">{active.name}</h3>
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono uppercase text-muted-foreground">
@@ -247,7 +247,7 @@ export default function DatasetsPage() {
           )}
 
           {result && (
-            <div className="rounded-xl border border-border bg-card p-3">
+            <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-3">
               <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
                 <span>
                   {result.rowCount} rows · {result.durationMs}ms

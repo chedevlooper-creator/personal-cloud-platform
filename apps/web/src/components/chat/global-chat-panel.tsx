@@ -48,12 +48,18 @@ export function GlobalChatPanel() {
       {/* Desktop: Fixed Panel */}
       <div className={cn('hidden md:block h-full shrink-0', !isOpen && 'hidden')}>
         {isOpen && (
-          <div className="flex h-full w-[420px] flex-col border-l border-border bg-card">
-            {/* Panel Header */}
-            <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
+          <div className="relative flex h-full w-[420px] flex-col border-l border-border bg-card/85 backdrop-blur-xl supports-[backdrop-filter]:bg-card/70 animate-fade-in-soft">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(120%_70%_at_50%_0%,color-mix(in_oklch,var(--primary)_18%,transparent),transparent_70%)]"
+            />
+            <div className="relative flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-3">
               <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-primary" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <span className="relative flex h-6 w-6 items-center justify-center rounded-md bg-primary/12 text-primary">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_color-mix(in_oklch,var(--primary)_60%,transparent)] animate-slow-pulse" />
+                </span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                   Sohbet
                 </span>
               </div>
@@ -61,7 +67,7 @@ export function GlobalChatPanel() {
                 <button
                   type="button"
                   onClick={startNewChat}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  className="press flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                   title="Yeni sohbet"
                   aria-label="Yeni sohbet"
                 >
@@ -70,7 +76,7 @@ export function GlobalChatPanel() {
                 <button
                   type="button"
                   onClick={togglePanel}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  className="press flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                   title="Paneli kapat"
                   aria-label="Paneli kapat"
                 >
@@ -78,7 +84,7 @@ export function GlobalChatPanel() {
                 </button>
               </div>
             </div>
-            <div className="min-h-0 flex-1">
+            <div className="relative min-h-0 flex-1">
               <ChatCore
                 conversationId={activeConversationId}
                 workspaceId={effectiveWorkspaceId}
@@ -91,24 +97,26 @@ export function GlobalChatPanel() {
 
       {/* Mobile: Fixed overlay */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-background md:hidden">
-          <div className="flex h-12 items-center justify-between border-b border-border px-3">
+        <div className="fixed inset-0 z-50 flex flex-col bg-background md:hidden animate-fade-in-soft">
+          <div className="flex h-12 items-center justify-between border-b border-border/60 bg-background/80 backdrop-blur-xl px-3">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-primary" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/12 text-primary">
+                <MessageSquare className="h-4 w-4" />
+              </span>
               <span className="text-sm font-semibold">Sohbet</span>
             </div>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={startNewChat}
-                className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                className="press flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-5 w-5" />
               </button>
               <button
                 type="button"
                 onClick={togglePanel}
-                className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                className="press flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <X className="h-5 w-5" />
               </button>

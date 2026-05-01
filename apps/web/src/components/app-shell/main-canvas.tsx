@@ -69,7 +69,7 @@ export function MainCanvas({
 
   return (
     <section className="relative min-w-0 flex-1 bg-background text-foreground">
-      <header className="flex min-h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/90 px-3 backdrop-blur-md md:min-h-12">
+      <header className="sticky top-0 z-30 flex min-h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/75 px-3 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:min-h-12">
         <div className="flex min-w-0 items-center gap-2">
           <Button
             type="button"
@@ -94,10 +94,10 @@ export function MainCanvas({
             <PanelLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-0">
-            <div className="truncate text-[11px] font-medium uppercase text-muted-foreground">
+            <div className="truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
               {meta.section}
             </div>
-            <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
+            <h1 className="truncate text-[15px] font-semibold tracking-tight text-foreground">
               {meta.title}
             </h1>
           </div>
@@ -110,8 +110,8 @@ export function MainCanvas({
               title="Yeni sohbet (Ctrl+N)"
               aria-label="Yeni sohbet"
               size="touch"
-              variant="ghost"
-              className="min-w-11 gap-1.5 text-foreground md:h-8 md:min-w-0 md:px-2"
+              variant="gradient"
+              className="min-w-11 gap-1.5 md:h-8 md:min-w-0 md:px-3"
               onClick={() => window.dispatchEvent(new Event('app:new-chat'))}
             >
               <Plus className="h-4 w-4" />
@@ -126,7 +126,7 @@ export function MainCanvas({
             variant="ghost"
             className={cn(
               'hidden text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex',
-              isOpen && 'text-primary',
+              isOpen && 'bg-primary/12 text-primary hover:bg-primary/18 hover:text-primary',
             )}
             onClick={togglePanel}
           >
@@ -135,7 +135,12 @@ export function MainCanvas({
         </div>
       </header>
 
-      <main id="main-content" tabIndex={-1} className="h-[calc(100dvh-3.5rem)] overflow-auto md:h-[calc(100dvh-3rem)]">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        key={pathname}
+        className="page-enter h-[calc(100dvh-3.5rem)] overflow-auto scroll-elegant md:h-[calc(100dvh-3rem)]"
+      >
         {children}
       </main>
     </section>

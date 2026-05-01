@@ -124,34 +124,34 @@ export default function ChatsPage() {
   return (
     <div className="flex h-full">
       {/* Conversation List */}
-      <div className="flex w-72 shrink-0 flex-col border-r border-border bg-card">
-        <div className="flex h-12 items-center justify-between border-b border-border px-3">
-          <span className="text-sm font-medium text-foreground">Sohbetler</span>
+      <div className="flex w-72 shrink-0 flex-col border-r border-border/60 bg-card/60 backdrop-blur-md">
+        <div className="flex h-12 items-center justify-between border-b border-border/60 px-3">
+          <span className="text-[13px] font-semibold tracking-tight text-foreground">Sohbetler</span>
           <button
             type="button"
             title="Yeni sohbet"
             aria-label="Yeni sohbet"
             onClick={startNewChat}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="press flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Plus className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="border-b border-border p-2">
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="border-b border-border/60 p-2">
+          <div className="group/search flex items-center gap-2 rounded-lg border border-border/70 bg-background/60 px-3 py-2 transition-[border-color,box-shadow] focus-within:border-primary/40 focus-within:shadow-[0_0_0_3px_color-mix(in_oklch,var(--primary)_15%,transparent)]">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within/search:text-primary" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Sohbetlerde ara..."
-              className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
             />
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-1.5">
+        <div className="min-h-0 flex-1 overflow-auto scroll-elegant p-1.5">
           {isLoading ? (
             <div className="p-3">
               <LoadingSkeleton lines={6} />
@@ -182,9 +182,9 @@ export default function ChatsPage() {
                             setActiveWorkspaceId(c.workspaceId);
                           }}
                           className={cn(
-                            'group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
+                            'group relative flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm transition-[background-color,color,transform] duration-200 active:scale-[0.99]',
                             isActive
-                              ? 'bg-primary/10 text-primary'
+                              ? 'bg-primary/12 text-primary shadow-[inset_2px_0_0_0_var(--primary)]'
                               : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                           )}
                         >

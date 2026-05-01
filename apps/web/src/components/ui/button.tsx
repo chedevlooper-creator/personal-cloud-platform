@@ -4,13 +4,14 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button relative inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap outline-none select-none transition-[transform,background-color,color,box-shadow,border-color,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        default:
+          "bg-primary text-primary-foreground shadow-[0_1px_0_0_color-mix(in_oklch,white_22%,transparent)_inset,0_4px_12px_-4px_color-mix(in_oklch,var(--primary)_45%,transparent)] hover:bg-primary/90 hover:shadow-[0_1px_0_0_color-mix(in_oklch,white_22%,transparent)_inset,0_8px_24px_-6px_color-mix(in_oklch,var(--primary)_60%,transparent)]",
         outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border-border bg-background hover:bg-muted hover:text-foreground hover:border-border/80 aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
@@ -18,6 +19,10 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        gradient:
+          "text-primary-foreground bg-[linear-gradient(120deg,var(--chart-1),var(--chart-4)_50%,var(--chart-1))] bg-[length:200%_100%] bg-[position:0%_50%] hover:bg-[position:100%_50%] shadow-[0_1px_0_0_color-mix(in_oklch,white_25%,transparent)_inset,0_8px_24px_-6px_color-mix(in_oklch,var(--chart-1)_55%,transparent)] hover:shadow-[0_1px_0_0_color-mix(in_oklch,white_25%,transparent)_inset,0_14px_42px_-8px_color-mix(in_oklch,var(--chart-1)_70%,transparent)] focus-visible:ring-primary/40",
+        glass:
+          "border border-white/15 bg-white/8 text-foreground backdrop-blur-md hover:bg-white/14 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10",
       },
       size: {
         default:

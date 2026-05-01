@@ -22,7 +22,7 @@ export function StatusBadge({ variant = 'default', children, className, dot = fa
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1.5 rounded-full border border-transparent px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-border/40 backdrop-blur-sm',
         variants[variant],
         className,
       )}

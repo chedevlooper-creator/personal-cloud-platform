@@ -57,7 +57,7 @@ export default function RulesPage() {
         </div>
       </div>
 
-      <div className="mt-6 space-y-3 rounded-xl border border-border bg-card p-4">
+      <div className="mt-6 space-y-3 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4">
         <textarea
           value={rules}
           disabled={isLoading}

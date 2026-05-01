@@ -79,11 +79,22 @@ export function Sidebar({
     >
       <div className="flex h-14 items-center justify-between px-3 border-b border-border/50">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
-            <BrainCircuit className="h-4 w-4" aria-hidden="true" />
+          <div
+            className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-primary-foreground shadow-[0_4px_14px_-4px_color-mix(in_oklch,var(--primary)_55%,transparent)]"
+            style={{
+              backgroundImage:
+                'linear-gradient(135deg, var(--chart-1), var(--chart-4) 60%, var(--chart-1))',
+              backgroundSize: '200% 200%',
+            }}
+          >
+            <BrainCircuit className="h-4 w-4 relative z-10" aria-hidden="true" />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-lg bg-[radial-gradient(120%_120%_at_30%_20%,white/30,transparent_55%)] opacity-50"
+            />
           </div>
           {!isCollapsed && (
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+            <span className="truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-[15px] font-semibold tracking-tight text-transparent">
               Zihinbulut
             </span>
           )}

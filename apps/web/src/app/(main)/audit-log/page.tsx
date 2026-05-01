@@ -103,7 +103,7 @@ export default function AuditLogPage() {
         </select>
       </div>
 
-      <div className="mt-4 rounded-xl border border-border bg-card">
+      <div className="mt-4 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md">
         {isLoading ? (
           <div className="p-6 text-sm text-muted-foreground">Loading...</div>
         ) : error ? (

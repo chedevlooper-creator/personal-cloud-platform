@@ -101,7 +101,7 @@ export default function ChannelsPage() {
         </div>
       </div>
 
-      <section className="mt-6 rounded-xl border border-border bg-card p-4">
+      <section className="mt-6 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4">
         <header className="mb-3 flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-primary" />
           <h3 className="font-medium text-foreground">Telegram</h3>
@@ -196,7 +196,7 @@ export default function ChannelsPage() {
             {links.map((l) => (
               <div
                 key={l.id}
-                className="flex items-center justify-between rounded-xl border border-border bg-card p-3"
+                className="flex items-center justify-between rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-3"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">

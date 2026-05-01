@@ -188,7 +188,7 @@ export default function SettingsPage() {
         {/* Content */}
         <div className="min-w-0 flex-1 space-y-6">
           {activeTab === 'profile' && (
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6">
               <h3 className="text-base font-semibold text-foreground">Profile</h3>
               <div className="mt-4 space-y-4">
                 <div className="space-y-1.5">
@@ -223,7 +223,7 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'ai-providers' && (
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6">
               <h3 className="text-base font-semibold text-foreground">AI Providers</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 API keys are encrypted with AES-256-GCM before storage. We never store or log
@@ -356,7 +356,7 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'models' && (
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6">
               <h3 className="text-base font-semibold text-foreground">Default Model</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Select the AI model for new conversations.
@@ -387,7 +387,7 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'workspace' && (
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6">
               <h3 className="text-base font-semibold text-foreground">Workspace Storage</h3>
               <div className="mt-4 space-y-3">
                 <div className="flex items-baseline justify-between">
@@ -405,7 +405,7 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'terminal' && (
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6">
               <h3 className="text-base font-semibold text-foreground">Terminal Security Policy</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Configure which commands require approval.
@@ -443,7 +443,7 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'theme' && (
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6">
               <h3 className="text-base font-semibold text-foreground">Appearance</h3>
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {[

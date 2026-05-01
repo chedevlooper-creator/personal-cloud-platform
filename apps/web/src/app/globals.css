@@ -52,6 +52,11 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-glow-sm: 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent), 0 4px 16px -4px color-mix(in oklch, var(--primary) 22%, transparent);
+  --shadow-glow: 0 0 0 1px color-mix(in oklch, var(--primary) 22%, transparent), 0 12px 40px -10px color-mix(in oklch, var(--primary) 32%, transparent);
+  --shadow-glow-lg: 0 0 0 1px color-mix(in oklch, var(--primary) 26%, transparent), 0 24px 80px -20px color-mix(in oklch, var(--primary) 40%, transparent);
+  --shadow-card: 0 1px 2px 0 oklch(0.13 0.008 260 / 0.04), 0 1px 3px 0 oklch(0.13 0.008 260 / 0.06);
+  --shadow-card-hover: 0 4px 12px -2px oklch(0.13 0.008 260 / 0.08), 0 8px 24px -4px oklch(0.13 0.008 260 / 0.12);
 }
 
 /* ─── Light Mode: Warm neutral with blue-teal accent ─── */
@@ -188,7 +193,7 @@
   top: 1rem;
 }
 
-/* ===== Custom motion: aurora drift, slow pulse, shimmer ===== */
+/* ===== Custom motion ===== */
 @keyframes aurora-drift {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
   33% { transform: translate3d(40px, -20px, 0) scale(1.05); }
@@ -202,12 +207,169 @@
   0%, 100% { opacity: 0.4; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.4); }
 }
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in-soft {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes border-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
 @media (prefers-reduced-motion: no-preference) {
   .animate-aurora { animation: aurora-drift 22s ease-in-out infinite; }
   .animate-aurora-slow { animation: aurora-drift 32s ease-in-out infinite; }
   .animate-slow-pulse { animation: slow-pulse 6s ease-in-out infinite; }
   .animate-twinkle { animation: star-twinkle 4s ease-in-out infinite; }
   .animate-twinkle-slow { animation: star-twinkle 6s ease-in-out infinite 1s; }
+  .animate-shimmer { animation: shimmer-sweep 2.4s ease-in-out infinite; }
+  .animate-float { animation: float-y 4s ease-in-out infinite; }
+  .animate-fade-up { animation: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-fade-in-soft { animation: fade-in-soft 0.3s ease-out both; }
+  .animate-scale-in { animation: scale-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-typing-dot { animation: typing-bounce 1.2s ease-in-out infinite; }
+}
+
+/* ===== Aurora background utility (decorative) ===== */
+.aurora-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+}
+.aurora-bg::before,
+.aurora-bg::after {
+  content: "";
+  position: absolute;
+  filter: blur(72px);
+  opacity: 0.55;
+  border-radius: 9999px;
+  will-change: transform;
+}
+.aurora-bg::before {
+  width: 38rem;
+  height: 38rem;
+  top: -10%;
+  right: -10%;
+  background: radial-gradient(circle, color-mix(in oklch, var(--chart-1) 70%, transparent), transparent 70%);
+  animation: aurora-drift 22s ease-in-out infinite;
+}
+.aurora-bg::after {
+  width: 32rem;
+  height: 32rem;
+  bottom: -12%;
+  left: -8%;
+  background: radial-gradient(circle, color-mix(in oklch, var(--chart-4) 60%, transparent), transparent 70%);
+  animation: aurora-drift 32s ease-in-out infinite reverse;
+}
+
+/* ===== Glass surface ===== */
+.glass {
+  background: color-mix(in oklch, var(--card) 70%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+}
+.dark .glass {
+  background: color-mix(in oklch, var(--card) 60%, transparent);
+  border-color: color-mix(in oklch, oklch(0.75 0.05 240) 18%, transparent);
+}
+
+/* ===== Animated gradient border (used by primary CTAs / focus chrome) ===== */
+.gradient-border {
+  position: relative;
+  isolation: isolate;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg,
+    color-mix(in oklch, var(--chart-1) 90%, transparent),
+    color-mix(in oklch, var(--chart-4) 90%, transparent),
+    color-mix(in oklch, var(--chart-2) 90%, transparent),
+    color-mix(in oklch, var(--chart-1) 90%, transparent));
+  background-size: 200% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gradient-border::before { animation: border-flow 8s linear infinite; }
+}
+
+/* ===== Press feedback used across interactive primitives ===== */
+.press {
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.18s ease,
+              background-color 0.18s ease,
+              color 0.18s ease,
+              opacity 0.18s ease;
+}
+.press:active { transform: scale(0.97); }
+
+/* ===== Typing indicator ===== */
+.typing-dots { display: inline-flex; gap: 4px; align-items: center; }
+.typing-dots > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  display: inline-block;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .typing-dots > span:nth-child(1) { animation: typing-bounce 1.2s ease-in-out infinite; }
+  .typing-dots > span:nth-child(2) { animation: typing-bounce 1.2s ease-in-out infinite 0.16s; }
+  .typing-dots > span:nth-child(3) { animation: typing-bounce 1.2s ease-in-out infinite 0.32s; }
+}
+
+/* ===== Scrollbar polish ===== */
+@layer utilities {
+  .scroll-elegant {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent) transparent;
+  }
+  .scroll-elegant::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll-elegant::-webkit-scrollbar-track { background: transparent; }
+  .scroll-elegant::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 28%, transparent);
+    border-radius: 9999px;
+  }
+  .scroll-elegant::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
+  }
+}
+
+/* ===== Page transition wrapper ===== */
+.page-enter {
+  animation: fade-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter { animation: none; }
 }
 
 /* Improve typographic rhythm with quality features */

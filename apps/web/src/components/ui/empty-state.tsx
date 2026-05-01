@@ -16,18 +16,22 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, title, description, action, className, children }: EmptyStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center px-6 py-16 text-center', className)}>
+    <div className={cn('flex flex-col items-center justify-center px-6 py-16 text-center animate-fade-up', className)}>
       {icon && (
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+        <div className="relative mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 via-primary/5 to-transparent text-primary ring-1 ring-primary/15">
           {icon}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(120%_120%_at_30%_20%,white/10,transparent_55%)]"
+          />
         </div>
       )}
       <h3 className="text-base font-semibold text-foreground">{title}</h3>
       {description && (
-        <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">{description}</p>
+        <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">{description}</p>
       )}
       {action && (
-        <Button className="mt-4" size="sm" onClick={action.onClick}>
+        <Button className="mt-5" size="sm" variant="gradient" onClick={action.onClick}>
           {action.label}
         </Button>
       )}

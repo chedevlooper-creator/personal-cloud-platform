@@ -54,7 +54,7 @@ export default function FilesPage() {
   return (
     <div className="flex h-full">
       {/* File Tree Sidebar */}
-      <div className="hidden w-64 shrink-0 border-r border-border bg-card lg:block">
+      <div className="hidden w-64 shrink-0 border-r border-border/60 bg-card/60 backdrop-blur-md lg:block">
         {currentWorkspaceId && <FileTree workspaceId={currentWorkspaceId} />}
       </div>
 

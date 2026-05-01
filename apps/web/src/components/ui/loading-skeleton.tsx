@@ -7,7 +7,19 @@ interface LoadingSkeletonProps {
 }
 
 function SkeletonLine({ className }: { className?: string }) {
-  return <div className={cn('h-4 animate-pulse rounded-md bg-muted', className)} />;
+  return (
+    <div
+      className={cn(
+        'relative h-4 overflow-hidden rounded-md bg-muted/70',
+        className,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 -translate-x-full bg-[linear-gradient(90deg,transparent,color-mix(in_oklch,var(--foreground)_8%,transparent),transparent)] animate-shimmer"
+      />
+    </div>
+  );
 }
 
 export function LoadingSkeleton({ className, lines = 3, variant = 'text' }: LoadingSkeletonProps) {

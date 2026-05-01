@@ -210,8 +210,10 @@ export default function HostingPage() {
     <div className="mx-auto flex w-full max-w-6xl flex-col p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-foreground">Hosting</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-2xl font-semibold tracking-tight text-transparent">
+            Hosting
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Workspace uygulamalarını yayınlanabilir servis olarak çalıştırın
           </p>
         </div>
@@ -238,6 +240,7 @@ export default function HostingPage() {
           ) : null}
           <Button
             size="touch"
+            variant="gradient"
             className="w-full sm:w-auto"
             onClick={() => setShowCreate((v) => !v)}
             disabled={!hostingReady || workspaces.length === 0}
@@ -261,7 +264,7 @@ export default function HostingPage() {
             e.preventDefault();
             if (canCreate) createService.mutate();
           }}
-          className="mt-4 grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-2 lg:grid-cols-3"
+          className="mt-4 grid animate-fade-up gap-4 rounded-2xl border border-border/70 bg-card/70 p-5 backdrop-blur-md shadow-[0_4px_24px_-12px_color-mix(in_oklch,var(--foreground)_15%,transparent)] md:grid-cols-2 lg:grid-cols-3"
         >
           <div className="space-y-1.5">
             <Label htmlFor="svc-name">Servis adı</Label>
@@ -391,7 +394,7 @@ export default function HostingPage() {
               return (
                 <div
                   key={svc.id}
-                  className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-start sm:justify-between"
+                  className="group/svc flex animate-fade-up flex-col gap-4 rounded-2xl border border-border/70 bg-card/70 p-4 backdrop-blur-md transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_12px_32px_-12px_color-mix(in_oklch,var(--primary)_25%,transparent)] sm:flex-row sm:items-start sm:justify-between"
                 >
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">

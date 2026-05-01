@@ -98,7 +98,7 @@ export default function AdminPage() {
 
       {/* Users Tab */}
       {activeTab === 'users' && (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md overflow-hidden">
           <div className="grid grid-cols-12 gap-4 p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
             <div className="col-span-4">Name</div>
             <div className="col-span-4">Email</div>
@@ -134,7 +134,7 @@ export default function AdminPage() {
 
       {/* Audit Logs Tab */}
       {activeTab === 'audit-logs' && (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md overflow-hidden">
           <div className="grid grid-cols-12 gap-4 p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
             <div className="col-span-3">Action</div>
             <div className="col-span-3">User ID</div>
@@ -187,7 +187,7 @@ export default function AdminPage() {
 
       {/* Runtime Events Tab */}
       {activeTab === 'runtime-events' && (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md overflow-hidden">
           <div className="grid grid-cols-12 gap-4 p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
             <div className="col-span-2">Type</div>
             <div className="col-span-3">Runtime ID</div>
@@ -245,7 +245,7 @@ export default function AdminPage() {
             </div>
           ) : healthData ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded-xl border border-border bg-card p-6 text-center">
+              <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6 text-center">
                 <Activity
                   className={cn(
                     'mx-auto h-8 w-8 mb-2',
@@ -257,7 +257,7 @@ export default function AdminPage() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">System Status</p>
               </div>
-              <div className="rounded-xl border border-border bg-card p-6 text-center">
+              <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6 text-center">
                 <div
                   className={cn(
                     'mx-auto h-8 w-8 rounded-full mb-2 flex items-center justify-center',
@@ -273,7 +273,7 @@ export default function AdminPage() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Database</p>
               </div>
-              <div className="rounded-xl border border-border bg-card p-6 text-center">
+              <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6 text-center">
                 <Clock className="mx-auto h-8 w-8 mb-2 text-primary" />
                 <p className="text-sm font-semibold text-foreground">
                   {Math.floor(healthData.uptime / 3600)}h{' '}

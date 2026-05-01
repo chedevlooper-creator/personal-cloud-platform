@@ -121,7 +121,7 @@ export default function BrowserPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
-        <aside className="rounded-xl border border-border bg-card p-3">
+        <aside className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-3">
           <h3 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Sessions
           </h3>
@@ -180,7 +180,7 @@ export default function BrowserPage() {
         <main className="space-y-4">
           {activeId ? (
             <>
-              <div className="rounded-xl border border-border bg-card p-4">
+              <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-4">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -226,7 +226,7 @@ export default function BrowserPage() {
               </div>
 
               {shotSrc && (
-                <div className="rounded-xl border border-border bg-card p-3">
+                <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-3">
                   <p className="mb-2 text-xs text-muted-foreground">Latest screenshot</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -238,7 +238,7 @@ export default function BrowserPage() {
               )}
 
               {extract && (
-                <div className="rounded-xl border border-border bg-card p-3">
+                <div className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-3">
                   <h4 className="mb-1 truncate font-medium text-foreground">{extract.title}</h4>
                   <p className="mb-2 truncate text-[11px] text-muted-foreground">{extract.url}</p>
                   <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs text-foreground">
