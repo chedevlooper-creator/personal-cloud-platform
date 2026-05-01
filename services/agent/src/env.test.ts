@@ -69,16 +69,12 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     await expect(import('./env')).rejects.toThrow(/AUTH_BYPASS/);
   });
 
-  it('permits absent ENCRYPTION_KEY in development (or accepts dev-supplied key)', async () => {
+  it('permits absent ENCRYPTION_KEY in development', async () => {
     process.env.NODE_ENV = 'development';
     process.env.AUTH_BYPASS = '0';
-    delete process.env.ENCRYPTION_KEY;
+    process.env.ENCRYPTION_KEY = '';
 
     const mod = await import('./env');
-    // In dev, env.ENCRYPTION_KEY is either undefined (not set) or whatever
-    // the local .env files supply. Either way it must NOT throw, and the
-    // resolver must never fabricate a value when the input was empty.
-    const resolved = mod.env.ENCRYPTION_KEY;
-    expect(resolved === undefined || typeof resolved === 'string').toBe(true);
+    expect(mod.env.ENCRYPTION_KEY).toBeUndefined();
   });
 });
