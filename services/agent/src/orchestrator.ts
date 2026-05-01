@@ -780,7 +780,7 @@ export class AgentOrchestrator {
             output: response.content,
             metadata: { ...existingMeta, agentRun },
           })
-          .where(eq(tasks.id, taskId));
+          .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
         this.emitTaskUpdate(taskId, {
           ...task,
           status: 'completed',
@@ -803,7 +803,7 @@ export class AgentOrchestrator {
         status: 'failed',
         output: 'Exceeded maximum iterations without completing the task.',
       })
-      .where(eq(tasks.id, taskId));
+      .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
     this.emitTaskUpdate(taskId, {
       ...task,
       status: 'failed',
