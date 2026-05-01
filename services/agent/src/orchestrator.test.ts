@@ -178,6 +178,35 @@ describe('AgentOrchestrator', () => {
     expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
+  it('emits and cleans up task events when cancelling a running task', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    const task = {
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      conversationId: CONVERSATION_ID,
+      input: 'hello',
+      output: null,
+      status: 'executing',
+      metadata: null,
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    };
+    mockDb.query.tasks.findFirst.mockResolvedValueOnce(task);
+    const orchestrator = new AgentOrchestrator(logger);
+    const emitter = orchestrator.subscribeToTask(TASK_ID);
+    const onTask = vi.fn();
+    emitter.on('task', onTask);
+
+    await expect(orchestrator.cancelTask(TASK_ID, USER_ID)).resolves.toEqual({ success: true });
+
+    expect(updatedValues).toContainEqual(expect.objectContaining({ status: 'cancelled' }));
+    expect(onTask).toHaveBeenCalledWith(
+      expect.objectContaining({ id: TASK_ID, status: 'cancelled' }),
+    );
+    expect(emitter.listenerCount('task')).toBe(0);
+  });
+
   it('creates an expiring approval request for approval-required tool calls', async () => {
     const { AgentOrchestrator } = await import('./orchestrator');
     mockDb.query.tasks.findFirst.mockResolvedValue({

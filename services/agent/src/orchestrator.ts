@@ -371,7 +371,13 @@ export class AgentOrchestrator {
       throw new Error(`Task already in final state: ${task.status}`);
     }
 
-    await db.update(tasks).set({ status: 'cancelled' }).where(eq(tasks.id, taskId));
+    const cancelledTask = { ...task, status: 'cancelled', updatedAt: new Date() };
+    await db
+      .update(tasks)
+      .set({ status: 'cancelled', updatedAt: cancelledTask.updatedAt })
+      .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+    this.emitTaskUpdate(taskId, cancelledTask);
+    this.cleanupTaskEmitter(taskId);
     return { success: true };
   }
 
