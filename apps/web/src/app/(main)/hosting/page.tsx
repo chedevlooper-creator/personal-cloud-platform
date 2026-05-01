@@ -13,17 +13,19 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { WorkspaceSummary } from '@/components/workspace/create-workspace-dialog';
-import {publishApi, workspaceApi , toastApiError} from '@/lib/api';
+import { publishApi, workspaceApi, toastApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useUser } from '@/lib/auth';
+import { cn } from '@/lib/utils';
 
 type WorkspacesResponse = {
   workspaces: WorkspaceSummary[];
@@ -45,6 +47,27 @@ type HostedService = {
   lastHealthAt?: string | null;
   lastHealthOk?: boolean | null;
 };
+
+const serviceKindLabels: Record<string, string> = {
+  static: 'Static',
+  vite: 'Vite',
+  node: 'Node.js',
+};
+
+function getStatusLabel(status: string) {
+  if (status === 'running') return 'Çalışıyor';
+  if (status === 'starting') return 'Başlatılıyor';
+  if (status === 'stopped') return 'Durdu';
+  if (status === 'crashed') return 'Çöktü';
+  return status;
+}
+
+function getStatusVariant(status: string): 'running' | 'pending' | 'stopped' | 'error' {
+  if (status === 'running') return 'running';
+  if (status === 'starting') return 'pending';
+  if (status === 'crashed') return 'error';
+  return 'stopped';
+}
 
 export default function HostingPage() {
   const { data: user } = useUser();
@@ -69,10 +92,7 @@ export default function HostingPage() {
     },
   });
 
-  const workspaces = useMemo(
-    () => workspacesQuery.data?.workspaces ?? [],
-    [workspacesQuery.data],
-  );
+  const workspaces = useMemo(() => workspacesQuery.data?.workspaces ?? [], [workspacesQuery.data]);
   const defaultWorkspaceId = workspaceId || workspaces[0]?.id || '';
 
   const servicesQuery = useQuery({
@@ -115,7 +135,7 @@ export default function HostingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
-      toast.success('Service created.');
+      toast.success('Servis oluşturuldu.');
       setShowCreate(false);
       setName('');
       setSlug('');
@@ -126,7 +146,7 @@ export default function HostingPage() {
       setCustomDomain('');
       setIsPublic(true);
     },
-    onError: (e) => toastApiError(e, 'Could not create service.'),
+    onError: (e) => toastApiError(e, 'Servis oluşturulamadı.'),
   });
 
   const startService = useMutation({
@@ -135,9 +155,9 @@ export default function HostingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
-      toast.success('Service starting...');
+      toast.success('Servis başlatılıyor.');
     },
-    onError: (e) => toastApiError(e, 'Could not start service.'),
+    onError: (e) => toastApiError(e, 'Servis başlatılamadı.'),
   });
 
   const stopService = useMutation({
@@ -146,9 +166,9 @@ export default function HostingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
-      toast.success('Service stopped.');
+      toast.success('Servis durduruldu.');
     },
-    onError: (e) => toastApiError(e, 'Could not stop service.'),
+    onError: (e) => toastApiError(e, 'Servis durdurulamadı.'),
   });
 
   const restartService = useMutation({
@@ -157,9 +177,9 @@ export default function HostingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
-      toast.success('Service restarting...');
+      toast.success('Servis yeniden başlatılıyor.');
     },
-    onError: (e) => toastApiError(e, 'Could not restart service.'),
+    onError: (e) => toastApiError(e, 'Servis yeniden başlatılamadı.'),
   });
 
   const updateAutoRestart = useMutation({
@@ -169,7 +189,7 @@ export default function HostingPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
     },
-    onError: (e) => toastApiError(e, 'Could not update service.'),
+    onError: (e) => toastApiError(e, 'Servis güncellenemedi.'),
   });
 
   const deleteService = useMutation({
@@ -178,35 +198,60 @@ export default function HostingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
-      toast.success('Service deleted.');
+      toast.success('Servis silindi.');
       setDeleteTarget(null);
     },
-    onError: (e) => toastApiError(e, 'Could not delete service.'),
+    onError: (e) => toastApiError(e, 'Servis silinemedi.'),
   });
 
   const canCreate = hostingReady && Boolean(defaultWorkspaceId && name.trim());
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="mx-auto flex w-full max-w-6xl flex-col p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-foreground">Hosting</h2>
-          <p className="text-sm text-muted-foreground">Deploy workspace apps as hosted services</p>
+          <p className="text-sm text-muted-foreground">
+            Workspace uygulamalarını yayınlanabilir servis olarak çalıştırın
+          </p>
         </div>
-        <Button
-          size="touch"
-          className="md:h-7 md:px-2.5 md:text-[0.8rem]"
-          onClick={() => setShowCreate((v) => !v)}
-          disabled={!hostingReady || workspaces.length === 0}
-        >
-          <Rocket className="mr-1.5 h-3.5 w-3.5" />
-          Servis oluştur
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:justify-end">
+          {workspaces.length > 1 ? (
+            <div className="min-w-0 sm:min-w-64">
+              <Label htmlFor="hosting-workspace-filter" className="sr-only">
+                Workspace
+              </Label>
+              <select
+                id="hosting-workspace-filter"
+                value={defaultWorkspaceId}
+                onChange={(e) => setWorkspaceId(e.target.value)}
+                className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                aria-label="Workspace"
+              >
+                {workspaces.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          <Button
+            size="touch"
+            className="w-full sm:w-auto"
+            onClick={() => setShowCreate((v) => !v)}
+            disabled={!hostingReady || workspaces.length === 0}
+            aria-expanded={showCreate}
+          >
+            <Rocket className="mr-1.5 h-3.5 w-3.5" />
+            Servis oluştur
+          </Button>
+        </div>
       </div>
 
       {servicesQuery.isError && (
         <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground dark:text-warning">
-          Publish service is not available. Hosting actions are disabled until it responds.
+          Publish servisine ulaşılamıyor. Servis yanıt verene kadar hosting aksiyonları kapalı.
         </div>
       )}
 
@@ -219,9 +264,10 @@ export default function HostingPage() {
           className="mt-4 grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-2 lg:grid-cols-3"
         >
           <div className="space-y-1.5">
-            <Label htmlFor="svc-name">Service name</Label>
+            <Label htmlFor="svc-name">Servis adı</Label>
             <Input
               id="svc-name"
+              className="min-h-11"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My App"
@@ -231,18 +277,19 @@ export default function HostingPage() {
             <Label htmlFor="svc-slug">Slug (subdomain)</Label>
             <Input
               id="svc-slug"
+              className="min-h-11"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder={normalizeSlug(name || 'my-app')}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="svc-kind">Kind</Label>
+            <Label htmlFor="svc-kind">Tür</Label>
             <select
               id="svc-kind"
               value={kind}
               onChange={(e) => setKind(e.target.value)}
-              className="h-8 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+              className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
             >
               <option value="static">Static (HTML/CSS/JS)</option>
               <option value="vite">Vite App</option>
@@ -253,6 +300,7 @@ export default function HostingPage() {
             <Label htmlFor="svc-root">Root path</Label>
             <Input
               id="svc-root"
+              className="min-h-11"
               value={rootPath}
               onChange={(e) => setRootPath(e.target.value)}
               placeholder="/"
@@ -264,7 +312,7 @@ export default function HostingPage() {
               id="svc-workspace"
               value={defaultWorkspaceId}
               onChange={(e) => setWorkspaceId(e.target.value)}
-              className="h-8 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+              className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
             >
               {workspaces.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -274,52 +322,59 @@ export default function HostingPage() {
             </select>
           </div>
           <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
-            <Label htmlFor="svc-start">Start command (Node/Vite only)</Label>
+            <Label htmlFor="svc-start">Başlatma komutu (Node/Vite)</Label>
             <Input
               id="svc-start"
+              className="min-h-11 font-mono text-sm"
               value={startCommand}
               onChange={(e) => setStartCommand(e.target.value)}
               placeholder="npm start"
             />
           </div>
           <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
-            <Label htmlFor="svc-env">Environment variables</Label>
-            <textarea
+            <Label htmlFor="svc-env">Ortam değişkenleri</Label>
+            <Textarea
               id="svc-env"
               value={envVarsText}
               onChange={(e) => setEnvVarsText(e.target.value)}
               placeholder={'KEY=value\nANOTHER_KEY=secret'}
               rows={4}
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground"
+              className="min-h-32 font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              One <code>KEY=VALUE</code> pair per line. Stored encrypted at rest.
+              Satır başına bir <code>KEY=VALUE</code>. Değerler saklanırken şifrelenir.
             </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="svc-domain">Custom domain</Label>
             <Input
               id="svc-domain"
+              className="min-h-11"
               value={customDomain}
               onChange={(e) => setCustomDomain(e.target.value)}
               placeholder="app.example.com"
             />
           </div>
-          <div className="flex items-center gap-2 pt-6">
+          <div className="flex min-h-11 items-center gap-2 pt-2 md:pt-6">
             <input
               id="svc-public"
               type="checkbox"
               checked={isPublic}
               onChange={(e) => setIsPublic(e.target.checked)}
-              className="h-4 w-4 rounded border-border"
+              className="h-4 w-4 rounded border-border accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <Label htmlFor="svc-public" className="font-normal">
-              Publicly accessible
+              Herkese açık
             </Label>
           </div>
-          <div className="flex items-end">
-            <Button type="submit" size="sm" disabled={!canCreate || createService.isPending}>
-              {createService.isPending ? 'Creating...' : 'Create'}
+          <div className="flex items-end md:justify-end">
+            <Button
+              type="submit"
+              size="touch"
+              className="w-full md:w-auto"
+              disabled={!canCreate || createService.isPending}
+            >
+              {createService.isPending ? 'Oluşturuluyor...' : 'Oluştur'}
             </Button>
           </div>
         </form>
@@ -336,31 +391,30 @@ export default function HostingPage() {
               return (
                 <div
                   key={svc.id}
-                  className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
+                  className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-start sm:justify-between"
                 >
-                  <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                       <Server className="h-5 w-5 text-primary" />
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-foreground">{svc.name}</h3>
-                        <StatusBadge
-                          variant={isRunning ? 'running' : isStarting ? 'pending' : 'stopped'}
-                          dot
-                        >
-                          {svc.status}
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <h3 className="min-w-0 truncate font-medium text-foreground">{svc.name}</h3>
+                        <StatusBadge variant={getStatusVariant(svc.status)} dot>
+                          {getStatusLabel(svc.status)}
                         </StatusBadge>
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          {svc.kind}
+                        <span className="rounded-sm bg-muted px-1.5 py-0.5 text-xs font-semibold uppercase text-muted-foreground">
+                          {serviceKindLabels[svc.kind] ?? svc.kind}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {svc.slug}.apps.localhost ·{' '}
-                        {workspaceNameById.get(svc.workspaceId) || 'Workspace'} ·{' '}
-                        {formatDate(svc.updatedAt)}
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        <span className="font-mono text-foreground/80">
+                          {svc.slug}.apps.localhost
+                        </span>
+                        <span> · {workspaceNameById.get(svc.workspaceId) || 'Workspace'}</span>
+                        <span> · {formatDate(svc.updatedAt)}</span>
                       </p>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span
                           className={
                             svc.lastHealthOk === false
@@ -371,15 +425,15 @@ export default function HostingPage() {
                           }
                           title={svc.lastHealthAt ?? undefined}
                         >
-                          Health:{' '}
+                          Sağlık:{' '}
                           {svc.lastHealthOk === null || svc.lastHealthOk === undefined
-                            ? '—'
+                            ? 'bekleniyor'
                             : svc.lastHealthOk
                               ? 'OK'
-                              : 'failing'}
+                              : 'hata'}
                         </span>
-                        <span>Crashes: {svc.crashCount ?? 0}</span>
-                        <label className="flex cursor-pointer items-center gap-1">
+                        <span>Çökme: {svc.crashCount ?? 0}</span>
+                        <label className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-sm focus-within:ring-2 focus-within:ring-ring sm:min-h-7">
                           <input
                             type="checkbox"
                             checked={svc.autoRestart ?? true}
@@ -389,56 +443,67 @@ export default function HostingPage() {
                                 autoRestart: e.target.checked,
                               })
                             }
-                            className="h-3 w-3"
+                            className="h-4 w-4 accent-primary"
                           />
-                          Auto-restart
+                          Otomatik başlat
                         </label>
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
                     {isRunning ? (
                       <>
                         <Button
-                          size="sm"
+                          size="touch"
                           variant="outline"
+                          className="w-full sm:w-auto"
                           onClick={() => restartService.mutate(svc.id)}
                           disabled={restartService.isPending}
-                          title="Restart"
+                          title="Yeniden başlat"
                         >
-                          <RefreshCw className="mr-1 h-3.5 w-3.5" /> Restart
+                          <RefreshCw className="mr-1 h-3.5 w-3.5" /> Yeniden başlat
                         </Button>
                         <Button
-                          size="sm"
+                          size="touch"
                           variant="outline"
+                          className="w-full sm:w-auto"
                           onClick={() => stopService.mutate(svc.id)}
                           disabled={stopService.isPending}
                         >
-                          <Square className="mr-1 h-3.5 w-3.5" /> Stop
+                          <Square className="mr-1 h-3.5 w-3.5" /> Durdur
                         </Button>
                       </>
                     ) : (
                       <Button
-                        size="sm"
+                        size="touch"
                         variant="outline"
+                        className="w-full sm:w-auto"
                         onClick={() => startService.mutate(svc.id)}
                         disabled={startService.isPending || isStarting}
                       >
-                        <Play className="mr-1 h-3.5 w-3.5" /> Start
+                        <Play className="mr-1 h-3.5 w-3.5" /> Başlat
                       </Button>
                     )}
                     {svc.publicUrl && (
-                      <a href={svc.publicUrl} target="_blank" rel="noreferrer">
-                        <Button size="sm" variant="outline">
-                          Open <ExternalLink className="ml-1 h-3.5 w-3.5" />
-                        </Button>
+                      <a
+                        href={svc.publicUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(
+                          buttonVariants({ variant: 'outline', size: 'touch' }),
+                          'w-full sm:w-auto',
+                        )}
+                      >
+                        Aç <ExternalLink className="ml-1 h-3.5 w-3.5" />
                       </a>
                     )}
                     <Button
-                      size="sm"
+                      size="icon-touch"
                       variant="ghost"
-                      className="text-destructive hover:text-destructive"
+                      className="justify-self-end text-destructive hover:text-destructive sm:justify-self-auto"
                       onClick={() => setDeleteTarget(svc.id)}
+                      title="Servisi sil"
+                      aria-label={`${svc.name} servisini sil`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -450,10 +515,10 @@ export default function HostingPage() {
         ) : (
           <EmptyState
             icon={<Globe2 className="h-6 w-6" />}
-            title="No services yet"
-            description="Create a static site, Vite app, or Node.js service from an existing workspace."
+            title="Henüz servis yok"
+            description="Mevcut bir workspace'ten static site, Vite uygulaması veya Node.js servisi oluşturun."
             action={{
-              label: 'Create service',
+              label: 'Servis oluştur',
               onClick: () => setShowCreate(true),
             }}
           />
@@ -463,9 +528,9 @@ export default function HostingPage() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={() => setDeleteTarget(null)}
-        title="Delete service"
-        description="This will stop the running container and remove the service. This action cannot be undone."
-        confirmLabel="Delete"
+        title="Servisi sil"
+        description="Çalışan container durdurulacak ve servis kaldırılacak. Bu işlem geri alınamaz."
+        confirmLabel="Sil"
         variant="destructive"
         onConfirm={async () => {
           if (deleteTarget) await deleteService.mutateAsync(deleteTarget);
