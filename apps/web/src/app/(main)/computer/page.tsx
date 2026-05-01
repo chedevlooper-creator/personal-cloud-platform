@@ -254,7 +254,7 @@ export default function ComputerPage() {
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${
                       svc.status === 'running'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        ? 'bg-success/15 text-success'
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >
@@ -337,7 +337,7 @@ export default function ComputerPage() {
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${
                       a.enabled
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        ? 'bg-success/15 text-success'
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >

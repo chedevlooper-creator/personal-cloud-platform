@@ -29,28 +29,28 @@ export default function WorkspacesPage() {
     <div className="flex-1 overflow-auto p-6 lg:p-8">
       <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Workspaces</h1>
-          <p className="mt-2 max-w-2xl text-base text-zinc-600 dark:text-zinc-400">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Workspaces</h1>
+          <p className="mt-2 max-w-2xl text-base text-muted-foreground">
             Persistent environments with files, terminal access, and agent context.
           </p>
         </div>
         <CreateWorkspaceDialog />
       </header>
 
-      <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <section className="rounded-lg border border-border bg-card">
         {isLoading ? (
-          <div className="flex h-40 items-center justify-center text-zinc-500">Loading workspaces...</div>
+          <div className="flex h-40 items-center justify-center text-muted-foreground">Loading workspaces...</div>
         ) : workspaces.length > 0 ? (
-          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <ul className="divide-y divide-border">
             {workspaces.map((workspace) => (
               <li key={workspace.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
                 <div className="flex min-w-0 items-start gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                     <Server className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="truncate font-semibold">{workspace.name}</h2>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    <h2 className="truncate font-semibold text-foreground">{workspace.name}</h2>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                       <span>{formatBytes(workspace.storageUsed)} used</span>
                       <span>{formatBytes(workspace.storageLimit)} quota</span>
                       <span>Updated {formatDate(workspace.updatedAt)}</span>
@@ -65,10 +65,10 @@ export default function WorkspacesPage() {
           </ul>
         ) : (
           <div className="flex h-72 flex-col items-center justify-center gap-4 text-center">
-            <FolderKanban className="h-10 w-10 text-zinc-400" />
+            <FolderKanban className="h-10 w-10 text-muted-foreground/60" />
             <div>
-              <h2 className="font-semibold">Create your first workspace</h2>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              <h2 className="font-semibold text-foreground">Create your first workspace</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 The starter workspace includes files that can be previewed immediately.
               </p>
             </div>

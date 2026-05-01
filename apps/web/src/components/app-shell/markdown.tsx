@@ -16,12 +16,12 @@ export function Markdown({ text, className }: { text: string; className?: string
   return (
     <div
       className={cn(
-        'max-w-none text-[14px] leading-[1.65] text-zinc-100',
+        'max-w-none text-sm leading-[1.65] text-foreground',
         '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
         '[&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5',
         '[&_h1]:mt-3 [&_h1]:mb-2 [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h3]:mt-2 [&_h3]:mb-1',
-        '[&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-3 [&_blockquote]:text-zinc-300',
-        '[&_a]:text-zinc-100 [&_a]:underline [&_a]:underline-offset-2 [&_a]:decoration-zinc-500 hover:[&_a]:decoration-zinc-200',
+        '[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
+        '[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:decoration-primary/40 hover:[&_a]:decoration-primary',
         className,
       )}
     >
@@ -61,10 +61,10 @@ function renderBlocks(text: string) {
       const content = heading[2] ?? '';
       const cls =
         level === 1
-          ? 'text-base font-semibold text-zinc-50'
+          ? 'text-base font-semibold text-foreground'
           : level === 2
-            ? 'text-[15px] font-semibold text-zinc-100'
-            : 'text-sm font-semibold text-zinc-200';
+            ? 'text-[15px] font-semibold text-foreground'
+            : 'text-sm font-semibold text-foreground/90';
       blocks.push(
         <p key={key++} className={cls}>
           {renderInline(content)}
@@ -97,7 +97,7 @@ function renderBlocks(text: string) {
         i++;
       }
       blocks.push(
-        <ol key={key++} className="list-decimal pl-5 marker:text-zinc-500">
+        <ol key={key++} className="list-decimal pl-5 marker:text-muted-foreground">
           {items.map((it, idx) => (
             <li key={idx}>{renderInline(it)}</li>
           ))}
@@ -114,7 +114,7 @@ function renderBlocks(text: string) {
         i++;
       }
       blocks.push(
-        <ul key={key++} className="list-disc pl-5 marker:text-zinc-500">
+        <ul key={key++} className="list-disc pl-5 marker:text-muted-foreground">
           {items.map((it, idx) => (
             <li key={idx}>{renderInline(it)}</li>
           ))}
@@ -287,17 +287,17 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   };
 
   return (
-    <div className="group/code my-2 overflow-hidden rounded-lg border border-white/[0.06] bg-[#0d1117]">
-      <div className="flex items-center justify-between border-b border-white/[0.04] bg-white/[0.02] px-3 py-1.5">
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-zinc-500">
+    <div className="group/code my-2 overflow-hidden rounded-lg border border-border bg-muted/40">
+      <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-3 py-1">
+        <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">
           {lang || 'code'}
         </span>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={apply}
-            className="flex items-center gap-1 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500 transition-colors hover:text-zinc-200"
-            title="Çalışma alanına kaydet"
+            aria-label={applied ? 'Uygulandı' : 'Çalışma alanına kaydet'}
+            className="flex items-center gap-1 text-xs uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground"
           >
             {applied ? (
               <>
@@ -312,7 +312,8 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
           <button
             type="button"
             onClick={copy}
-            className="flex items-center gap-1 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500 transition-colors hover:text-zinc-200"
+            aria-label={copied ? 'Kopyalandı' : 'Kopyala'}
+            className="flex items-center gap-1 text-xs uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground"
           >
             {copied ? (
               <>
@@ -326,7 +327,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
           </button>
         </div>
       </div>
-      <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[12.5px] leading-[1.6]">
+      <pre className="overflow-x-auto px-3 py-2 font-mono text-[12.5px] leading-[1.6] text-foreground">
         <code ref={codeRef} className={lang ? `language-${lang}` : undefined}>
           {code}
         </code>

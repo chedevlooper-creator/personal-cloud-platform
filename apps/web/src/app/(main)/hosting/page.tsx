@@ -205,7 +205,7 @@ export default function HostingPage() {
       </div>
 
       {servicesQuery.isError && (
-        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
+        <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground dark:text-warning">
           Publish service is not available. Hosting actions are disabled until it responds.
         </div>
       )}

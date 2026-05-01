@@ -108,8 +108,8 @@ export default function ChannelsPage() {
           <span
             className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-medium ${
               telegramOk
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                ? 'bg-success/15 text-success'
+                : 'bg-warning/15 text-warning-foreground dark:text-warning'
             }`}
           >
             {telegramOk ? 'Bot configured' : 'Token missing'}
@@ -117,7 +117,7 @@ export default function ChannelsPage() {
         </header>
 
         {!telegramOk && (
-          <div className="mb-3 flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <div className="mb-3 flex gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground dark:text-warning">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>
               Set <code className="font-mono">TELEGRAM_BOT_TOKEN</code> on the agent service env,
@@ -207,7 +207,7 @@ export default function ChannelsPage() {
                       {l.label || l.externalId}
                     </span>
                     {!l.enabled && (
-                      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                      <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground dark:text-warning">
                         Disabled
                       </span>
                     )}
