@@ -1,9 +1,17 @@
 'use client';
 
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { MessageSquare, X, Plus } from 'lucide-react';
 import { ChatCore } from '@/components/chat/chat-core';
 import { useChatPanel } from '@/components/chat/chat-panel-context';
+import { workspaceApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+type WorkspaceSummary = {
+  id: string;
+  name: string;
+};
 
 export function GlobalChatPanel() {
   const {
@@ -12,8 +20,28 @@ export function GlobalChatPanel() {
     activeWorkspaceId,
     togglePanel,
     setActiveConversationId,
+    setActiveWorkspaceId,
     startNewChat,
   } = useChatPanel();
+
+  const { data: workspacesData } = useQuery({
+    queryKey: ['chat-workspaces'],
+    queryFn: async () => {
+      const res = await workspaceApi.get('/workspaces');
+      return (res.data?.workspaces ?? []) as WorkspaceSummary[];
+    },
+    enabled: isOpen && !activeWorkspaceId,
+    staleTime: 30_000,
+  });
+
+  const fallbackWorkspaceId = useMemo(() => workspacesData?.[0]?.id ?? null, [workspacesData]);
+  const effectiveWorkspaceId = activeWorkspaceId ?? fallbackWorkspaceId;
+
+  useEffect(() => {
+    if (!activeWorkspaceId && fallbackWorkspaceId) {
+      setActiveWorkspaceId(fallbackWorkspaceId);
+    }
+  }, [activeWorkspaceId, fallbackWorkspaceId, setActiveWorkspaceId]);
 
   return (
     <>
@@ -53,7 +81,7 @@ export function GlobalChatPanel() {
             <div className="min-h-0 flex-1">
               <ChatCore
                 conversationId={activeConversationId}
-                workspaceId={activeWorkspaceId}
+                workspaceId={effectiveWorkspaceId}
                 onConversationChange={setActiveConversationId}
               />
             </div>
@@ -89,7 +117,7 @@ export function GlobalChatPanel() {
           <div className="min-h-0 flex-1">
             <ChatCore
               conversationId={activeConversationId}
-              workspaceId={activeWorkspaceId}
+              workspaceId={effectiveWorkspaceId}
               onConversationChange={setActiveConversationId}
             />
           </div>

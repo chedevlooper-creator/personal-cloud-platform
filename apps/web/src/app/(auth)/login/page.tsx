@@ -36,7 +36,7 @@ export default function LoginPage() {
             <SquareTerminal className="h-5 w-5" />
           </div>
           <div className="text-center">
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Tekrar hoş geldiniz</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Login</h1>
             <p className="mt-1 text-sm text-muted-foreground">Zihinbulut’a giriş yapın</p>
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function LoginPage() {
               className="w-full"
               disabled={loginMutation.isPending}
             >
-              {loginMutation.isPending ? 'Giriş yapılıyor...' : 'Giriş yap'}
+              {loginMutation.isPending ? 'Giriş yapılıyor...' : 'Login'}
             </Button>
           </form>
         </div>

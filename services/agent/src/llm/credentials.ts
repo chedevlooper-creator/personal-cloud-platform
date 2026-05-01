@@ -24,19 +24,19 @@ export async function resolveUserProvider(userId: string): Promise<{
     where: eq(userPreferences.userId, userId),
   });
 
-  const providerName = normalizeProviderName(prefs?.defaultProvider ?? null);
-  if (!providerName) return null;
+  let providerName = normalizeProviderName(prefs?.defaultProvider ?? null);
+  let credential = providerName ? await findCredential(userId, providerName) : null;
 
-  const credential = await db.query.providerCredentials.findFirst({
-    where: and(
-      eq(providerCredentials.userId, userId),
-      eq(providerCredentials.provider, providerName),
-      isNull(providerCredentials.revokedAt),
-    ),
-    orderBy: [desc(providerCredentials.createdAt)],
-  });
+  if (!credential) {
+    const credentials = await db.query.providerCredentials.findMany({
+      where: and(eq(providerCredentials.userId, userId), isNull(providerCredentials.revokedAt)),
+      orderBy: [desc(providerCredentials.createdAt)],
+    });
+    credential = credentials.find(c => normalizeProviderName(c.provider) !== null) ?? null;
+    providerName = credential ? normalizeProviderName(credential.provider) : null;
+  }
 
-  if (!credential) return null;
+  if (!providerName || !credential) return null;
 
   const apiKey = safeDecrypt(credential.encryptedKey, credential.iv, credential.authTag);
   if (!apiKey) return null;
@@ -66,6 +66,17 @@ export async function resolveUserProvider(userId: string): Promise<{
 
   const provider = createLLMProvider(overlay);
   return { provider, providerName, model };
+}
+
+function findCredential(userId: string, providerName: LLMProviderName) {
+  return db.query.providerCredentials.findFirst({
+    where: and(
+      eq(providerCredentials.userId, userId),
+      eq(providerCredentials.provider, providerName),
+      isNull(providerCredentials.revokedAt),
+    ),
+    orderBy: [desc(providerCredentials.createdAt)],
+  });
 }
 
 function normalizeProviderName(value: string | null): LLMProviderName | null {

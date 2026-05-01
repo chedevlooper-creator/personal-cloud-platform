@@ -815,7 +815,7 @@ export class AgentOrchestrator {
     userId: string,
     err: unknown,
   ): Promise<void> {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = agentFailureMessage(err);
     this.logger.error({ err, taskId, userId }, 'Agent loop failed');
     try {
       await db
@@ -1087,6 +1087,30 @@ function parseToolArguments(input: string): Record<string, unknown> {
   return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
     ? (parsed as Record<string, unknown>)
     : {};
+}
+
+function agentFailureMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const status =
+    typeof err === 'object' && err !== null && 'status' in err
+      ? (err as { status?: unknown }).status
+      : undefined;
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    status === 401 ||
+    lowerMessage.includes('authentication_error') ||
+    lowerMessage.includes('invalid api key') ||
+    lowerMessage.includes('incorrect api key') ||
+    lowerMessage.includes('api secret key')
+  ) {
+    return (
+      'AI provider authentication failed. Add a valid key in Settings > AI Providers, ' +
+      'or set the service API key for the selected provider and restart the agent service.'
+    );
+  }
+
+  return message;
 }
 
 async function emitAudit(

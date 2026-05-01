@@ -3,8 +3,8 @@
 ## Status
 
 **Current Phase:** 6 — Runtime Hardening
-**Last Activity:** 2026-04-30
-**Current Focus:** Phase 6 complete — all runtime hardening done
+**Last Activity:** 2026-05-01
+**Current Focus:** Awaiting next task
 **Current Position:** Phase 6 done, awaiting next milestone
 
 ## Phase Progress
@@ -30,6 +30,9 @@
 - [x] Phase 6 execution: Runtime Hardening (06-01)
 - [x] Phase 6 execution: Runtime Health Checks (06-02)
 - [x] Quick task 260430-tin: Command Center V1 UI redesign
+- [x] Quick task 260501-uiq: UI/UX Pro Max chat quality pass
+- [x] Quick task 260501-log: Login copy update
+- [x] Quick task 260501-chat: Global chat workspace context fix
 
 ## Blockers
 
@@ -56,6 +59,9 @@ None.
 | 2026-04-30 | Snapshot system completed | Download endpoint, storage usage API, timeline UI with day grouping, storage indicator, warning variant for restore |
 | 2026-04-30 | Rate limiting unified across all services | Shared rate-limit module in packages/shared; memory service added; all 7 services now covered |
 | 2026-04-30 | Command Center V1 UI redesign | Dashboard command center, Turkish shell, sidebar IA, mobile workspace tabs, and touch target fixes |
+| 2026-05-01 | UI/UX Pro Max chat quality pass | `chat-core.tsx` lint warnings cleared; attachment previews use `next/image`; chat micro-labels follow `text-xs` floor |
+| 2026-05-01 | Login copy update | `/login` heading and primary submit button now display `Login` per browser diff comment |
+| 2026-05-01 | Global chat context fix | `/terminal` chat resolves fallback workspace, provider auth failures are readable, and first saved provider becomes default |
 
 ## Notes
 
@@ -67,4 +73,4 @@ None.
 - Agent service recently received multi-tool, automation polling, and safe parsing fixes (committed to master)
 
 ---
-*Last updated: 2026-04-30*
+*Last updated: 2026-05-01*

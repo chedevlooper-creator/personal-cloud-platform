@@ -184,6 +184,22 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
 
       if (!credential) throw new Error('Failed to save credential');
 
+      const prefs = await db.query.userPreferences.findFirst({
+        where: eq(userPreferences.userId, userId),
+      });
+      if (!prefs) {
+        await db.insert(userPreferences).values({
+          userId,
+          defaultProvider: provider,
+          updatedAt: new Date(),
+        });
+      } else if (!prefs.defaultProvider) {
+        await db
+          .update(userPreferences)
+          .set({ defaultProvider: provider, updatedAt: new Date() })
+          .where(eq(userPreferences.userId, userId));
+      }
+
       await db.insert(auditLogs).values({
         userId,
         action: 'ADD_PROVIDER_CREDENTIAL',

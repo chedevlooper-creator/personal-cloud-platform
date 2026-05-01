@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import {
   Send,
   Paperclip,
@@ -112,6 +113,30 @@ export function ChatCore({
   });
 
   const messages = useMemo(() => messagesData ?? [], [messagesData]);
+  const hasActiveTask = useMemo(
+    () => messages.some((m) => ['pending', 'executing', 'waiting_approval'].includes(m.taskStatus)),
+    [messages],
+  );
+
+  const refreshConversationMessages = useCallback(
+    (id: string) => {
+      queryClient.invalidateQueries({ queryKey: ['agent-messages', id] });
+      window.setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['agent-messages', id] });
+      }, 750);
+      window.setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['agent-messages', id] });
+      }, 2500);
+    },
+    [queryClient],
+  );
+
+  useEffect(() => {
+    if (!hasActiveTask) {
+      const timeoutId = window.setTimeout(() => setIsStreaming(false), 0);
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [hasActiveTask]);
 
   // Listen for workspace file attachments from file tree
   useEffect(() => {
@@ -224,8 +249,9 @@ export function ChatCore({
       if (data.conversationId && data.conversationId !== conversationId) {
         onConversationChange?.(data.conversationId);
       }
-      if (conversationId) {
-        queryClient.invalidateQueries({ queryKey: ['agent-messages', conversationId] });
+      const nextConversationId = data.conversationId ?? conversationId;
+      if (nextConversationId) {
+        refreshConversationMessages(nextConversationId);
       }
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
@@ -392,7 +418,7 @@ export function ChatCore({
           <button
             type="button"
             onClick={stopGeneration}
-            className="flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/20"
+            className="flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/20"
           >
             <Square className="h-3 w-3" /> Durdur
           </button>
@@ -443,7 +469,6 @@ export function ChatCore({
           <MessageBubble
             key={msg.id}
             message={msg}
-            isLast={idx === messages.length - 1}
             onEdit={(content) => {
               setInput(content);
               messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -566,14 +591,21 @@ function AttachmentChip({ attachment, onRemove }: { attachment: Attachment; onRe
   return (
     <div className="group relative flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 text-xs">
       {isImage && attachment.preview ? (
-        <img src={attachment.preview} alt={attachment.name} className="h-8 w-8 rounded object-cover" />
+        <Image
+          src={attachment.preview}
+          alt={attachment.name}
+          width={32}
+          height={32}
+          className="h-8 w-8 rounded object-cover"
+          unoptimized
+        />
       ) : (
         <FileIconRenderer filename={attachment.name} />
       )}
       <div className="min-w-0">
         <p className="truncate font-medium text-foreground max-w-[120px]">{attachment.name}</p>
         {attachment.size !== undefined && (
-          <p className="text-[10px] text-muted-foreground">{formatBytes(attachment.size)}</p>
+          <p className="text-xs text-muted-foreground">{formatBytes(attachment.size)}</p>
         )}
       </div>
 
@@ -603,12 +635,10 @@ function AttachmentChip({ attachment, onRemove }: { attachment: Attachment; onRe
 
 function MessageBubble({
   message,
-  isLast: _isLast,
   onEdit,
   onRegenerate,
 }: {
   message: Message;
-  isLast?: boolean;
   onEdit?: (content: string) => void;
   onRegenerate?: () => void;
 }) {
@@ -674,10 +704,13 @@ function MessageBubble({
                   >
                     {isImg ? (
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
-                        <img
+                        <Image
                           src={`${process.env.NEXT_PUBLIC_WORKSPACE_API_URL || 'http://localhost:3002/api'}/files${filePath}`}
                           alt={filename}
+                          width={40}
+                          height={40}
                           className="h-full w-full object-cover"
+                          unoptimized
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}
@@ -688,7 +721,7 @@ function MessageBubble({
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{filename}</p>
-                      <p className="text-[10px] text-muted-foreground">{filePath}</p>
+                      <p className="text-xs text-muted-foreground">{filePath}</p>
                     </div>
                   </div>
                 );
@@ -730,7 +763,7 @@ function MessageBubble({
                     </StatusBadge>
                   </div>
                   {tc.result && (
-                    <pre className="mt-1 max-h-24 overflow-auto rounded bg-muted p-1.5 text-[10px] text-muted-foreground">
+                    <pre className="mt-1 max-h-24 overflow-auto rounded bg-muted p-1.5 text-xs text-muted-foreground">
                       {tc.result.slice(0, 500)}
                     </pre>
                   )}
@@ -746,7 +779,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={copy}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
             >
               {copied ? (
                 <>
@@ -764,7 +797,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={() => onEdit(message.content)}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
             >
               <Pencil className="h-3 w-3" /> Düzenle
             </button>
@@ -774,7 +807,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={onRegenerate}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
             >
               <RotateCcw className="h-3 w-3" /> Yeniden üret
             </button>

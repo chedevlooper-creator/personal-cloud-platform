@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 
 type Conversation = {
   id: string;
+  workspaceId: string | null;
   title: string | null;
   createdAt: string;
   updatedAt: string;
@@ -55,7 +56,8 @@ function groupConversations(convos: Conversation[]) {
 
 export default function ChatsPage() {
   const queryClient = useQueryClient();
-  const { activeConversationId, setActiveConversationId, startNewChat } = useChatPanel();
+  const { activeConversationId, setActiveConversationId, setActiveWorkspaceId, startNewChat } =
+    useChatPanel();
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -175,7 +177,10 @@ export default function ChatsPage() {
                       return (
                         <div
                           key={c.id}
-                          onClick={() => setActiveConversationId(c.id)}
+                          onClick={() => {
+                            setActiveConversationId(c.id);
+                            setActiveWorkspaceId(c.workspaceId);
+                          }}
                           className={cn(
                             'group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
                             isActive

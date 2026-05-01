@@ -38,7 +38,7 @@ const { mockDb, insertedValues, updatedValues } = vi.hoisted(() => {
       approvalRequests: { findFirst: vi.fn() },
       personas: { findFirst: vi.fn() },
       userPreferences: { findFirst: vi.fn() },
-      providerCredentials: { findFirst: vi.fn() },
+      providerCredentials: { findFirst: vi.fn(), findMany: vi.fn() },
       skills: { findMany: vi.fn() },
       tokenUsage: { findFirst: vi.fn() },
     },
@@ -96,6 +96,7 @@ describe('AgentOrchestrator', () => {
     mockDb.query.personas.findFirst.mockResolvedValue(null);
     mockDb.query.userPreferences.findFirst.mockResolvedValue(null);
     mockDb.query.providerCredentials.findFirst.mockResolvedValue(null);
+    mockDb.query.providerCredentials.findMany.mockResolvedValue([]);
     mockDb.query.skills.findMany.mockResolvedValue([]);
     mockDb.query.tokenUsage.findFirst.mockResolvedValue(null);
   });
@@ -583,6 +584,47 @@ describe('AgentOrchestrator', () => {
       TASK_ID,
       expect.objectContaining({ id: TASK_ID }),
     );
+  });
+
+  it('stores a readable failure when provider authentication fails', async () => {
+    const { AgentOrchestrator } = await import('./orchestrator');
+    const taskRow = {
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      conversationId: CONVERSATION_ID,
+      input: 'needs auth',
+      output: null,
+      status: 'pending',
+      metadata: { personaId: null, skillIds: [] },
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    };
+    mockDb.query.tasks.findFirst.mockResolvedValue(taskRow);
+
+    const authError = new Error(
+      "401 authentication_error: Please carry the API secret key in the Authorization field",
+    ) as Error & { status: number };
+    authError.status = 401;
+    const generate = vi.fn(async () => {
+      throw authError;
+    });
+    const orchestrator = new AgentOrchestrator(logger) as unknown as {
+      llm: { generate: typeof generate };
+      runAgentLoop: (taskId: string, userId: string) => Promise<void>;
+    };
+    orchestrator.llm = { generate };
+
+    await expect(orchestrator.runAgentLoop(TASK_ID, USER_ID)).resolves.toBeUndefined();
+
+    const failed = updatedValues.find(
+      (value) =>
+        value.status === 'failed' &&
+        value.output ===
+          'AI provider authentication failed. Add a valid key in Settings > AI Providers, ' +
+            'or set the service API key for the selected provider and restart the agent service.',
+    );
+    expect(failed).toBeDefined();
   });
 
   it('executes multiple tool calls in a single LLM response', async () => {
