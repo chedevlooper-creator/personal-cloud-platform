@@ -44,7 +44,7 @@ export const useRegister = () => {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: async (payload: { email: string; password: string; name: string }) => {
+    mutationFn: async (payload: { email: string; password: string; name?: string }) => {
       const res = await authApi.post('/register', payload);
       return res.data.user as AuthUser;
     },

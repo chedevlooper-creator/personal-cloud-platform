@@ -100,7 +100,7 @@ export function ChatCore({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const { setIsOpen } = useChatPanel();
+  const { setIsOpen, pendingMessage, setPendingMessage } = useChatPanel();
   const isNearBottomRef = useRef(true);
 
   const { data: messagesData, isLoading } = useQuery({
@@ -260,6 +260,15 @@ export function ChatCore({
       toastApiError(err, 'Mesaj gönderilemedi');
     },
   });
+
+  // Auto-send pending message from dashboard/command-center
+  useEffect(() => {
+    if (pendingMessage && !conversationId && !sendMutation.isPending) {
+      const message = pendingMessage;
+      setPendingMessage(null);
+      sendMutation.mutate(message);
+    }
+  }, [pendingMessage, conversationId, sendMutation, setPendingMessage]);
 
   const handleSend = useCallback(() => {
     const prompt = input.trim();

@@ -55,7 +55,9 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new Error('Email already registered');
+      const err = new Error('Email already registered') as Error & { statusCode: number };
+      err.statusCode = 409;
+      throw err;
     }
 
     const passwordHash = await argon2.hash(password);
@@ -92,7 +94,9 @@ export class AuthService {
         ipAddress,
         userAgent,
       );
-      throw new Error('Invalid credentials');
+      const err = new Error('Invalid credentials') as Error & { statusCode: number };
+      err.statusCode = 401;
+      throw err;
     }
 
     const isValid = await argon2.verify(user.passwordHash, password);
@@ -104,7 +108,9 @@ export class AuthService {
         ipAddress,
         userAgent,
       );
-      throw new Error('Invalid credentials');
+      const err = new Error('Invalid credentials') as Error & { statusCode: number };
+      err.statusCode = 401;
+      throw err;
     }
 
     const session = await this.createSession(user.id);

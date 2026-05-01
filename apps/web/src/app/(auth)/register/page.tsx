@@ -19,7 +19,7 @@ export default function RegisterPage() {
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     registerMutation.mutate(
-      { email, password, name },
+      { email, password, name: name.trim() || undefined },
       {
         onError: (error) => {
           toastApiError(error, 'Registration failed.');

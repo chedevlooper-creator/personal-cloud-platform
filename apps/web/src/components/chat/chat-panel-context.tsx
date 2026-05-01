@@ -26,12 +26,14 @@ export type ChatPanelContextType = {
   activeConversationId: string | null;
   activeWorkspaceId: string | null;
   attachments: FileAttachment[];
+  pendingMessage: string | null;
   togglePanel: () => void;
   setIsOpen: (open: boolean) => void;
   setWidth: (width: number) => void;
   setActiveConversationId: (id: string | null) => void;
   setActiveWorkspaceId: (id: string | null) => void;
   startNewChat: () => void;
+  setPendingMessage: (message: string | null) => void;
   addAttachment: (attachment: FileAttachment) => void;
   removeAttachment: (path: string) => void;
   clearAttachments: () => void;
@@ -81,6 +83,7 @@ export function ChatPanelProvider({ children }: { children: React.ReactNode }) {
     initial.activeWorkspaceId ?? null,
   );
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [pendingMessage, setPendingMessageState] = useState<string | null>(null);
 
   const setIsOpen = useCallback((open: boolean) => {
     setIsOpenState(open);
@@ -105,7 +108,12 @@ export function ChatPanelProvider({ children }: { children: React.ReactNode }) {
   const startNewChat = useCallback(() => {
     setActiveConversationIdState(null);
     setAttachments([]);
+    setPendingMessageState(null);
     setIsOpenState(true);
+  }, []);
+
+  const setPendingMessage = useCallback((message: string | null) => {
+    setPendingMessageState(message);
   }, []);
 
   const addAttachment = useCallback((attachment: FileAttachment) => {
@@ -136,12 +144,14 @@ export function ChatPanelProvider({ children }: { children: React.ReactNode }) {
         activeConversationId,
         activeWorkspaceId,
         attachments,
+        pendingMessage,
         togglePanel,
         setIsOpen,
         setWidth,
         setActiveConversationId,
         setActiveWorkspaceId,
         startNewChat,
+        setPendingMessage,
         addAttachment,
         removeAttachment,
         clearAttachments,
