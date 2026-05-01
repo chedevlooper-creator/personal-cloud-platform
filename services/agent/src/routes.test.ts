@@ -1,13 +1,19 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { createApiErrorHandler } from '@pcp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
 const TASK_ID = '550e8400-e29b-41d4-a716-446655440005';
 const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440003';
 
-const { orchestratorMethods } = vi.hoisted(() => {
+const { orchestratorMethods, dbSelect, dbUserPreferencesFindFirst, dbGroupBy } = vi.hoisted(() => {
+  const dbGroupBy = vi.fn(async () => []);
+  const dbWhere = vi.fn(() => ({ groupBy: dbGroupBy }));
+  const dbFrom = vi.fn(() => ({ where: dbWhere }));
+  const dbSelect = vi.fn(() => ({ from: dbFrom }));
+  const dbUserPreferencesFindFirst = vi.fn(async () => ({ monthlyTokenQuota: 100_000 }));
   const orchestratorMethods = {
     recoverInterruptedWork: vi.fn(async () => undefined),
     validateUserFromCookie: vi.fn(),
@@ -20,13 +26,32 @@ const { orchestratorMethods } = vi.hoisted(() => {
     getMessages: vi.fn(),
     submitToolApproval: vi.fn(),
     deleteConversation: vi.fn(),
+    subscribeToTask: vi.fn(),
   };
 
-  return { orchestratorMethods };
+  return { orchestratorMethods, dbSelect, dbUserPreferencesFindFirst, dbGroupBy };
 });
 
 vi.mock('./orchestrator', () => ({
   AgentOrchestrator: vi.fn(() => orchestratorMethods),
+}));
+
+vi.mock('@pcp/db/src/client', () => ({
+  db: {
+    select: dbSelect,
+    query: {
+      userPreferences: {
+        findFirst: dbUserPreferencesFindFirst,
+      },
+    },
+  },
+}));
+
+vi.mock('./env', () => ({
+  env: {
+    AUTH_BYPASS: false,
+    REDIS_URL: 'redis://localhost:6379',
+  },
 }));
 
 const OTHER_USER_ID = '550e8400-e29b-41d4-a716-446655440002';
@@ -44,6 +69,7 @@ async function buildApp() {
   const app = Fastify();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  app.setErrorHandler(createApiErrorHandler());
   await app.register(cookie);
   await app.register(setupAgentRoutes);
   return app;
@@ -52,6 +78,8 @@ async function buildApp() {
 describe('agent task event stream routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbGroupBy.mockResolvedValue([]);
+    dbUserPreferencesFindFirst.mockResolvedValue({ monthlyTokenQuota: 100_000 });
     orchestratorMethods.recoverInterruptedWork.mockResolvedValue(undefined);
     orchestratorMethods.validateUserFromCookie.mockResolvedValue(USER_ID);
     orchestratorMethods.getTask.mockResolvedValue({
@@ -77,6 +105,23 @@ describe('agent task event stream routes', () => {
         createdAt: new Date('2026-04-27T00:00:01.000Z'),
       },
     ]);
+    orchestratorMethods.subscribeToTask.mockReturnValue({
+      on: vi.fn((event: string, callback: (data: unknown) => void) => {
+        if (event === 'task') {
+          callback({
+            id: TASK_ID,
+            userId: USER_ID,
+            workspaceId: WORKSPACE_ID,
+            status: 'completed',
+            input: 'hello',
+            output: 'done',
+            createdAt: new Date('2026-04-27T00:00:00.000Z'),
+            updatedAt: new Date('2026-04-27T00:00:02.000Z'),
+          });
+        }
+      }),
+      off: vi.fn(),
+    });
   });
 
   it('rejects unauthenticated task event stream requests', async () => {
@@ -130,6 +175,25 @@ describe('agent task event stream routes', () => {
     expect(response.statusCode).toBe(200);
     expect(orchestratorMethods.getTask).toHaveBeenCalledWith(TASK_ID, OTHER_USER_ID);
     expect(response.body).not.toContain('event: task');
+
+    await app.close();
+  });
+
+  it('rejects live event streams before subscribing when the task is not owned by the user', async () => {
+    const app = await buildApp();
+
+    orchestratorMethods.getTask.mockResolvedValueOnce(null);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/agent/tasks/${TASK_ID}/events`,
+      headers: { cookie: 'sessionId=session-2' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+    expect(orchestratorMethods.getTask).toHaveBeenCalledWith(TASK_ID, OTHER_USER_ID);
+    expect(orchestratorMethods.subscribeToTask).not.toHaveBeenCalled();
 
     await app.close();
   });

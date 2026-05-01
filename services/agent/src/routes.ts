@@ -226,16 +226,19 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const { id } = request.params;
       const { snapshot } = request.query;
 
-      reply.raw.setHeader('Content-Type', 'text/event-stream');
-      reply.raw.setHeader('Cache-Control', 'no-cache');
-      reply.raw.setHeader('Connection', 'keep-alive');
-      reply.raw.statusCode = 200;
+      const startEventStream = (): void => {
+        reply.raw.setHeader('Content-Type', 'text/event-stream');
+        reply.raw.setHeader('Cache-Control', 'no-cache');
+        reply.raw.setHeader('Connection', 'keep-alive');
+        reply.raw.statusCode = 200;
+      };
 
       const sendEvent = (event: string, data: unknown): void => {
         reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
 
       if (snapshot) {
+        startEventStream();
         const task = await orchestrator.getTask(id, userId);
         if (task) {
           sendEvent('task', task);
@@ -248,7 +251,14 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
         return reply;
       }
 
-      // Live push: subscribe to in-process task events
+      const currentTask = await orchestrator.getTask(id, userId);
+      if (!currentTask) {
+        return sendApiError(reply, 404, 'NOT_FOUND', 'Task not found');
+      }
+
+      startEventStream();
+
+      // Live push: subscribe to in-process task events after proving ownership.
       const emitter = orchestrator.subscribeToTask(id);
 
       const onTask = (data: unknown): void => {
@@ -267,6 +277,14 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       function cleanup() {
         emitter.off('task', onTask);
         emitter.off('step', onStep);
+      }
+
+      sendEvent('task', currentTask);
+
+      if (['completed', 'failed', 'cancelled'].includes(currentTask.status)) {
+        cleanup();
+        reply.raw.end();
+        return reply;
       }
 
       request.raw.on('close', cleanup);
