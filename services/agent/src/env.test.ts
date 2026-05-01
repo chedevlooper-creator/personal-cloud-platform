@@ -24,7 +24,7 @@ describe('agent env ENCRYPTION_KEY validation', () => {
     process.env.AUTH_BYPASS = '0';
     process.env.LLM_PROVIDER = 'openai';
     process.env.OPENAI_API_KEY = 'sk-test-openai-key-1234567890abcdef';
-    delete process.env.ENCRYPTION_KEY;
+    process.env.ENCRYPTION_KEY = '';
 
     await expect(import('./env')).rejects.toThrow(/ENCRYPTION_KEY/);
   });
