@@ -292,6 +292,7 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       function cleanup() {
         emitter.off('task', onTask);
         emitter.off('step', onStep);
+        orchestrator.releaseTaskSubscription(id, emitter);
       }
 
       function closeStream() {

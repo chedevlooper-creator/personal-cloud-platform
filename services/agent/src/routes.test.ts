@@ -27,6 +27,7 @@ const { orchestratorMethods, dbSelect, dbUserPreferencesFindFirst, dbGroupBy } =
     submitToolApproval: vi.fn(),
     deleteConversation: vi.fn(),
     subscribeToTask: vi.fn(),
+    releaseTaskSubscription: vi.fn(),
   };
 
   return { orchestratorMethods, dbSelect, dbUserPreferencesFindFirst, dbGroupBy };
@@ -288,6 +289,52 @@ describe('agent task event stream routes', () => {
     expect(response.body).not.toContain('"output":"stale"');
     expect(freshIndex).toBeGreaterThanOrEqual(0);
     expect(completedIndex).toBeGreaterThan(freshIndex);
+
+    await app.close();
+  });
+
+  it('releases the idle task emitter when fresh current state is terminal without an event', async () => {
+    const app = await buildApp();
+
+    const activeTask = {
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      status: 'executing',
+      input: 'hello',
+      output: null,
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:01.000Z'),
+    };
+    const completedTask = {
+      ...activeTask,
+      status: 'completed',
+      output: 'done',
+      updatedAt: new Date('2026-04-27T00:00:02.000Z'),
+    };
+    const emitter = {
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+
+    orchestratorMethods.getTask
+      .mockResolvedValueOnce(activeTask)
+      .mockResolvedValueOnce(completedTask);
+    orchestratorMethods.subscribeToTask.mockReturnValueOnce(emitter);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/agent/tasks/${TASK_ID}/events`,
+      headers: { cookie: 'sessionId=session-1' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.body).toContain('event: task');
+    expect(response.body).toContain('"status":"completed"');
+    expect(response.body).toContain('"output":"done"');
+    expect(orchestratorMethods.subscribeToTask).toHaveBeenCalledWith(TASK_ID);
+    expect(orchestratorMethods.releaseTaskSubscription).toHaveBeenCalledWith(TASK_ID, emitter);
 
     await app.close();
   });

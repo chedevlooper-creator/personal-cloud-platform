@@ -104,6 +104,14 @@ export class AgentOrchestrator {
     return this.taskEvents.get(taskId)!;
   }
 
+  releaseTaskSubscription(taskId: string, emitter: EventEmitter): void {
+    const current = this.taskEvents.get(taskId);
+    if (current !== emitter) return;
+    if (current.listenerCount('task') === 0 && current.listenerCount('step') === 0) {
+      this.taskEvents.delete(taskId);
+    }
+  }
+
   private emitTaskUpdate(taskId: string, data: unknown): void {
     this.taskEvents.get(taskId)?.emit('task', data);
   }
