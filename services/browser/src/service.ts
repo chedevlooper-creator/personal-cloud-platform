@@ -46,7 +46,11 @@ export class BrowserService {
   private sessions = new Map<string, InternalSession>();
 
   constructor(
-    private logger?: { info: (...a: any[]) => void; warn: (...a: any[]) => void; error: (...a: any[]) => void },
+    private logger?: {
+      info: (...a: any[]) => void;
+      warn: (...a: any[]) => void;
+      error: (...a: any[]) => void;
+    },
   ) {}
 
   list(userId: string): BrowserSessionInfo[] {
@@ -58,7 +62,10 @@ export class BrowserService {
   async createSession(userId: string): Promise<BrowserSessionInfo> {
     const userSessions = Array.from(this.sessions.values()).filter((s) => s.userId === userId);
     if (userSessions.length >= env.BROWSER_MAX_SESSIONS_PER_USER) {
-      throw httpErr(429, `Session limit reached (${env.BROWSER_MAX_SESSIONS_PER_USER}). Close one first.`);
+      throw httpErr(
+        429,
+        `Session limit reached (${env.BROWSER_MAX_SESSIONS_PER_USER}). Close one first.`,
+      );
     }
     const pw = await loadPlaywright();
     const profileDir = path.resolve(env.BROWSER_PROFILE_DIR, userId);
@@ -135,7 +142,10 @@ export class BrowserService {
   }
 
   /** Extract trimmed visible text + a small set of links for LLM consumption. */
-  async extract(userId: string, sessionId: string): Promise<{
+  async extract(
+    userId: string,
+    sessionId: string,
+  ): Promise<{
     url: string;
     title: string;
     text: string;
@@ -155,7 +165,9 @@ export class BrowserService {
         .slice(0, 100)
         .map((a) => ({
           href: String(a.href ?? ''),
-          text: String(a.innerText ?? '').trim().slice(0, 200),
+          text: String(a.innerText ?? '')
+            .trim()
+            .slice(0, 200),
         }))
         .filter((l: { href: string; text: string }) => l.href && l.text);
       return { text, links };
@@ -226,7 +238,7 @@ function httpErr(statusCode: number, message: string) {
   return Object.assign(new Error(message), { statusCode });
 }
 
-/** Reject non-http(s) URLs and obvious private-network targets to limit SSRF surface. */
+/** Reject non-http(s) URLs and private/special-use network targets to limit SSRF surface. */
 export function isSafeUrl(url: string): boolean {
   let u: URL;
   try {
@@ -269,12 +281,18 @@ function isPrivateAddress(host: string): boolean {
   const normalized = host.toLowerCase();
   const ipv4 = parseIpv4(normalized);
   if (ipv4) {
-    const [a, b] = ipv4;
+    const [a, b, c] = ipv4;
     if (a === 0 || a === 10 || a === 127) return true;
     if (a === 100 && b >= 64 && b <= 127) return true;
     if (a === 169 && b === 254) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 0 && c === 0) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
     if (a === 192 && b === 168) return true;
+    if (a === 192 && b === 88 && c === 99) return true;
+    if (a === 198 && b >= 18 && b <= 19) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
     if (a >= 224) return true;
     return false;
   }
@@ -288,7 +306,11 @@ function isPrivateAddress(host: string): boolean {
     normalized === '::' ||
     normalized.startsWith('fe80:') ||
     normalized.startsWith('fc') ||
-    normalized.startsWith('fd')
+    normalized.startsWith('fd') ||
+    normalized.startsWith('ff') ||
+    normalized.startsWith('2001:2:') ||
+    normalized.startsWith('2001:10:') ||
+    normalized.startsWith('2001:db8:')
   );
 }
 
