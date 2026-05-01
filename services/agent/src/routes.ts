@@ -20,6 +20,12 @@ import { env } from './env';
 import { z } from 'zod';
 import { checkAgentRateLimit, AGENT_RATE_LIMITS } from './rate-limit';
 
+const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+function isTerminalTaskStatus(status: string | undefined): boolean {
+  return Boolean(status && TERMINAL_TASK_STATUSES.has(status));
+}
+
 export async function setupAgentRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
   const orchestrator = new AgentOrchestrator(fastify.log);
@@ -258,36 +264,65 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
 
       startEventStream();
 
+      if (isTerminalTaskStatus(currentTask.status)) {
+        sendEvent('task', currentTask);
+        reply.raw.end();
+        return reply;
+      }
+
       // Live push: subscribe to in-process task events after proving ownership.
       const emitter = orchestrator.subscribeToTask(id);
+      let closed = false;
 
       const onTask = (data: unknown): void => {
+        if (closed) return;
         sendEvent('task', data);
         const d = data as { status?: string };
-        if (d.status && ['completed', 'failed', 'cancelled'].includes(d.status)) {
-          cleanup();
-          reply.raw.end();
+        if (isTerminalTaskStatus(d.status)) {
+          closeStream();
         }
       };
-      const onStep = (data: unknown): void => sendEvent('step', data);
+      const onStep = (data: unknown): void => {
+        if (!closed) sendEvent('step', data);
+      };
 
       emitter.on('task', onTask);
-      emitter.on('step', onStep);
+      if (!closed) emitter.on('step', onStep);
 
       function cleanup() {
         emitter.off('task', onTask);
         emitter.off('step', onStep);
       }
 
-      sendEvent('task', currentTask);
-
-      if (['completed', 'failed', 'cancelled'].includes(currentTask.status)) {
+      function closeStream() {
+        if (closed) return;
+        closed = true;
         cleanup();
         reply.raw.end();
+      }
+
+      if (closed) {
         return reply;
       }
 
-      request.raw.on('close', cleanup);
+      request.raw.on('close', () => {
+        closed = true;
+        cleanup();
+      });
+
+      const latestTask = await orchestrator.getTask(id, userId);
+      if (!latestTask) {
+        closeStream();
+        return reply;
+      }
+
+      if (!closed) {
+        sendEvent('task', latestTask);
+        if (isTerminalTaskStatus(latestTask.status)) {
+          closeStream();
+        }
+      }
+
       return reply;
     },
   );

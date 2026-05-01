@@ -197,4 +197,98 @@ describe('agent task event stream routes', () => {
 
     await app.close();
   });
+
+  it('streams and closes an already terminal owned live task without subscribing', async () => {
+    const app = await buildApp();
+
+    orchestratorMethods.getTask.mockResolvedValueOnce({
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      status: 'completed',
+      input: 'hello',
+      output: 'done',
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:02.000Z'),
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/agent/tasks/${TASK_ID}/events`,
+      headers: { cookie: 'sessionId=session-1' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.body).toContain('event: task');
+    expect(response.body).toContain('"status":"completed"');
+    expect(response.body).toContain('"output":"done"');
+    expect(orchestratorMethods.getTask).toHaveBeenCalledWith(TASK_ID, USER_ID);
+    expect(orchestratorMethods.subscribeToTask).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('subscribes and sends fresh current state for owned active live streams', async () => {
+    const app = await buildApp();
+
+    const staleTask = {
+      id: TASK_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      status: 'executing',
+      input: 'hello',
+      output: 'stale',
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:01.000Z'),
+    };
+    const freshTask = {
+      ...staleTask,
+      output: 'fresh current',
+      updatedAt: new Date('2026-04-27T00:00:02.000Z'),
+    };
+    const completedTask = {
+      ...freshTask,
+      status: 'completed',
+      output: 'done',
+      updatedAt: new Date('2026-04-27T00:00:03.000Z'),
+    };
+    let taskListener: ((data: unknown) => void) | undefined;
+    const emitter = {
+      on: vi.fn((event: string, callback: (data: unknown) => void) => {
+        if (event === 'task') {
+          taskListener = callback;
+        }
+        if (event === 'step') {
+          setImmediate(() => taskListener?.(completedTask));
+        }
+      }),
+      off: vi.fn(),
+    };
+
+    orchestratorMethods.getTask.mockResolvedValueOnce(staleTask).mockResolvedValueOnce(freshTask);
+    orchestratorMethods.subscribeToTask.mockReturnValueOnce(emitter);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/agent/tasks/${TASK_ID}/events`,
+      headers: { cookie: 'sessionId=session-1' },
+    });
+
+    const freshIndex = response.body.indexOf('"output":"fresh current"');
+    const completedIndex = response.body.indexOf('"output":"done"');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(orchestratorMethods.getTask).toHaveBeenNthCalledWith(1, TASK_ID, USER_ID);
+    expect(orchestratorMethods.getTask).toHaveBeenNthCalledWith(2, TASK_ID, USER_ID);
+    expect(orchestratorMethods.subscribeToTask).toHaveBeenCalledWith(TASK_ID);
+    expect(emitter.on).toHaveBeenCalledWith('task', expect.any(Function));
+    expect(emitter.on).toHaveBeenCalledWith('step', expect.any(Function));
+    expect(response.body).not.toContain('"output":"stale"');
+    expect(freshIndex).toBeGreaterThanOrEqual(0);
+    expect(completedIndex).toBeGreaterThan(freshIndex);
+
+    await app.close();
+  });
 });
