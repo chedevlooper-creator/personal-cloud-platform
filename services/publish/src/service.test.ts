@@ -10,16 +10,20 @@ const SERVICE_ID = '550e8400-e29b-41d4-a716-446655440003';
 const {
   mockDb,
   createContainer,
+  createdContainer,
   insertedValues,
   insertedValueCalls,
   updatedValues,
   updateWherePredicates,
   deleteWherePredicates,
 } = vi.hoisted(() => {
-  const createContainer = vi.fn(async () => ({
+  const createdContainer = {
     id: 'container-1',
     start: vi.fn(async () => undefined),
-  }));
+    stop: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined),
+  };
+  const createContainer = vi.fn(async () => createdContainer);
   const insertedValues: Record<string, unknown>[] = [];
   const updatedValues: Record<string, unknown>[] = [];
   const insertedValueCalls: Record<string, unknown>[] = [];
@@ -92,6 +96,7 @@ const {
   return {
     mockDb,
     createContainer,
+    createdContainer,
     insertedValues,
     insertedValueCalls,
     updatedValues,
@@ -255,6 +260,27 @@ describe('PublishService security boundaries', () => {
           SecurityOpt: expect.arrayContaining(['no-new-privileges:true']),
           Tmpfs: expect.objectContaining({ '/tmp': 'rw,noexec,nosuid,size=100m' }),
         }),
+      }),
+    );
+  });
+
+  it('removes a created hosted container when startup fails after Docker creation', async () => {
+    const { PublishService } = await import('./service');
+    createdContainer.start.mockRejectedValueOnce(new Error('start failed'));
+    const service = new PublishService();
+
+    await service.startService(SERVICE_ID, USER_ID);
+
+    await waitForExpectation(() =>
+      expect(updatedValues).toContainEqual(expect.objectContaining({ status: 'crashed' })),
+    );
+    expect(createdContainer.stop).toHaveBeenCalled();
+    expect(createdContainer.remove).toHaveBeenCalled();
+    expect(insertedValueCalls).toContainEqual(
+      expect.objectContaining({
+        serviceId: SERVICE_ID,
+        stream: 'stderr',
+        line: 'start failed',
       }),
     );
   });

@@ -164,6 +164,8 @@ export class PublishService {
   }
 
   private async runContainer(service: HostedServiceRow) {
+    let createdContainer: Docker.Container | null = null;
+
     try {
       const containerName = `hosted-${service.id}`;
       const workspaceVolume = await this.materializer.materialize(
@@ -233,6 +235,7 @@ export class PublishService {
         },
         Env: toSafeEnv(decryptEnvVars(service.envVars || {})),
       });
+      createdContainer = container;
 
       await container.start();
 
@@ -244,8 +247,13 @@ export class PublishService {
           publicUrl: `http://${slug}.apps.localhost`,
         })
         .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, service.userId)));
+      createdContainer = null;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown publish container error';
+      if (createdContainer) {
+        await cleanupFailedContainer(createdContainer, service.id, this.logger);
+      }
+
       this.logger?.error?.(
         {
           err: error,
@@ -291,6 +299,27 @@ export class PublishService {
     if (!workspace) {
       throw new Error('Workspace not found');
     }
+  }
+}
+
+async function cleanupFailedContainer(
+  container: Docker.Container,
+  serviceId: string,
+  logger?: { error?: (obj: object, msg?: string) => void },
+): Promise<void> {
+  try {
+    await container.stop();
+  } catch {
+    // A container that failed before or during start may not be stoppable.
+  }
+
+  try {
+    await container.remove();
+  } catch (err) {
+    logger?.error?.(
+      { err, serviceId, containerId: container.id },
+      'Failed to remove hosted container after startup failure',
+    );
   }
 }
 
