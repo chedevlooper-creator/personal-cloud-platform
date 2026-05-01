@@ -61,9 +61,9 @@ type AutomationRun = {
 };
 
 const tabs: { id: Tab; label: string }[] = [
-  { id: 'active', label: 'Active' },
-  { id: 'paused', label: 'Paused' },
-  { id: 'history', label: 'History' },
+  { id: 'active', label: 'Aktif' },
+  { id: 'paused', label: 'Duraklatıldı' },
+  { id: 'history', label: 'Geçmiş' },
 ];
 
 function formatRelative(value: string | null | undefined) {
@@ -71,12 +71,12 @@ function formatRelative(value: string | null | undefined) {
   const diff = new Date(value).getTime() - Date.now();
   const abs = Math.abs(diff);
   const min = Math.round(abs / 60_000);
-  if (min < 1) return diff >= 0 ? 'in <1m' : 'just now';
-  if (min < 60) return diff >= 0 ? `in ${min}m` : `${min}m ago`;
+  if (min < 1) return diff >= 0 ? '<1 dk içinde' : 'az önce';
+  if (min < 60) return diff >= 0 ? `${min} dk içinde` : `${min} dk önce`;
   const hr = Math.round(min / 60);
-  if (hr < 24) return diff >= 0 ? `in ${hr}h` : `${hr}h ago`;
+  if (hr < 24) return diff >= 0 ? `${hr} sa içinde` : `${hr} sa önce`;
   const day = Math.round(hr / 24);
-  return diff >= 0 ? `in ${day}d` : `${day}d ago`;
+  return diff >= 0 ? `${day} gün içinde` : `${day} gün önce`;
 }
 
 function describeSchedule(a: Automation) {
@@ -90,7 +90,7 @@ export default function AutomationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: automations, isLoading } = useQuery({
+  const { data: automations, isLoading, isError } = useQuery({
     queryKey: ['automations'],
     queryFn: async () => {
       const res = await agentApi.get('/automations');
@@ -155,12 +155,12 @@ export default function AutomationsPage() {
     <div className="mx-auto max-w-4xl p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Automations</h2>
-          <p className="text-sm text-muted-foreground">Schedule AI tasks to run automatically</p>
+          <h2 className="text-lg font-semibold text-foreground">Otomasyonlar</h2>
+          <p className="text-sm text-muted-foreground">AI görevlerini otomatik çalışacak şekilde planlayın</p>
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
+        <Button size="touch" className="md:h-7 md:px-2.5 md:text-[0.8rem]" onClick={() => setCreateOpen(true)}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
-          Create Automation
+          Otomasyon oluştur
         </Button>
       </div>
 
@@ -187,6 +187,10 @@ export default function AutomationsPage() {
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
+            Agent servisine ulaşılamıyor. Otomasyonlar şu anda yüklenemiyor.
+          </div>
         ) : filtered.length > 0 ? (
           <div className="space-y-3">
             {filtered.map((auto) => (
@@ -202,7 +206,7 @@ export default function AutomationsPage() {
                     <div className="flex items-center gap-2">
                       <h3 className="truncate font-medium text-foreground">{auto.title}</h3>
                       <StatusBadge variant={auto.enabled ? 'success' : 'stopped'} dot>
-                        {auto.enabled ? 'Active' : 'Paused'}
+                        {auto.enabled ? 'Aktif' : 'Duraklatıldı'}
                       </StatusBadge>
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
@@ -211,10 +215,10 @@ export default function AutomationsPage() {
                     </p>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                       <span title={auto.nextRunAt ?? undefined}>
-                        Next: <span className="text-foreground/80">{formatRelative(auto.nextRunAt)}</span>
+                        Sıradaki: <span className="text-foreground/80">{formatRelative(auto.nextRunAt)}</span>
                       </span>
                       <span title={auto.lastRunAt ?? undefined}>
-                        Last: <span className="text-foreground/80">{formatRelative(auto.lastRunAt)}</span>
+                        Son: <span className="text-foreground/80">{formatRelative(auto.lastRunAt)}</span>
                       </span>
                       {auto.notificationMode && auto.notificationMode !== 'none' && (
                         <span>Notify: {auto.notificationMode}</span>
@@ -229,7 +233,7 @@ export default function AutomationsPage() {
                     onClick={() => runMutation.mutate(auto.id)}
                     disabled={runMutation.isPending}
                   >
-                    <Play className="mr-1 h-3.5 w-3.5" /> Run
+                        <Play className="mr-1 h-3.5 w-3.5" /> Çalıştır
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -276,10 +280,10 @@ export default function AutomationsPage() {
         ) : (
           <EmptyState
             icon={<Clock3 className="h-6 w-6" />}
-            title={`No ${activeTab} automations`}
-            description="Create an automation to schedule AI tasks like file processing, reports, or backups."
+            title={`${tabs.find((tab) => tab.id === activeTab)?.label ?? 'Otomasyon'} otomasyon yok`}
+            description="Dosya işleme, rapor veya yedek gibi AI görevleri için otomasyon oluşturun."
             action={{
-              label: 'Create automation',
+              label: 'Otomasyon oluştur',
               onClick: () => setCreateOpen(true),
             }}
           />

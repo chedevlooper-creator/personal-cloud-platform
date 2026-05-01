@@ -1,3 +1,6 @@
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440001';
@@ -8,6 +11,7 @@ const {
   mockDb,
   createContainer,
   insertedValues,
+  insertedValueCalls,
   updatedValues,
   updateWherePredicates,
   deleteWherePredicates,
@@ -18,6 +22,7 @@ const {
   }));
   const insertedValues: Record<string, unknown>[] = [];
   const updatedValues: Record<string, unknown>[] = [];
+  const insertedValueCalls: Record<string, unknown>[] = [];
   const updateWherePredicates: unknown[] = [];
   const deleteWherePredicates: unknown[] = [];
 
@@ -27,20 +32,23 @@ const {
       hostedServices: { findFirst: vi.fn() },
     },
     insert: vi.fn(() => ({
-      values: vi.fn((value: Record<string, unknown>) => ({
-        returning: vi.fn(async () => {
-          insertedValues.push(value);
-          return [hostedService(value)];
-        }),
-      })),
+      values: vi.fn((value: Record<string, unknown>) => {
+        insertedValueCalls.push(value);
+        return {
+          returning: vi.fn(async () => {
+            insertedValues.push(value);
+            return [hostedService(value)];
+          }),
+        };
+      }),
     })),
     update: vi.fn(() => ({
       set: vi.fn((value: Record<string, unknown>) => ({
         where: vi.fn((predicate: unknown) => {
+          updatedValues.push(value);
           updateWherePredicates.push(predicate);
           return {
             returning: vi.fn(async () => {
-              updatedValues.push(value);
               return [hostedService(value)];
             }),
           };
@@ -85,6 +93,7 @@ const {
     mockDb,
     createContainer,
     insertedValues,
+    insertedValueCalls,
     updatedValues,
     updateWherePredicates,
     deleteWherePredicates,
@@ -116,9 +125,17 @@ describe('PublishService security boundaries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     insertedValues.length = 0;
+    insertedValueCalls.length = 0;
     updatedValues.length = 0;
     updateWherePredicates.length = 0;
     deleteWherePredicates.length = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ files: [] }),
+      })),
+    );
     mockDb.query.workspaces.findFirst.mockResolvedValue({ id: WORKSPACE_ID, userId: USER_ID });
     mockDb.query.hostedServices.findFirst.mockResolvedValue({
       id: SERVICE_ID,
@@ -211,6 +228,7 @@ describe('PublishService security boundaries', () => {
 
     await service.startService(SERVICE_ID, USER_ID);
 
+    await waitForExpectation(() => expect(createContainer).toHaveBeenCalled());
     expect(createContainer).toHaveBeenCalledWith(
       expect.objectContaining({
         User: '1000:1000',
@@ -224,7 +242,7 @@ describe('PublishService security boundaries', () => {
         }),
         HostConfig: expect.objectContaining({
           NetworkMode: 'pcp-publish',
-          Binds: [`/tmp/workspaces/${USER_ID}/${WORKSPACE_ID}:/workspace:ro`],
+          Binds: [`${resolve('/tmp/workspaces', USER_ID, WORKSPACE_ID)}:/workspace:ro`],
           Memory: 512 * 1024 * 1024,
           MemorySwap: 512 * 1024 * 1024,
           NanoCpus: 1_000_000_000,
@@ -254,6 +272,7 @@ describe('PublishService security boundaries', () => {
 
       await service.startService(SERVICE_ID, USER_ID);
 
+      await waitForExpectation(() => expect(createContainer).toHaveBeenCalled());
       expect(createContainer).toHaveBeenCalledWith(
         expect.objectContaining({
           HostConfig: expect.objectContaining({
@@ -272,6 +291,282 @@ describe('PublishService security boundaries', () => {
     }
   });
 
+  it('fetches and materializes workspace source before hosted container launch', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'pcp-publish-'));
+    const originalRoot = process.env.PUBLISH_WORKSPACE_HOST_ROOT;
+    const originalWorkspaceUrl = process.env.WORKSPACE_SERVICE_URL;
+    const originalToken = process.env.INTERNAL_SERVICE_TOKEN;
+    process.env.PUBLISH_WORKSPACE_HOST_ROOT = workspaceRoot;
+    process.env.WORKSPACE_SERVICE_URL = 'http://workspace.test/api';
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-token'.repeat(3);
+    vi.resetModules();
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        files: [
+          {
+            path: '/src',
+            isDirectory: true,
+            size: 0,
+            mimeType: null,
+            contentBase64: null,
+          },
+          {
+            path: '/src/app.js',
+            isDirectory: false,
+            size: 21,
+            mimeType: 'text/javascript',
+            contentBase64: Buffer.from('console.log("ready");').toString('base64'),
+          },
+          {
+            path: '/empty.txt',
+            isDirectory: false,
+            size: 0,
+            mimeType: 'text/plain',
+            contentBase64: '',
+          },
+        ],
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { PublishService } = await import('./service');
+      const service = new PublishService();
+
+      await service.startService(SERVICE_ID, USER_ID);
+
+      await waitForExpectation(() => expect(createContainer).toHaveBeenCalled());
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://workspace.test/api/workspaces/550e8400-e29b-41d4-a716-446655440002/sync/manifest',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${process.env.INTERNAL_SERVICE_TOKEN}`,
+            'X-User-Id': USER_ID,
+          }),
+        }),
+      );
+      await expect(
+        readFile(join(workspaceRoot, USER_ID, WORKSPACE_ID, 'src', 'app.js'), 'utf8'),
+      ).resolves.toBe('console.log("ready");');
+      await expect(
+        readFile(join(workspaceRoot, USER_ID, WORKSPACE_ID, 'empty.txt')),
+      ).resolves.toEqual(Buffer.alloc(0));
+      expect(createContainer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          HostConfig: expect.objectContaining({
+            Binds: [`${join(workspaceRoot, USER_ID, WORKSPACE_ID)}:/workspace:ro`],
+          }),
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      restoreEnvValue('PUBLISH_WORKSPACE_HOST_ROOT', originalRoot);
+      restoreEnvValue('WORKSPACE_SERVICE_URL', originalWorkspaceUrl);
+      restoreEnvValue('INTERNAL_SERVICE_TOKEN', originalToken);
+      vi.resetModules();
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('removes stale workspace files before materializing published source', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'pcp-publish-'));
+    const originalRoot = process.env.PUBLISH_WORKSPACE_HOST_ROOT;
+    const originalToken = process.env.INTERNAL_SERVICE_TOKEN;
+    process.env.PUBLISH_WORKSPACE_HOST_ROOT = workspaceRoot;
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-token'.repeat(3);
+    vi.resetModules();
+    await mkdir(join(workspaceRoot, USER_ID, WORKSPACE_ID), { recursive: true });
+    await writeFile(join(workspaceRoot, USER_ID, WORKSPACE_ID, 'old.txt'), 'stale');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          files: [
+            {
+              path: '/new.txt',
+              isDirectory: false,
+              size: 5,
+              mimeType: 'text/plain',
+              contentBase64: Buffer.from('fresh').toString('base64'),
+            },
+          ],
+        }),
+      })),
+    );
+
+    try {
+      const { PublishService } = await import('./service');
+      const service = new PublishService();
+
+      await service.startService(SERVICE_ID, USER_ID);
+
+      await waitForExpectation(() => expect(createContainer).toHaveBeenCalled());
+      await expect(
+        readFile(join(workspaceRoot, USER_ID, WORKSPACE_ID, 'new.txt'), 'utf8'),
+      ).resolves.toBe('fresh');
+      await expect(pathExists(join(workspaceRoot, USER_ID, WORKSPACE_ID, 'old.txt'))).resolves.toBe(
+        false,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      restoreEnvValue('PUBLISH_WORKSPACE_HOST_ROOT', originalRoot);
+      restoreEnvValue('INTERNAL_SERVICE_TOKEN', originalToken);
+      vi.resetModules();
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed and skips container creation when materialization rejects manifest content', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'pcp-publish-'));
+    const originalRoot = process.env.PUBLISH_WORKSPACE_HOST_ROOT;
+    const originalToken = process.env.INTERNAL_SERVICE_TOKEN;
+    process.env.PUBLISH_WORKSPACE_HOST_ROOT = workspaceRoot;
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-token'.repeat(3);
+    vi.resetModules();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          files: [
+            {
+              path: '/../escape.txt',
+              isDirectory: false,
+              size: 4,
+              mimeType: 'text/plain',
+              contentBase64: Buffer.from('nope').toString('base64'),
+            },
+          ],
+        }),
+      })),
+    );
+
+    try {
+      const { PublishService } = await import('./service');
+      const service = new PublishService();
+
+      await service.startService(SERVICE_ID, USER_ID);
+
+      await waitForExpectation(() =>
+        expect(updatedValues).toContainEqual(expect.objectContaining({ status: 'crashed' })),
+      );
+      expect(createContainer).not.toHaveBeenCalled();
+      expect(insertedValueCalls).toContainEqual(
+        expect.objectContaining({
+          serviceId: SERVICE_ID,
+          stream: 'stderr',
+          line: expect.stringContaining('materialization'),
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      restoreEnvValue('PUBLISH_WORKSPACE_HOST_ROOT', originalRoot);
+      restoreEnvValue('INTERNAL_SERVICE_TOKEN', originalToken);
+      vi.resetModules();
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed and records workspace service failures before Docker creation', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'pcp-publish-'));
+    const originalRoot = process.env.PUBLISH_WORKSPACE_HOST_ROOT;
+    const originalWorkspaceUrl = process.env.WORKSPACE_SERVICE_URL;
+    const originalToken = process.env.INTERNAL_SERVICE_TOKEN;
+    process.env.PUBLISH_WORKSPACE_HOST_ROOT = workspaceRoot;
+    process.env.WORKSPACE_SERVICE_URL = 'http://workspace.test/api';
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-token'.repeat(3);
+    vi.resetModules();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        statusText: 'Unavailable',
+        text: async () => 'down',
+      })),
+    );
+
+    try {
+      const { PublishService } = await import('./service');
+      const service = new PublishService();
+
+      await service.startService(SERVICE_ID, USER_ID);
+
+      await waitForExpectation(() =>
+        expect(updatedValues).toContainEqual(expect.objectContaining({ status: 'crashed' })),
+      );
+      expect(createContainer).not.toHaveBeenCalled();
+      expect(insertedValueCalls).toContainEqual(
+        expect.objectContaining({
+          serviceId: SERVICE_ID,
+          stream: 'stderr',
+          line: expect.stringContaining('workspace service 503: down'),
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      restoreEnvValue('PUBLISH_WORKSPACE_HOST_ROOT', originalRoot);
+      restoreEnvValue('WORKSPACE_SERVICE_URL', originalWorkspaceUrl);
+      restoreEnvValue('INTERNAL_SERVICE_TOKEN', originalToken);
+      vi.resetModules();
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when a manifest file is missing inline content', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'pcp-publish-'));
+    const originalRoot = process.env.PUBLISH_WORKSPACE_HOST_ROOT;
+    const originalToken = process.env.INTERNAL_SERVICE_TOKEN;
+    process.env.PUBLISH_WORKSPACE_HOST_ROOT = workspaceRoot;
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-token'.repeat(3);
+    vi.resetModules();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          files: [
+            {
+              path: '/missing.txt',
+              isDirectory: false,
+              size: 5,
+              mimeType: 'text/plain',
+              contentBase64: null,
+            },
+          ],
+        }),
+      })),
+    );
+
+    try {
+      const { PublishService } = await import('./service');
+      const service = new PublishService();
+
+      await service.startService(SERVICE_ID, USER_ID);
+
+      await waitForExpectation(() =>
+        expect(updatedValues).toContainEqual(expect.objectContaining({ status: 'crashed' })),
+      );
+      expect(createContainer).not.toHaveBeenCalled();
+      expect(insertedValueCalls).toContainEqual(
+        expect.objectContaining({
+          serviceId: SERVICE_ID,
+          stream: 'stderr',
+          line: expect.stringContaining('missing content for /missing.txt'),
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      restoreEnvValue('PUBLISH_WORKSPACE_HOST_ROOT', originalRoot);
+      restoreEnvValue('INTERNAL_SERVICE_TOKEN', originalToken);
+      vi.resetModules();
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   it('uses the configured publish-only Docker network for hosted containers', async () => {
     const originalNetwork = process.env.PUBLISH_DOCKER_NETWORK;
     process.env.PUBLISH_DOCKER_NETWORK = 'custom-publish-network';
@@ -283,6 +578,7 @@ describe('PublishService security boundaries', () => {
 
       await service.startService(SERVICE_ID, USER_ID);
 
+      await waitForExpectation(() => expect(createContainer).toHaveBeenCalled());
       expect(createContainer).toHaveBeenCalledWith(
         expect.objectContaining({
           HostConfig: expect.objectContaining({
@@ -303,6 +599,7 @@ describe('PublishService security boundaries', () => {
 
     await service.startService(SERVICE_ID, USER_ID);
 
+    await waitForExpectation(() => expect(updateWherePredicates.length).toBeGreaterThan(0));
     expect(updateWherePredicates.length).toBeGreaterThan(0);
     expect(
       updateWherePredicates.some((where) =>
@@ -354,5 +651,28 @@ function restoreEnvValue(name: string, value: string | undefined): void {
     delete process.env[name];
   } else {
     process.env[name] = value;
+  }
+}
+
+async function waitForExpectation(assertion: () => void): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+  throw lastError;
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
   }
 }

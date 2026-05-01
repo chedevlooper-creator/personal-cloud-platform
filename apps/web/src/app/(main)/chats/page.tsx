@@ -1,29 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   Bot,
-  ChevronRight,
-  Loader2,
   MessageCircle,
   Plus,
-  Send,
-  Square,
+  Search,
   Trash2,
-  User,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { agentApi, toastApiError } from '@/lib/api';
+import { useChatPanel } from '@/components/chat/chat-panel-context';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { agentApi, apiEndpoints, workspaceApi , toastApiError} from '@/lib/api';
-import { useUser } from '@/lib/auth';
-import { usePersonaStore } from '@/store/persona';
-import { useActiveSkillsStore } from '@/store/skills';
-import { ChatContextBar } from '@/components/workspace/chat-context-bar';
 import { cn } from '@/lib/utils';
 
 type Conversation = {
@@ -33,333 +27,254 @@ type Conversation = {
   updatedAt: string;
 };
 
-type Message = {
-  id: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  createdAt: string;
-  toolCalls?: ToolCallInfo[];
-};
+function groupConversations(convos: Conversation[]) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const last7 = new Date(today);
+  last7.setDate(last7.getDate() - 7);
 
-type ToolCallInfo = {
-  id: string;
-  name: string;
-  arguments: string;
-  result: string | null;
-  status: string;
-};
+  const groups: { label: string; items: Conversation[] }[] = [
+    { label: 'Bugün', items: [] },
+    { label: 'Dün', items: [] },
+    { label: 'Son 7 gün', items: [] },
+    { label: 'Daha eski', items: [] },
+  ];
 
-type TaskResponse = {
-  id: string;
-  status: string;
-  conversationId?: string;
-};
+  for (const c of convos) {
+    const d = new Date(c.updatedAt);
+    if (d >= today) groups[0].items.push(c);
+    else if (d >= yesterday) groups[1].items.push(c);
+    else if (d >= last7) groups[2].items.push(c);
+    else groups[3].items.push(c);
+  }
+
+  return groups.filter((g) => g.items.length > 0);
+}
 
 export default function ChatsPage() {
-  const { data: user } = useUser();
   const queryClient = useQueryClient();
-  const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
-  const [input, setInput] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
+  const { activeConversationId, setActiveConversationId, startNewChat } = useChatPanel();
+  const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
-  // Fetch conversations
-  const convosQuery = useQuery({
-    queryKey: ['conversations', user?.id],
-    enabled: Boolean(user?.id),
+  const { data, isLoading } = useQuery({
+    queryKey: ['conversations'],
     queryFn: async () => {
       const res = await agentApi.get('/agent/conversations');
       return (res.data?.conversations ?? res.data ?? []) as Conversation[];
     },
   });
 
-  // Fetch messages for selected conversation
-  const messagesQuery = useQuery({
-    queryKey: ['messages', selectedConvoId],
-    enabled: Boolean(selectedConvoId),
-    queryFn: async () => {
-      const res = await agentApi.get(`/agent/conversations/${selectedConvoId}/messages`);
-      return (res.data?.messages ?? res.data ?? []) as Message[];
+  const conversations = data ?? [];
+  const filtered = search
+    ? conversations.filter(
+        (c) =>
+          (c.title ?? '').toLowerCase().includes(search.toLowerCase()) ||
+          c.id.toLowerCase().includes(search.toLowerCase()),
+      )
+    : conversations;
+
+  const grouped = groupConversations(filtered);
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await agentApi.delete(`/agent/conversations/${id}`);
     },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (activeConversationId === id) {
+        setActiveConversationId(null);
+      }
+      toast.success('Sohbet silindi');
+    },
+    onError: (err) => toastApiError(err, 'Silinemedi'),
   });
 
-  const conversations = convosQuery.data ?? [];
-  const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);
-
-  // Auto-scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Send message
-  const sendMutation = useMutation({
-    mutationFn: async (prompt: string) => {
-      setIsStreaming(true);
-      // Get workspace ID
-      const wsRes = await workspaceApi.get('/workspaces');
-      const workspaces = wsRes.data?.workspaces ?? [];
-      const workspaceId = workspaces[0]?.id;
-
-      if (!workspaceId || !user?.id) throw new Error('No workspace or user');
-
-      const personaId = usePersonaStore.getState().activePersonaId;
-      const skillIds = useActiveSkillsStore.getState().activeSkillIds;
-
-      const res = await agentApi.post('/agent/tasks', {
-        workspaceId,
-        conversationId: selectedConvoId || undefined,
-        input: prompt,
-        personaId: personaId ?? undefined,
-        skillIds: skillIds.length > 0 ? skillIds : undefined,
-      });
-      return res.data as TaskResponse;
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      await agentApi.patch(`/agent/conversations/${id}`, { title });
     },
-    onSuccess: (data) => {
-      setInput('');
-      // Subscribe to live task events instead of polling.
-      subscribeToTask(data.id);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setEditingId(null);
+      toast.success('Yeniden adlandırıldı');
     },
-    onError: (err) => {
-      setIsStreaming(false);
-      toastApiError(err, 'Failed to send message');
-    },
+    onError: (err) => toastApiError(err, 'Adlandırılamadı'),
   });
 
-  const subscribeToTask = useCallback(
-    (taskId: string) => {
-      const url = `${apiEndpoints.agent}/agent/tasks/${taskId}/events`;
-      const es = new EventSource(url, { withCredentials: true });
+  const startRename = (c: Conversation) => {
+    setEditingId(c.id);
+    setEditValue(c.title ?? '');
+  };
 
-      const refresh = () => {
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
-        if (selectedConvoId) {
-          queryClient.invalidateQueries({ queryKey: ['messages', selectedConvoId] });
-        }
-      };
-
-      es.addEventListener('step', refresh);
-      es.addEventListener('task', (ev: MessageEvent) => {
-        refresh();
-        try {
-          const payload = JSON.parse(ev.data) as {
-            status?: string;
-            conversationId?: string | null;
-          };
-          // If a new conversation was created server-side, surface it.
-          if (payload.conversationId && !selectedConvoId) {
-            setSelectedConvoId(payload.conversationId);
-          }
-          if (
-            payload.status &&
-            ['completed', 'failed', 'cancelled'].includes(payload.status)
-          ) {
-            setIsStreaming(false);
-            es.close();
-          }
-        } catch {
-          // Ignore malformed payloads; the server still closed the stream
-          // on terminal status, and our es.onerror handler covers cleanup.
-        }
-      });
-
-      es.onerror = () => {
-        setIsStreaming(false);
-        es.close();
-      };
-    },
-    [queryClient, selectedConvoId],
-  );
-
-  const handleSend = () => {
-    const prompt = input.trim();
-    if (!prompt || isStreaming) return;
-    sendMutation.mutate(prompt);
+  const saveRename = (id: string) => {
+    if (editValue.trim()) {
+      renameMutation.mutate({ id, title: editValue.trim() });
+    } else {
+      setEditingId(null);
+    }
   };
 
   return (
     <div className="flex h-full">
       {/* Conversation List */}
-      <div className="hidden w-72 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+      <div className="flex w-72 shrink-0 flex-col border-r border-border bg-card">
         <div className="flex h-12 items-center justify-between border-b border-border px-3">
-          <span className="text-sm font-medium text-foreground">Conversations</span>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            title="New conversation"
-            aria-label="New conversation"
-            onClick={() => setSelectedConvoId(null)}
+          <span className="text-sm font-medium text-foreground">Sohbetler</span>
+          <button
+            type="button"
+            title="Yeni sohbet"
+            aria-label="Yeni sohbet"
+            onClick={startNewChat}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
           >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto">
-          {convosQuery.isLoading ? (
-            <div className="p-3"><LoadingSkeleton lines={4} /></div>
-          ) : conversations.length === 0 ? (
-            <p className="p-4 text-center text-xs text-muted-foreground">No conversations yet</p>
-          ) : (
-            <ul className="space-y-0.5 p-1.5">
-              {conversations.map((c) => (
-                <li key={c.id}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedConvoId(c.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedConvoId(c.id);
-                      }
-                    }}
-                    className={cn(
-                      'group flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                      selectedConvoId === c.id
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{c.title || 'Untitled'}</span>
-                    <button
-                      type="button"
-                      title="Delete conversation"
-                      aria-label="Delete conversation"
-                      className="ml-2 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-destructive group-hover:opacity-100"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(c.id); }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* Chat Area */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Messages */}
-        <div className="min-h-0 flex-1 overflow-auto px-4 py-6">
-          {!selectedConvoId && messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <EmptyState
-                icon={<MessageCircle className="h-6 w-6" />}
-                title="Start a conversation"
-                description="Send a message to your AI assistant. It can read/write files, run commands, and more."
-              />
-            </div>
-          ) : messagesQuery.isLoading ? (
-            <LoadingSkeleton lines={8} />
-          ) : (
-            <div className="mx-auto max-w-3xl space-y-4">
-              {messages.map((msg) => (
-                <div key={msg.id} className={cn('flex gap-3', msg.role === 'user' && 'justify-end')}>
-                  {msg.role !== 'user' && (
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </div>
-                  )}
-                  <div
-                    className={cn(
-                      'max-w-[85%] rounded-xl px-4 py-3 text-sm',
-                      msg.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-foreground'
-                    )}
-                  >
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
-                    {/* Tool calls */}
-                    {msg.toolCalls && msg.toolCalls.length > 0 && (
-                      <div className="mt-2 space-y-1.5">
-                        {msg.toolCalls.map((tc) => (
-                          <div key={tc.id} className="rounded-lg border border-border bg-background p-2 text-xs">
-                            <div className="flex items-center gap-1.5">
-                              <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                              <span className="font-medium text-foreground">{tc.name}</span>
-                              <StatusBadge variant={tc.status === 'completed' ? 'success' : tc.status === 'failed' ? 'error' : 'pending'}>
-                                {tc.status}
-                              </StatusBadge>
-                            </div>
-                            {tc.result && (
-                              <pre className="mt-1 max-h-24 overflow-auto rounded bg-muted p-1.5 text-[10px] text-muted-foreground">
-                                {tc.result.slice(0, 500)}
-                              </pre>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {msg.role === 'user' && (
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-              ))}
-              {isStreaming && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  AI is thinking...
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
 
-        {/* Input */}
-        <div className="border-t border-border bg-background p-4">
-          <div className="mx-auto max-w-3xl space-y-2">
-            <ChatContextBar />
-            <div className="flex items-end gap-2">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder="Send a message..."
-                rows={1}
-                className="min-h-[44px] max-h-36 flex-1 resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                aria-label="Chat message input"
-              />
-              <Button
-                size="icon"
-                onClick={handleSend}
-                disabled={!input.trim() || isStreaming}
-                title={isStreaming ? 'Stop' : 'Send message'}
-                aria-label={isStreaming ? 'Stop' : 'Send message'}
-              >
-                {isStreaming ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </div>
+        <div className="border-b border-border p-2">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Sohbetlerde ara..."
+              className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            />
           </div>
         </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-1.5">
+          {isLoading ? (
+            <div className="p-3">
+              <LoadingSkeleton lines={6} />
+            </div>
+          ) : grouped.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center p-4 text-center">
+              <MessageCircle className="h-8 w-8 text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">
+                {search ? 'Sonuç bulunamadı' : 'Henüz sohbet yok'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {grouped.map((group) => (
+                <div key={group.label}>
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.label}
+                  </div>
+                  <div className="space-y-0.5">
+                    {group.items.map((c) => {
+                      const isActive = activeConversationId === c.id;
+                      const isEditing = editingId === c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => setActiveConversationId(c.id)}
+                          className={cn(
+                            'group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
+                            isActive
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                          )}
+                        >
+                          {isEditing ? (
+                            <div className="flex min-w-0 flex-1 items-center gap-1">
+                              <input
+                                autoFocus
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveRename(c.id);
+                                  if (e.key === 'Escape') setEditingId(null);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="min-w-0 flex-1 rounded bg-background px-2 py-1 text-xs text-foreground outline-none ring-1 ring-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  saveRename(c.id);
+                                }}
+                                className="rounded p-1 text-success hover:bg-success/10"
+                              >
+                                <Check className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingId(null);
+                                }}
+                                className="rounded p-1 text-destructive hover:bg-destructive/10"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="min-w-0 flex-1 truncate">{c.title || 'İsimsiz'}</span>
+                              <div className="ml-2 flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startRename(c);
+                                  }}
+                                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  title="Yeniden adlandır"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteTarget(c.id);
+                                  }}
+                                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                  title="Sil"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Delete Confirmation */}
+      {/* Right side is empty because global chat panel handles the chat */}
+      <div className="hidden flex-1 items-center justify-center text-muted-foreground md:flex">
+        <EmptyState
+          icon={<Bot className="h-8 w-8" />}
+          title="Sohbet seçin veya yeni başlayın"
+          description="Sol panelden bir sohbet seçin veya sağ panelden yeni sohbet başlatın."
+        />
+      </div>
+
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={() => setDeleteTarget(null)}
-        title="Delete conversation"
-        description="This will permanently delete this conversation and all its messages."
-        confirmLabel="Delete"
+        title="Sohbeti sil"
+        description="Bu sohbet ve tüm mesajları kalıcı olarak silinecek."
+        confirmLabel="Sil"
         variant="destructive"
-        onConfirm={async () => {
-          if (!deleteTarget) return;
-          try {
-            await agentApi.delete(`/agent/conversations/${deleteTarget}`);
-            queryClient.invalidateQueries({ queryKey: ['conversations'] });
-            if (selectedConvoId === deleteTarget) setSelectedConvoId(null);
-            toast.success('Conversation deleted');
-          } catch (err) {
-            toastApiError(err, 'Failed to delete');
-          }
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget);
         }}
       />
     </div>

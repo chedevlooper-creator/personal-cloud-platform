@@ -9,8 +9,8 @@ export function formatBytes(bytes: number) {
 }
 
 export function formatDate(value: string | Date | null | undefined) {
-  if (!value) return 'Never';
-  return new Intl.DateTimeFormat(undefined, {
+  if (!value) return 'Yok';
+  return new Intl.DateTimeFormat('tr-TR', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

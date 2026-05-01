@@ -22,8 +22,8 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = 'Onayla',
+  cancelLabel = 'Vazgeç',
   variant = 'default',
   onConfirm,
   children,
@@ -48,7 +48,7 @@ export function ConfirmDialog({
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={() => onOpenChange(false)}
-        aria-label="Close dialog"
+        aria-label="Pencereyi kapat"
         tabIndex={-1}
       />
       <div className="relative z-10 mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
@@ -79,7 +79,7 @@ export function ConfirmDialog({
             onClick={handleConfirm}
             disabled={loading}
           >
-            {loading ? 'Processing...' : confirmLabel}
+            {loading ? 'İşleniyor...' : confirmLabel}
           </Button>
         </div>
       </div>

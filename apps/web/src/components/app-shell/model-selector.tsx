@@ -15,11 +15,11 @@ export function ModelSelector({
     <Button
       type="button"
       variant="outline"
-      title="Select model"
-      aria-label="Select model"
+      title="Model seç"
+      aria-label="Model seç"
       className={cn(
-        'rounded-full border-border bg-muted/50 text-foreground hover:bg-muted transition-all active:scale-[0.98]',
-        compact ? 'h-7 px-2.5 text-xs font-medium' : 'h-8 px-3 font-medium',
+              'rounded-full border-border bg-muted/50 text-foreground hover:bg-muted transition-all active:scale-[0.98]',
+        compact ? 'h-11 px-3 text-xs font-medium md:h-7 md:px-2.5' : 'h-8 px-3 font-medium',
       )}
     >
       <Cpu className={cn('text-foreground/80', compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} />

@@ -5,6 +5,7 @@ import Docker from 'dockerode';
 import { encryptEnvVars, decryptEnvVars, redactEnvVars } from './encryption';
 import { env } from './env';
 import { buildPublishSecurityOptions, resolvePublishImage } from './policy';
+import { WorkspaceMaterializer } from './workspace-materializer';
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/;
@@ -24,10 +25,18 @@ type HostedServiceUpdate = Partial<{
 
 type HostedServiceRow = typeof hostedServices.$inferSelect;
 
+type PublishLogger = {
+  error?: (...args: unknown[]) => void;
+  warn?: (...args: unknown[]) => void;
+};
+
 export class PublishService {
   private docker: Docker;
 
-  constructor() {
+  constructor(
+    private readonly logger?: PublishLogger,
+    private readonly materializer = new WorkspaceMaterializer(),
+  ) {
     this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
   }
 
@@ -118,8 +127,8 @@ export class PublishService {
       .set({ status: 'starting' })
       .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, userId)));
 
-    // Start asynchronously to not block the request
-    this.runContainer(service).catch(console.error);
+    // Start asynchronously to not block the request.
+    void this.runContainer(service);
     await emitAudit(userId, 'HOSTED_SERVICE_START', { serviceId });
 
     return { status: 'starting' };
@@ -138,7 +147,10 @@ export class PublishService {
         await container.stop();
         await container.remove();
       } catch (e) {
-        console.error(`Failed to stop container ${service.runnerProcessId}`, e);
+        this.logger?.error?.(
+          { err: e, containerId: service.runnerProcessId, serviceId },
+          'Failed to stop hosted service container',
+        );
       }
     }
 
@@ -154,7 +166,10 @@ export class PublishService {
   private async runContainer(service: HostedServiceRow) {
     try {
       const containerName = `hosted-${service.id}`;
-      const workspaceVolume = `/tmp/workspaces/${service.userId}/${service.workspaceId}`;
+      const workspaceVolume = await this.materializer.materialize(
+        service.userId,
+        service.workspaceId,
+      );
 
       // In MVP, we just use node alpine or nginx depending on kind
       let image = resolvePublishImage(service.kind as 'static' | 'vite' | 'node');
@@ -231,6 +246,15 @@ export class PublishService {
         .where(and(eq(hostedServices.id, service.id), eq(hostedServices.userId, service.userId)));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown publish container error';
+      this.logger?.error?.(
+        {
+          err: error,
+          serviceId: service.id,
+          userId: service.userId,
+          workspaceId: service.workspaceId,
+        },
+        'Hosted service startup failed',
+      );
       await db
         .update(hostedServices)
         .set({

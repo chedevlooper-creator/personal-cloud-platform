@@ -40,17 +40,18 @@ export function CommandPalette({
 
   const actions = useMemo<CommandAction[]>(
     () => [
-      {
-        id: 'new-chat',
-        label: 'New chat',
-        hint: 'Start a conversation',
-        icon: MessageSquarePlus,
-        shortcut: '⌘N',
-        run: () => {
-          router.push('/chats');
-          window.dispatchEvent(new Event('app:new-chat'));
+        {
+          id: 'new-chat',
+          label: 'New chat',
+          hint: 'Start a conversation',
+          icon: MessageSquarePlus,
+          shortcut: '⌘N',
+          run: () => {
+            router.push('/chats');
+            window.dispatchEvent(new Event('app:new-chat'));
+            window.dispatchEvent(new Event('app:toggle-chat-panel'));
+          },
         },
-      },
       {
         id: 'search-files',
         label: 'Search files',

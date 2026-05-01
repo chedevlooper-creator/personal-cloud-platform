@@ -537,6 +537,38 @@ describe('WorkspaceService', () => {
     );
     expect(metadataUpdate?.set.storageUsed).toBe(16);
   });
+
+  it('encodes sync manifest file content from raw object bytes', async () => {
+    const storage = new MemoryStorage();
+    const workspaceService = new WorkspaceService(logger, storage);
+    const bytes = Buffer.from([0xff, 0x00, 0x80]);
+    await storage.putBuffer('user-1/workspace-1/image.bin', bytes, 'application/octet-stream');
+    mockDb.query.workspaceFiles.findMany.mockResolvedValue([
+      {
+        id: 'file-binary',
+        workspaceId: 'workspace-1',
+        path: '/image.bin',
+        name: 'image.bin',
+        mimeType: 'application/octet-stream',
+        size: bytes.length.toString(),
+        storageKey: 'user-1/workspace-1/image.bin',
+        isDirectory: '0',
+        parentPath: null,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      },
+    ]);
+
+    const manifest = await workspaceService.buildSyncManifest('workspace-1', 'user-1');
+
+    expect(manifest.files).toContainEqual(
+      expect.objectContaining({
+        path: '/image.bin',
+        contentBase64: bytes.toString('base64'),
+      }),
+    );
+  });
 });
 
 function predicateContainsEq(predicate: unknown, column: unknown, value: unknown): boolean {

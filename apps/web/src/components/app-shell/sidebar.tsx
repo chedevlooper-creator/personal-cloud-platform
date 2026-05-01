@@ -29,25 +29,26 @@ import { SidebarItem } from '@/components/app-shell/sidebar-item';
 import { WorkspaceAccountCard } from '@/components/app-shell/workspace-account-card';
 
 const primaryItems = [
-  { label: 'Home', href: '/dashboard', icon: Home },
-  { label: 'Files', href: '/files', icon: Folder, searchable: true },
-  { label: 'Chats', href: '/chats', icon: MessagesSquare },
-  { label: 'Automations', href: '/automations', icon: Clock3 },
-  { label: 'Space', href: '/space', icon: LayoutGrid },
-  { label: 'Skills', href: '/skills', icon: Sparkles },
-  { label: 'Computer', href: '/computer', icon: SquareTerminal },
+  { label: 'Ana sayfa', href: '/dashboard', icon: Home },
+  { label: 'Çalışma alanları', href: '/workspaces', icon: LayoutGrid },
+  { label: 'Dosyalar', href: '/files', icon: Folder, searchable: true },
+  { label: 'Sohbetler', href: '/chats', icon: MessagesSquare },
+  { label: 'Otomasyonlar', href: '/automations', icon: Clock3 },
+  { label: 'Bilgisayar', href: '/computer', icon: SquareTerminal },
 ];
 
 const moreItems = [
   { label: 'Terminal', href: '/terminal', icon: SquareTerminal },
   { label: 'Hosting', href: '/hosting', icon: Globe2 },
-  { label: 'Datasets', href: '/datasets', icon: Database, badge: 'Beta' as const },
-  { label: 'Browser', href: '/browser', icon: Globe },
-  { label: 'Apps', href: '/apps', icon: Boxes },
-  { label: 'Channels', href: '/channels', icon: Plug },
+  { label: 'Tarayıcı', href: '/browser', icon: Globe },
+  { label: 'Veri setleri', href: '/datasets', icon: Database, badge: 'Beta' as const },
+  { label: 'Yetenekler', href: '/skills', icon: Sparkles },
+  { label: 'Alan', href: '/space', icon: LayoutGrid },
+  { label: 'Uygulamalar', href: '/apps', icon: Boxes },
+  { label: 'Kanallar', href: '/channels', icon: Plug },
 ];
 
-const secondaryItems = [{ label: 'Settings', href: '/settings', icon: Settings }];
+const secondaryItems = [{ label: 'Ayarlar', href: '/settings', icon: Settings }];
 
 function isActive(pathname: string, href: string) {
   if (href === '/dashboard' && pathname === '/dashboard') return true;
@@ -69,11 +70,11 @@ export function Sidebar({
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(true);
 
-  const sidebarContent = (
+  const renderSidebarContent = (isCollapsed: boolean) => (
     <aside
       className={cn(
         'relative flex h-full flex-col overflow-hidden border-r border-border bg-sidebar text-sidebar-foreground transition-[width] duration-200',
-        collapsed ? 'w-[56px]' : 'w-[220px]',
+        isCollapsed ? 'w-[56px]' : 'w-[232px]',
       )}
     >
       <div className="flex h-14 items-center justify-between px-3 border-b border-border/50">
@@ -81,7 +82,7 @@ export function Sidebar({
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
             <BrainCircuit className="h-4 w-4" aria-hidden="true" />
           </div>
-          {!collapsed && (
+          {!isCollapsed && (
             <span className="truncate text-sm font-semibold tracking-tight text-foreground">
               Zihinbulut
             </span>
@@ -89,10 +90,10 @@ export function Sidebar({
         </div>
         <Button
           type="button"
-          size="icon-sm"
+          size="icon-touch"
           variant="ghost"
-          title="Close menu"
-          aria-label="Close menu"
+          title="Menüyü kapat"
+          aria-label="Menüyü kapat"
           className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground md:hidden"
           onClick={() => onMobileOpenChange(false)}
         >
@@ -108,15 +109,15 @@ export function Sidebar({
               href={item.href}
               label={item.label}
               icon={item.icon}
-              collapsed={collapsed}
+              collapsed={isCollapsed}
               active={isActive(pathname, item.href)}
               action={
                 item.searchable ? (
                   <button
                     type="button"
-                    title="Search files"
-                    aria-label="Search files"
-                    className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    title="Dosyalarda ara"
+                    aria-label="Dosyalarda ara"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                     onClick={(event) => {
                       event.preventDefault();
                       window.dispatchEvent(new Event('app:open-command-palette'));
@@ -133,21 +134,21 @@ export function Sidebar({
         <div className="mt-0.5">
           <button
             type="button"
-            title="More"
-            aria-label="Toggle more navigation"
+            title="Sistem"
+            aria-label="Sistem menüsünü aç veya kapat"
             aria-expanded={moreOpen}
             aria-controls="sidebar-more-section"
             className={cn(
-              'group flex h-7 w-full items-center gap-1.5 rounded-md px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-sidebar-foreground',
-              collapsed && 'mx-auto w-8 justify-center px-0',
+              'group flex h-9 w-full items-center gap-1.5 rounded-md px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-sidebar-foreground md:h-7',
+              isCollapsed && 'mx-auto w-9 justify-center px-0 md:w-8',
             )}
             onClick={() => setMoreOpen((value) => !value)}
           >
-            {collapsed ? (
+            {isCollapsed ? (
               <MoreHorizontal className="h-[17px] w-[17px]" />
             ) : (
               <>
-                <span>More</span>
+                <span>Sistem</span>
                 <ChevronDown
                   className={cn(
                     'h-3 w-3 transition-transform',
@@ -165,7 +166,7 @@ export function Sidebar({
                   href={item.href}
                   label={item.label}
                   icon={item.icon}
-                  collapsed={collapsed}
+                  collapsed={isCollapsed}
                   active={isActive(pathname, item.href)}
                   badge={item.badge}
                 />
@@ -181,7 +182,7 @@ export function Sidebar({
               href={item.href}
               label={item.label}
               icon={item.icon}
-              collapsed={collapsed}
+              collapsed={isCollapsed}
               active={isActive(pathname, item.href)}
             />
           ))}
@@ -191,31 +192,23 @@ export function Sidebar({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-sidebar to-transparent" />
 
       <div className="relative z-10 border-t border-border/50 p-2 bg-sidebar">
-        {!collapsed && (
-          <div className="mb-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2 py-2 text-[11px] text-muted-foreground">
-            <div className="flex items-center justify-between gap-2">
-              <span>Share Zo, earn rewards</span>
-              <X className="h-3 w-3" aria-hidden="true" />
-            </div>
-          </div>
-        )}
-        <WorkspaceAccountCard user={user} collapsed={collapsed} />
+        <WorkspaceAccountCard user={user} collapsed={isCollapsed} />
       </div>
     </aside>
   );
 
   return (
     <>
-      <div className="hidden shrink-0 md:block">{sidebarContent}</div>
+      <div className="hidden shrink-0 md:block">{renderSidebarContent(collapsed)}</div>
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <button
             type="button"
-            aria-label="Close sidebar overlay"
+            aria-label="Menü kaplama alanını kapat"
             className="absolute inset-0 bg-black/60"
             onClick={() => onMobileOpenChange(false)}
           />
-          <div className="relative h-full w-[200px] max-w-[88vw]">{sidebarContent}</div>
+          <div className="relative h-full w-[232px] max-w-[88vw]">{renderSidebarContent(false)}</div>
         </div>
       )}
     </>

@@ -183,7 +183,7 @@ export default function TerminalPage() {
       >
         {activeSession && activeSession.lines.length === 0 && (
           <div className="text-muted-foreground/70 mb-4">
-            Zihinbulut Terminal — çalışma alanı sandbox'ı
+            Zihinbulut Terminal — çalışma alanı sandbox&apos;ı
             <br />
             Başlamak için bir komut yazın.
           </div>

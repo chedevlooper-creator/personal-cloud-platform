@@ -97,15 +97,15 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             type="button"
             onClick={copy}
             className="mt-1 flex items-center gap-1 px-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-            aria-label="Copy message"
+            aria-label="Mesajı kopyala"
           >
             {copied ? (
               <>
-                <Check className="h-3 w-3" /> Copied
+                <Check className="h-3 w-3" /> Kopyalandı
               </>
             ) : (
               <>
-                <Copy className="h-3 w-3" /> Copy
+                <Copy className="h-3 w-3" /> Kopyala
               </>
             )}
           </button>
@@ -126,7 +126,7 @@ function TypingIndicator() {
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-border/60">
         <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
-      <div className="rounded-xl rounded-tl-sm bg-card px-4 py-3 ring-1 ring-border/60" role="status" aria-live="polite" aria-label="Agent is typing">
+      <div className="rounded-xl rounded-tl-sm bg-card px-4 py-3 ring-1 ring-border/60" role="status" aria-live="polite" aria-label="Agent yazıyor">
         <div className="flex items-center gap-1.5">
           <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-bounce" />
           <span className="h-1 w-1 rounded-full bg-muted-foreground motion-safe:animate-bounce [animation-delay:140ms]" />

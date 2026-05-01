@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Check, Copy, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css';
 
 /**
  * Lightweight, dependency-free Markdown renderer tuned for chat messages.
@@ -152,7 +154,6 @@ function renderInline(text: string): React.ReactNode {
   const nodes: React.ReactNode[] = [];
   let rest = text;
   let key = 0;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const codeIdx = rest.indexOf('`');
     const boldIdx = rest.indexOf('**');
@@ -243,6 +244,15 @@ function matchItalic(text: string): number {
 
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const codeRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (codeRef.current) {
+      hljs.highlightElement(codeRef.current);
+    }
+  }, [code, lang]);
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
@@ -252,30 +262,74 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
       /* noop */
     }
   };
+
+  const apply = () => {
+    // Suggest a filename based on language
+    const extMap: Record<string, string> = {
+      javascript: 'js', js: 'js', typescript: 'ts', ts: 'ts',
+      jsx: 'jsx', tsx: 'tsx', python: 'py', py: 'py',
+      java: 'java', cpp: 'cpp', c: 'c', go: 'go',
+      rust: 'rs', rs: 'rs', php: 'php', ruby: 'rb',
+      html: 'html', css: 'css', json: 'json', yaml: 'yaml',
+      yml: 'yml', markdown: 'md', md: 'md', sql: 'sql',
+      bash: 'sh', shell: 'sh', sh: 'sh',
+    };
+    const ext = extMap[lang.toLowerCase()] ?? '';
+    const filename = ext ? `generated.${ext}` : 'generated.txt';
+
+    window.dispatchEvent(
+      new CustomEvent('app:apply-code-to-workspace', {
+        detail: { code, filename, lang },
+      }),
+    );
+    setApplied(true);
+    setTimeout(() => setApplied(false), 1500);
+  };
+
   return (
-    <div className="group/code my-2 overflow-hidden rounded-lg border border-white/[0.06] bg-black/40">
-      <div className="flex items-center justify-between border-b border-white/[0.04] bg-white/[0.02] px-3 py-1">
+    <div className="group/code my-2 overflow-hidden rounded-lg border border-white/[0.06] bg-[#0d1117]">
+      <div className="flex items-center justify-between border-b border-white/[0.04] bg-white/[0.02] px-3 py-1.5">
         <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-zinc-500">
           {lang || 'code'}
         </span>
-        <button
-          type="button"
-          onClick={copy}
-          className="flex items-center gap-1 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500 transition-colors hover:text-zinc-200"
-        >
-          {copied ? (
-            <>
-              <Check className="h-3 w-3" /> Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-3 w-3" /> Copy
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={apply}
+            className="flex items-center gap-1 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500 transition-colors hover:text-zinc-200"
+            title="Çalışma alanına kaydet"
+          >
+            {applied ? (
+              <>
+                <Check className="h-3 w-3" /> Uygulandı
+              </>
+            ) : (
+              <>
+                <Save className="h-3 w-3" /> Uygula
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={copy}
+            className="flex items-center gap-1 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500 transition-colors hover:text-zinc-200"
+          >
+            {copied ? (
+              <>
+                <Check className="h-3 w-3" /> Kopyalandı
+              </>
+            ) : (
+              <>
+                <Copy className="h-3 w-3" /> Kopyala
+              </>
+            )}
+          </button>
+        </div>
       </div>
-      <pre className="overflow-x-auto px-3 py-2 font-mono text-[12.5px] leading-[1.6] text-zinc-100">
-        <code>{code}</code>
+      <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[12.5px] leading-[1.6]">
+        <code ref={codeRef} className={lang ? `language-${lang}` : undefined}>
+          {code}
+        </code>
       </pre>
     </div>
   );

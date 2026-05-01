@@ -28,11 +28,11 @@ export function SidebarItem({
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group relative flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group relative flex h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9',
         active
           ? 'bg-sidebar-accent text-sidebar-foreground shadow-[inset_0_1px_0_0_hsl(var(--border)/0.4)]'
           : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
-        collapsed ? 'mx-auto h-8 w-8 justify-center px-0' : 'h-8 text-[13px]',
+        collapsed ? 'mx-auto h-10 w-10 justify-center px-0 md:h-8 md:w-8' : 'md:h-8 md:text-[13px]',
       )}
     >
       {active && !collapsed && (

@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import crypto from 'crypto';
-import { isUnsafeEnvValue, resolveProductionValue } from '@pcp/shared';
+import { isUnsafeEnvValue, resolveProductionValue, resolveSecret } from '@pcp/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3006),
   DATABASE_URL: z.string().url().optional(),
   ENCRYPTION_KEY: z.string().optional(),
+  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002/api'),
+  INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  PUBLISH_WORKSPACE_HOST_ROOT: z.string().default('/tmp/workspaces'),
   PUBLISH_SECCOMP_PROFILE: z.string().optional(),
   PUBLISH_APPARMOR_PROFILE: z.string().optional(),
   PUBLISH_DOCKER_NETWORK: z.string().default('pcp-publish'),
@@ -20,6 +23,14 @@ export const env = {
   PORT: parsed.PORT,
   DATABASE_URL: resolveProductionValue(ctx, 'DATABASE_URL', parsed.DATABASE_URL),
   ENCRYPTION_KEY: resolveEncryptionKey(parsed.ENCRYPTION_KEY),
+  WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
+  INTERNAL_SERVICE_TOKEN: resolveSecret(
+    ctx,
+    'INTERNAL_SERVICE_TOKEN',
+    parsed.INTERNAL_SERVICE_TOKEN,
+    32,
+  ),
+  PUBLISH_WORKSPACE_HOST_ROOT: parsed.PUBLISH_WORKSPACE_HOST_ROOT,
   PUBLISH_SECCOMP_PROFILE: parsed.PUBLISH_SECCOMP_PROFILE,
   PUBLISH_APPARMOR_PROFILE: parsed.PUBLISH_APPARMOR_PROFILE,
   PUBLISH_DOCKER_NETWORK: parsed.PUBLISH_DOCKER_NETWORK,

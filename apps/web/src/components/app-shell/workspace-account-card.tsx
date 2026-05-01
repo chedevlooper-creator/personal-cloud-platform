@@ -15,9 +15,9 @@ export function WorkspaceAccountCard({
     return (
       <button
         type="button"
-        title="Account"
-        aria-label="Account"
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-xs font-bold text-sidebar-foreground hover:bg-sidebar-accent/80"
+        title="Hesap"
+        aria-label="Hesap"
+        className="flex h-10 w-10 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-xs font-bold text-sidebar-foreground hover:bg-sidebar-accent/80 md:h-9 md:w-9"
       >
         {name.charAt(0).toUpperCase()}
       </button>
@@ -28,7 +28,7 @@ export function WorkspaceAccountCard({
     <button
       type="button"
       className={cn(
-        'flex h-9 w-full min-w-0 items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2 text-left transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2 text-left transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9',
       )}
     >
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-[11px] font-bold text-sidebar-primary-foreground">

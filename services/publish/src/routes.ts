@@ -16,7 +16,7 @@ function sendUnauthorized(reply: FastifyReply) {
 }
 
 export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
-  const publishService = new PublishService();
+  const publishService = new PublishService(app.log);
 
   app.post(
     '/hosted-services',

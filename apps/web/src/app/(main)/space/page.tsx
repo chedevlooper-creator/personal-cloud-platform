@@ -35,8 +35,6 @@ type Snapshot = {
   createdAt: string;
 };
 
-type SnapshotsResponse = { snapshots: Snapshot[] };
-
 function parseBytes(value: number | string | null | undefined): number {
   if (value == null) return 0;
   const n = typeof value === 'string' ? Number(value) : value;

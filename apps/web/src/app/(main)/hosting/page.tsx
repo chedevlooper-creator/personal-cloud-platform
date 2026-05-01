@@ -194,12 +194,13 @@ export default function HostingPage() {
           <p className="text-sm text-muted-foreground">Deploy workspace apps as hosted services</p>
         </div>
         <Button
-          size="sm"
+          size="touch"
+          className="md:h-7 md:px-2.5 md:text-[0.8rem]"
           onClick={() => setShowCreate((v) => !v)}
           disabled={!hostingReady || workspaces.length === 0}
         >
           <Rocket className="mr-1.5 h-3.5 w-3.5" />
-          Create service
+          Servis oluştur
         </Button>
       </div>
 

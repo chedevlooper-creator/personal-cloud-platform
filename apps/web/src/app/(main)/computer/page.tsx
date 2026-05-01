@@ -1,5 +1,6 @@
 'use client';
 
+import type { ComponentType } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import {
@@ -63,7 +64,7 @@ function StatTile({
   href,
   caption,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   href?: string;
@@ -110,6 +111,7 @@ export default function ComputerPage() {
     })),
   });
   const servicesLoading = servicesResults.some((r) => r.isLoading);
+  const servicesError = servicesResults.some((r) => r.isError) || workspacesQuery.isError;
   const services = servicesResults.flatMap((r) => r.data ?? []);
 
   const browserQuery = useQuery({
@@ -144,10 +146,9 @@ export default function ComputerPage() {
           <Layers3 className="h-6 w-6" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Computer</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Bilgisayar</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            A live snapshot of everything currently running for you: workspaces, hosted services,
-            cloud browser sessions, and scheduled automations.
+            Çalışma alanları, yayınlanan servisler, bulut tarayıcı oturumları ve otomasyonlar için canlı sistem özeti.
           </p>
         </div>
       </header>
@@ -155,52 +156,60 @@ export default function ComputerPage() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={Server}
-          label="Workspaces"
+          label="Çalışma alanları"
           value={workspaces.length}
           href="/workspaces"
           caption={
-            workspaces.length > 0
-              ? `${formatBytes(totalStorage)} used across all workspaces`
-              : 'No workspaces yet'
+            workspacesQuery.isError
+              ? 'Workspace servisine ulaşılamıyor'
+              : workspaces.length > 0
+                ? `${formatBytes(totalStorage)} kullanılıyor`
+                : 'Henüz çalışma alanı yok'
           }
         />
         <StatTile
           icon={Globe2}
-          label="Hosted services"
+          label="Servisler"
           value={`${runningServices}/${services.length}`}
           href="/hosting"
           caption={
-            services.length > 0
-              ? `${runningServices} running, ${services.length - runningServices} stopped`
-              : 'Nothing deployed'
+            servicesError
+              ? 'Publish servisine ulaşılamıyor'
+              : services.length > 0
+                ? `${runningServices} çalışıyor, ${services.length - runningServices} durdu`
+                : 'Yayınlanan servis yok'
           }
         />
         <StatTile
           icon={Globe}
-          label="Browser sessions"
+          label="Tarayıcı oturumları"
           value={browserSessions.length}
           href="/browser"
           caption={
             browserSessions[0]?.url
               ? (() => {
                   try {
-                    return `Latest: ${new URL(browserSessions[0]!.url!).hostname}`;
+                    return `Son: ${new URL(browserSessions[0]!.url!).hostname}`;
                   } catch {
-                    return 'Active';
+                    return 'Aktif';
                   }
                 })()
-              : 'No active sessions'
+              : browserQuery.isError
+                ? 'Browser servisine ulaşılamıyor'
+                : 'Aktif oturum yok'
           }
         />
         <StatTile
           icon={Clock3}
-          label="Automations"
+          label="Otomasyonlar"
           value={`${enabledAutomations}/${automations.length}`}
           href="/automations"
           caption={
             automations.length > 0
-              ? `${enabledAutomations} enabled, ${automations.length - enabledAutomations} paused`
-              : 'No automations yet'
+              ? `${enabledAutomations} aktif, ${automations.length - enabledAutomations} duraklatıldı`
+              : automationsQuery.isError
+                ? 'Agent servisine ulaşılamıyor'
+                : 'Otomasyon yok'
           }
         />
       </section>
@@ -210,19 +219,21 @@ export default function ComputerPage() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Globe2 className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground">Hosted services</h2>
+              <h2 className="text-sm font-semibold text-foreground">Servisler</h2>
             </div>
             <Link
               href="/hosting"
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              Manage →
+              Yönet
             </Link>
           </div>
           {servicesLoading ? (
-            <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+            <div className="p-4 text-sm text-muted-foreground">Servisler yükleniyor...</div>
+          ) : servicesError ? (
+            <div className="p-4 text-sm text-destructive">Publish servisine ulaşılamıyor.</div>
           ) : services.length === 0 ? (
-            <div className="p-4 text-sm text-muted-foreground">No services deployed yet.</div>
+            <div className="p-4 text-sm text-muted-foreground">Henüz servis yayınlanmadı.</div>
           ) : (
             <ul className="divide-y divide-border">
               {services.slice(0, 5).map((svc) => (
@@ -259,19 +270,21 @@ export default function ComputerPage() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground">Browser sessions</h2>
+              <h2 className="text-sm font-semibold text-foreground">Tarayıcı oturumları</h2>
             </div>
             <Link
               href="/browser"
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              Open →
+              Aç
             </Link>
           </div>
           {browserQuery.isLoading ? (
-            <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+            <div className="p-4 text-sm text-muted-foreground">Oturumlar yükleniyor...</div>
+          ) : browserQuery.isError ? (
+            <div className="p-4 text-sm text-destructive">Browser servisine ulaşılamıyor.</div>
           ) : browserSessions.length === 0 ? (
-            <div className="p-4 text-sm text-muted-foreground">No active sessions.</div>
+            <div className="p-4 text-sm text-muted-foreground">Aktif oturum yok.</div>
           ) : (
             <ul className="divide-y divide-border">
               {browserSessions.slice(0, 5).map((s) => (
@@ -280,7 +293,7 @@ export default function ComputerPage() {
                     {s.title || s.url || s.id}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Last active {formatDate(s.lastUsedAt)}
+                    Son aktivite {formatDate(s.lastUsedAt)}
                   </div>
                 </li>
               ))}
@@ -292,19 +305,21 @@ export default function ComputerPage() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground">Automations</h2>
+              <h2 className="text-sm font-semibold text-foreground">Otomasyonlar</h2>
             </div>
             <Link
               href="/automations"
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              Manage →
+              Yönet
             </Link>
           </div>
           {automationsQuery.isLoading ? (
-            <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+            <div className="p-4 text-sm text-muted-foreground">Otomasyonlar yükleniyor...</div>
+          ) : automationsQuery.isError ? (
+            <div className="p-4 text-sm text-destructive">Agent servisine ulaşılamıyor.</div>
           ) : automations.length === 0 ? (
-            <div className="p-4 text-sm text-muted-foreground">No automations scheduled.</div>
+            <div className="p-4 text-sm text-muted-foreground">Planlanmış otomasyon yok.</div>
           ) : (
             <ul className="divide-y divide-border">
               {automations.slice(0, 5).map((a) => (
@@ -315,7 +330,7 @@ export default function ComputerPage() {
                       {a.scheduleType === 'cron'
                         ? (a.cronExpression ?? 'cron')
                         : a.scheduleType === 'interval'
-                          ? `every ${a.intervalSeconds ?? '?'}s`
+                          ? `${a.intervalSeconds ?? '?'} saniyede bir`
                           : a.scheduleType}
                     </div>
                   </div>
@@ -326,7 +341,7 @@ export default function ComputerPage() {
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >
-                    {a.enabled ? 'enabled' : 'paused'}
+                    {a.enabled ? 'aktif' : 'duraklatıldı'}
                   </span>
                 </li>
               ))}
@@ -338,7 +353,7 @@ export default function ComputerPage() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Cpu className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground">Quick links</h2>
+              <h2 className="text-sm font-semibold text-foreground">Hızlı bağlantılar</h2>
             </div>
           </div>
           <ul className="divide-y divide-border">
@@ -357,7 +372,7 @@ export default function ComputerPage() {
                 className="flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/40"
               >
                 <span className="flex items-center gap-2">
-                  <Boxes className="h-4 w-4" /> Space (storage &amp; resources)
+                  <Boxes className="h-4 w-4" /> Alan ve kaynaklar
                 </span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </Link>
@@ -368,7 +383,7 @@ export default function ComputerPage() {
                 className="flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/40"
               >
                 <span className="flex items-center gap-2">
-                  <Camera className="h-4 w-4" /> Snapshots
+                  <Camera className="h-4 w-4" /> Anlık görüntüler
                 </span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </Link>
@@ -379,7 +394,7 @@ export default function ComputerPage() {
                 className="flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/40"
               >
                 <span className="flex items-center gap-2">
-                  <Database className="h-4 w-4" /> Datasets
+                  <Database className="h-4 w-4" /> Veri setleri
                 </span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </Link>
@@ -390,7 +405,7 @@ export default function ComputerPage() {
                 className="flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/40"
               >
                 <span className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" /> Skills
+                  <Sparkles className="h-4 w-4" /> Yetenekler
                 </span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </Link>

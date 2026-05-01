@@ -90,7 +90,7 @@ const start = async () => {
     app.log.info(`Publish service listening on port ${env.PORT}`);
 
     if (process.env.HOSTED_SERVICE_HEALTH_DISABLED !== '1') {
-      const publishService = new PublishService();
+      const publishService = new PublishService(app.log);
       healthDaemon = startHealthDaemon({ publishService, logger: app.log });
     }
   } catch (err) {

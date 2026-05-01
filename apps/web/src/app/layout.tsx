@@ -1,8 +1,8 @@
-import type { Metadata, Viewport } from "next";
-import type React from "react";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { Providers } from "@/components/providers";
+import type { Metadata, Viewport } from 'next';
+import type React from 'react';
+import { Geist, Geist_Mono } from 'next/font/google';
+import './globals.css';
+import { Providers } from '@/components/providers';
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -17,8 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zihinbulut",
-  description: "Kişisel AI bulut bilgisayarınız — dosyalar, sohbet, terminal, otomasyonlar ve hosting tek çalışma alanında.",
+  title: 'Zihinbulut',
+  description:
+    'Kişisel AI bulut bilgisayarınız: dosyalar, sohbet, terminal, otomasyonlar ve hosting tek çalışma alanında.',
 };
 
 export const viewport: Viewport = {
@@ -32,16 +33,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="tr" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`}
       >
         <a href="#main-content" className="skip-link">
-          Skip to main content
+          Ana içeriğe geç
         </a>
-        <Providers>
-          {children}
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

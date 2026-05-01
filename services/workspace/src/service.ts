@@ -684,8 +684,8 @@ export class WorkspaceService {
 
       if (!isDirectory && row.storageKey && size <= maxInlineBytes) {
         try {
-          const text = await this.storage.getText(row.storageKey);
-          contentBase64 = Buffer.from(text, 'utf8').toString('base64');
+          const content = await this.storage.getBuffer(row.storageKey);
+          contentBase64 = content.toString('base64');
         } catch {
           contentBase64 = null;
         }

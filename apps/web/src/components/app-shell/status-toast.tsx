@@ -18,10 +18,10 @@ export function StatusToast({ isThinking, onStop }: { isThinking: boolean; onSto
           <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
         </div>
         <span className="text-[13px] font-medium tracking-tight text-foreground">
-          Reasoning
+          Düşünüyor
         </span>
         <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-          Esc to cancel
+          Esc ile durdur
         </span>
       </div>
       <Button
@@ -32,7 +32,7 @@ export function StatusToast({ isThinking, onStop }: { isThinking: boolean; onSto
         className="h-7 gap-1.5 px-2.5 text-xs font-medium"
       >
         <Square className="h-3 w-3" />
-        Stop
+        Durdur
       </Button>
     </div>
   );

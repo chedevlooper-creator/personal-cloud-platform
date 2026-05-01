@@ -41,7 +41,7 @@ export function PersonaSelector({ compact }: { compact?: boolean }) {
     activePersonaName ||
     personas.find((p) => p.id === activePersonaId)?.name ||
     personas.find((p) => p.isDefault)?.name ||
-    'Default';
+    'Varsayılan';
 
   return (
     <DropdownMenu>
@@ -52,11 +52,11 @@ export function PersonaSelector({ compact }: { compact?: boolean }) {
             type="button"
             variant="outline"
             size="sm"
-            title={`Active persona: ${currentName}`}
-            aria-label="Select assistant persona"
+            title={`Aktif persona: ${currentName}`}
+            aria-label="Asistan personası seç"
             className={cn(
               'rounded-full border-border bg-muted/50 text-foreground hover:bg-muted transition-all active:scale-[0.98]',
-              compact && 'h-7 w-7 px-0',
+              compact && 'h-11 w-11 px-0 md:h-7 md:w-7',
             )}
           >
             <Bot className={cn('h-4 w-4', !compact && 'mr-1.5')} />
@@ -70,7 +70,7 @@ export function PersonaSelector({ compact }: { compact?: boolean }) {
           onClick={() => setActivePersona(null, null)}
           className="flex items-center justify-between"
         >
-          <span>Default (none)</span>
+          <span>Varsayılan</span>
           {!activePersonaId && <Check className="h-3.5 w-3.5" />}
         </DropdownMenuItem>
         {personas.length > 0 && <DropdownMenuSeparator />}
@@ -86,7 +86,7 @@ export function PersonaSelector({ compact }: { compact?: boolean }) {
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem render={(props) => <Link {...props} href="/personas" />}>
-          Manage personas...
+          Personaları yönet...
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

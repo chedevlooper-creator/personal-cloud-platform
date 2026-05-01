@@ -24,6 +24,11 @@ export function KeyboardShortcutProvider({ children }: { children: React.ReactNo
         window.dispatchEvent(new Event('app:new-chat'));
       }
 
+      if (key === 'j') {
+        event.preventDefault();
+        window.dispatchEvent(new Event('app:toggle-chat-panel'));
+      }
+
       if (key === 'u') {
         event.preventDefault();
         window.dispatchEvent(new Event('app:open-file-upload'));
@@ -31,12 +36,15 @@ export function KeyboardShortcutProvider({ children }: { children: React.ReactNo
     };
 
     const openCommandPalette = () => setCommandOpen(true);
+    const toggleChatPanel = () => window.dispatchEvent(new Event('app:toggle-chat-panel'));
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('app:open-command-palette', openCommandPalette);
+    window.addEventListener('app:toggle-chat-panel', toggleChatPanel);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('app:open-command-palette', openCommandPalette);
+      window.removeEventListener('app:toggle-chat-panel', toggleChatPanel);
     };
   }, []);
 
