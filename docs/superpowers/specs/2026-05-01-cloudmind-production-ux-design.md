@@ -19,9 +19,8 @@ prototype. The repository is a pnpm monorepo with:
 - `packages/db` as the sole Drizzle schema and migration owner.
 - `packages/shared` for Zod DTOs imported directly from source.
 
-The live checkout is clean on `master`. Prior Codex work exists in
-`stash@{0}: codex-before-pull-2026-05-01`; it must be inspected and integrated
-selectively rather than applied wholesale.
+The current checkout has no local stash entries. Current source and the latest
+Superpowers audit report are the source of truth for follow-up work.
 
 ## Product Goal
 
@@ -58,19 +57,15 @@ system safer, more coherent, and easier to verify.
 
 ## Selected Design
 
-### Phase 0: Source and Stash Reconciliation
+### Phase 0: Source and Audit Reconciliation
 
-Start from the current clean `master` checkout. Inspect the prior stash before
+Start from the current `master` checkout and the latest Superpowers audit before
 making code changes:
 
-- Identify fixes already present upstream.
-- Identify fixes still needed.
-- Identify obsolete or conflicting changes that should stay out.
-- Recover only the useful slices, preferably file-by-file or hunk-by-hunk.
-
-No stash pop should be used for this phase. If applying is useful, use
-non-destructive `git stash apply` only after reviewing the diff and with a plan
-for conflicts.
+- Identify issues already addressed in current source.
+- Identify issues still needing implementation.
+- Identify obsolete or conflicting older notes that should stay out.
+- Recover only useful, currently evidenced slices through fresh plans.
 
 ### Phase 1: Reliable Product Foundation
 
@@ -131,9 +126,10 @@ Prepare the project for repeatable setup and external use:
 
 The first implementation slice is Phase 0 plus the first part of Phase 1:
 
-1. Inspect `stash@{0}` against current `master`.
-2. Classify prior fixes as already upstream, still needed, or obsolete.
-3. Reintegrate only still-needed fixes.
+1. Use `docs/superpowers/reports/2026-05-02-cloudmind-superpowers-gap-audit.md`
+   as the current audit baseline.
+2. Classify findings into already-fixed, still-needed, and obsolete.
+3. Write a fresh plan for only the still-needed work.
 4. Start the production foundation with the shared API error envelope and
    canonical error-code usage, because earlier review findings pointed at this
    exact seam and it improves both backend correctness and frontend handling.
