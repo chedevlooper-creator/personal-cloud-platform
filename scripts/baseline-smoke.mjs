@@ -31,6 +31,8 @@ const TEST_FILTERS = [
   '--filter',
   'web',
   '--filter',
+  '@pcp/db',
+  '--filter',
   '@pcp/auth-service',
   '--filter',
   '@pcp/workspace-service',

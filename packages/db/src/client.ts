@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import { z } from 'zod';
 import * as dotenv from 'dotenv';
 import path from 'path';
+import { createPostgresOptions } from './connection-options';
 
 // Load Docker defaults first; root .env can override for local development.
 dotenv.config({ path: path.resolve(__dirname, '../../../infra/docker/.env') });
@@ -14,13 +15,17 @@ import * as schema from './schema';
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   DB_MAX_CONNECTIONS: z.coerce.number().default(10),
+  DB_SEARCH_PATH: z.string().optional(),
 });
 
 const env = envSchema.parse(process.env);
 
 // Connection pool with proper config
 const queryClient = postgres(env.DATABASE_URL, {
-  max: env.DB_MAX_CONNECTIONS,
+  ...createPostgresOptions({
+    maxConnections: env.DB_MAX_CONNECTIONS,
+    searchPath: env.DB_SEARCH_PATH,
+  }),
 });
 
 export const db = drizzle(queryClient, { schema });
