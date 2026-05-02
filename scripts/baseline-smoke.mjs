@@ -29,6 +29,8 @@ const ALL_PACKAGE_FILTERS = [
 const LINT_FILTERS = ['--filter', 'web', '--filter', '@pcp/db'];
 const TEST_FILTERS = [
   '--filter',
+  'web',
+  '--filter',
   '@pcp/auth-service',
   '--filter',
   '@pcp/workspace-service',

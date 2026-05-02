@@ -1,18 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
+import { supabaseAuth, type AuthUser } from '@/lib/supabase-auth';
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  name: string | null;
-};
+export type { AuthUser } from '@/lib/supabase-auth';
 
 export const useUser = () => {
   return useQuery({
     queryKey: ['user'],
     queryFn: async () => {
       try {
+        if (supabaseAuth) {
+          return await supabaseAuth.getCurrentUser();
+        }
         const res = await authApi.get('/me');
         return res.data.user as AuthUser;
       } catch {
@@ -29,6 +29,9 @@ export const useLogin = () => {
 
   return useMutation({
     mutationFn: async (credentials: { email: string; password: string }) => {
+      if (supabaseAuth) {
+        return await supabaseAuth.login(credentials);
+      }
       const res = await authApi.post('/login', credentials);
       return res.data.user as AuthUser;
     },
@@ -45,6 +48,9 @@ export const useRegister = () => {
 
   return useMutation({
     mutationFn: async (payload: { email: string; password: string; name?: string }) => {
+      if (supabaseAuth) {
+        return await supabaseAuth.register(payload);
+      }
       const res = await authApi.post('/register', payload);
       return res.data.user as AuthUser;
     },
@@ -61,6 +67,10 @@ export const useLogout = () => {
 
   return useMutation({
     mutationFn: async () => {
+      if (supabaseAuth) {
+        await supabaseAuth.logout();
+        return;
+      }
       await authApi.post('/logout');
     },
     onSuccess: () => {
