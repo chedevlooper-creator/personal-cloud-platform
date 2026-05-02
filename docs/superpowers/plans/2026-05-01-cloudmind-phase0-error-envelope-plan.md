@@ -95,7 +95,6 @@ Date: 2026-05-01
 | `services/browser/src/routes.ts` | Current handler maps 400/429 service errors to 500. | Recover mapping, using `RATE_LIMITED` for 429. |
 | `services/browser/src/service.ts` URL hardening | Current tests cover common private ranges and IPv4-mapped IPv6. Stash contains additional special-use ranges. | Defer broader SSRF range expansion to the browser/runtime hardening plan unless browser tests reveal a current gap. |
 | `services/publish/src/service.ts` created container cleanup | Current code marks startup failure crashed but can leave a created container behind if `start()` or DB update fails. | Recover cleanup behavior through a regression test. |
-| `.planning/**` | Stash contains large generated planning churn from the old GSD path. | Do not restore. Current Superpowers docs are the active planning artifacts. |
 | `apps/web/**` lint-only tweaks | Stash contains minor web lint/style edits. | Do not restore unless a current lint run identifies the same issue. |
 
 ## Verification Target
