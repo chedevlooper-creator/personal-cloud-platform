@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const sessionHelpers = vi.hoisted(() => ({
   validateSessionUserId: vi.fn(),
   verifyUserExists: vi.fn(),
+  upsertExternalAuthUser: vi.fn(),
   getSessionUserContext: vi.fn(),
 }));
 
@@ -128,5 +129,68 @@ describe('resolveAuthenticatedUserId', () => {
 
     expect(result).toBeNull();
     expect(sessionHelpers.verifyUserExists).not.toHaveBeenCalled();
+  });
+
+  it('resolves a Supabase JWT from the session cookie', async () => {
+    sessionHelpers.upsertExternalAuthUser.mockResolvedValue('517512e3-f837-4bfb-afb3-889d90214e9d');
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          id: '517512e3-f837-4bfb-afb3-889d90214e9d',
+          email: 'cloudmind-test@zihinbulut.dev',
+          user_metadata: { name: 'CloudMind Test' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const result = await resolveAuthenticatedUserId(
+      makeRequest({ sessionId: 'header.payload.signature' }),
+      {
+        supabaseAuth: {
+          url: 'https://example.supabase.co',
+          anonKey: 'anon-key',
+          fetchImpl,
+        },
+      },
+    );
+
+    expect(result).toBe('517512e3-f837-4bfb-afb3-889d90214e9d');
+    expect(fetchImpl).toHaveBeenCalledWith('https://example.supabase.co/auth/v1/user', {
+      headers: {
+        apikey: 'anon-key',
+        Authorization: 'Bearer header.payload.signature',
+      },
+    });
+    expect(sessionHelpers.upsertExternalAuthUser).toHaveBeenCalledWith({
+      id: '517512e3-f837-4bfb-afb3-889d90214e9d',
+      email: 'cloudmind-test@zihinbulut.dev',
+      name: 'CloudMind Test',
+    });
+    expect(sessionHelpers.validateSessionUserId).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid Supabase JWT without treating it as a legacy session id', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ msg: 'invalid jwt' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const result = await resolveAuthenticatedUserId(
+      makeRequest({ sessionId: 'header.payload.signature' }),
+      {
+        supabaseAuth: {
+          url: 'https://example.supabase.co',
+          anonKey: 'anon-key',
+          fetchImpl,
+        },
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(sessionHelpers.validateSessionUserId).not.toHaveBeenCalled();
+    expect(sessionHelpers.upsertExternalAuthUser).not.toHaveBeenCalled();
   });
 });
