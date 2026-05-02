@@ -22,6 +22,8 @@ const ALL_PACKAGE_FILTERS = [
   '@pcp/memory-service',
   '--filter',
   '@pcp/publish-service',
+  '--filter',
+  '@pcp/browser-service',
 ];
 
 const LINT_FILTERS = ['--filter', 'web', '--filter', '@pcp/db'];
@@ -38,6 +40,8 @@ const TEST_FILTERS = [
   '@pcp/memory-service',
   '--filter',
   '@pcp/publish-service',
+  '--filter',
+  '@pcp/browser-service',
 ];
 
 export function makeBaselineSmokeCommands(packageManager = 'corepack pnpm@9.0.0') {

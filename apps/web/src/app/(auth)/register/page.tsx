@@ -60,7 +60,7 @@ export default function RegisterPage() {
             <h1 className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-2xl font-semibold tracking-tight text-transparent">
               Hesap oluşturun
             </h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">Zihinbulut'a katılın</p>
+            <p className="mt-1.5 text-sm text-muted-foreground">Zihinbulut&apos;a katılın</p>
           </div>
         </div>
 

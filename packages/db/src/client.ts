@@ -4,7 +4,8 @@ import { z } from 'zod';
 import * as dotenv from 'dotenv';
 import path from 'path';
 
-// Load .env from workspace root
+// Load Docker defaults first; root .env can override for local development.
+dotenv.config({ path: path.resolve(__dirname, '../../../infra/docker/.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import * as schema from './schema';

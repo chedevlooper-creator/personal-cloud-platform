@@ -68,7 +68,8 @@ Snapshot of where the platform is right now. Replaces the old "Faz 0–7" tracke
 - OpenTelemetry traces across the agent loop.
 
 ### Test & CI
-- No CI pipeline yet (`pnpm typecheck` + `pnpm test` + `pnpm lint` + smoke).
+- CI exists for install, typecheck, lint, and tests; build, smoke, e2e, deploy, and release gates
+  still need coverage.
 - Vitest version split (`auth`/`workspace` on 4.x, others on 1.x) — unify after Faz 7.
 - `apps/web` and `packages/shared` have no tests.
 

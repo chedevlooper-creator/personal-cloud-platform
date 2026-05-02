@@ -29,7 +29,30 @@ describe('baseline smoke commands', () => {
         '@pcp/memory-service',
         '--filter',
         '@pcp/publish-service',
+        '--filter',
+        '@pcp/browser-service',
         'typecheck',
+      ],
+    ]);
+    assert.deepEqual(commands[3], [
+      'corepack',
+      [
+        'pnpm@9.0.0',
+        '--filter',
+        '@pcp/auth-service',
+        '--filter',
+        '@pcp/workspace-service',
+        '--filter',
+        '@pcp/runtime-service',
+        '--filter',
+        '@pcp/agent-service',
+        '--filter',
+        '@pcp/memory-service',
+        '--filter',
+        '@pcp/publish-service',
+        '--filter',
+        '@pcp/browser-service',
+        'test',
       ],
     ]);
   });

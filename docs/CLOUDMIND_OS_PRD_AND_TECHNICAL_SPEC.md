@@ -967,7 +967,6 @@ Scripts: scripts/backup.sh, scripts/restore.sh
 | P0 | Add Zod schema validation to Telegram webhook |
 | P1 | Centralize assertSafePath() in @pcp/shared |
 | P1 | Remove @ts-ignore in auth OAuth callback |
-| P1 | Fix lint error in register page (apostrophe entity) |
 | P2 | Unify Vitest versions across services |
 | P2 | Pin drizzle-orm version (remove "latest") |
 | P2 | Add ESLint to all services |
@@ -982,7 +981,7 @@ Scripts: scripts/backup.sh, scripts/restore.sh
 | Retrieval Reranking | On top of pgvector HNSW |
 | Observability | OpenTelemetry traces across agent loop |
 | Frontend | WebSocket/SSE streaming, optimistic mutations, a11y pass, i18n |
-| CI/CD | No CI pipeline yet (typecheck to lint to test + smoke) |
+| CI/CD | Add build, smoke, e2e, deploy, and release gates to the existing install/typecheck/lint/test CI |
 
 ### 13.3 Planned Improvements
 
