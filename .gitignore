@@ -60,4 +60,5 @@ labels/
 views.json
 events.jsonl
 config.json
+!.planning/config.json
 
