@@ -5,9 +5,9 @@
 ## Current
 
 - **Milestone:** v0.1 — Production-Readiness Hardening
-- **Phase:** 2 — Auth Normalization
+- **Phase:** 3 — Real Settings Forms
 - **Status:** Completed
-- **Last command:** `/gsd-execute-phase 2`
+- **Last command:** `/gsd-execute-phase 3`
 - **Last updated:** 2026-05-06
 
 ## Phase Status
@@ -16,7 +16,7 @@
 |---|-------|--------|
 | 1 | Error Envelope Hardening | Completed |
 | 2 | Auth Normalization | Completed |
-| 3 | Real Settings Forms | Not Started |
+| 3 | Real Settings Forms | Completed |
 | 4 | Automations & Hosting UX | Not Started |
 | 5 | Tenant Isolation Backstop | Not Started |
 | 6 | Runtime Sandbox Regression | Not Started |
@@ -24,7 +24,7 @@
 
 ## Next Action
 
-Run `/gsd-discuss-phase 3` to gather context for Phase 3 (Real Settings Forms).
+Run `/gsd-discuss-phase 4` to gather context for Phase 4 (Automations & Hosting UX).
 
 ## History
 
@@ -33,3 +33,4 @@ Run `/gsd-discuss-phase 3` to gather context for Phase 3 (Real Settings Forms).
 - **2026-05-06** — Phase 1 planned. PLAN.md created with 10 tasks + error envelope tests. Plan-checker found 6 MEDIUM issues, all fixed in revision.
 - **2026-05-06** — Phase 1 executed. 10 tasks completed: DomainError hierarchy + tests, runtime/publish/agent service migrations, browser/datasets route hardening, workspace route updates. All typecheck + lint + tests pass (192 tests total).
 - **2026-05-06** — Phase 2 executed. 10 tasks completed: audience scoping in resolveAuthenticatedUserId, ALLOWED_AUDIENCES env vars across 4 services, snapshot route auth unification, X-Service-Audience headers in all internal HTTP clients, audience scoping tests. All typecheck + lint + tests pass (203 tests total).
+- **2026-05-06** — Phase 3 executed. 11 tasks completed: defaultModel schema already existed, PATCH /user/profile endpoint, DELETE /user/account endpoint, profile form wired to API, models tab uses real defaultModel, workspace storage endpoint, storage tab shows real data, danger zone with DELETE confirmation, mobile navigation dropdown, deletedAt added to users schema. All typecheck + lint + tests pass (203 tests total).
