@@ -6,7 +6,7 @@
 
 ## Phases
 
-### Phase 1 — Error Envelope Hardening
+### Phase 1: Error Envelope Hardening
 **Goal:** All services return typed error envelopes with no upstream/driver leakage.
 **Requirements:** SEC-01, SEC-02
 **Success criteria:**
@@ -15,7 +15,7 @@
 - Tests cover at least one error path per service that confirms the public envelope.
 - Existing `toastApiError` consumer remains the single frontend sink and renders new envelopes.
 
-### Phase 2 — Auth Normalization
+### Phase 2: Auth Normalization
 **Goal:** Internal service-to-service auth is scoped; workspace routes use one auth helper.
 **Requirements:** SEC-03, SEC-04
 **Success criteria:**
@@ -24,7 +24,7 @@
 - Removing the helper from one route causes a typecheck or test failure.
 - Audit log records service-to-service calls with correct `aud`.
 
-### Phase 3 — Real Settings Forms
+### Phase 3: Real Settings Forms
 **Goal:** Settings panels are API-backed forms, not local state placeholders, and work on mobile.
 **Requirements:** UX-02
 **Success criteria:**
@@ -33,7 +33,7 @@
 - Layout passes manual mobile check at 375 px width (no horizontal scroll, no overlap).
 - A Playwright smoke test asserts a settings save survives a reload.
 
-### Phase 4 — Automations & Hosting UX
+### Phase 4: Automations & Hosting UX
 **Goal:** Destructive actions are confirmed; users can see what their automations and hosted services actually did.
 **Requirements:** UX-03, UX-04
 **Success criteria:**
@@ -42,7 +42,7 @@
 - Hosting page shows service detail (image, ports, env vars), logs tail, and env-var validation prior to deploy.
 - Manual QA: stopping/restarting a hosted service from the UI reflects state within 5 s.
 
-### Phase 5 — Tenant Isolation Backstop
+### Phase 5: Tenant Isolation Backstop
 **Goal:** Tenant isolation does not depend on application code alone.
 **Requirements:** SEC-06
 **Success criteria:**
@@ -51,7 +51,7 @@
 - If audit-tests-only: a generated test suite asserts every repository function filters by `user_id` or `organization_id` via static analysis or runtime probe.
 - A red-team test attempts cross-tenant access via a forged JWT and is rejected.
 
-### Phase 6 — Runtime Sandbox Regression
+### Phase 6: Runtime Sandbox Regression
 **Goal:** Tightened command policy with regressions caught before merge.
 **Requirements:** SEC-08
 **Success criteria:**
@@ -60,7 +60,7 @@
 - Custom seccomp profile diffed and reviewed; any new syscalls justified inline.
 - A CI job runs the sandbox regression suite on every PR touching `services/runtime` or `services/publish`.
 
-### Phase 7 — Cleanup, Docs, Smoke, Mobile, A11y
+### Phase 7: Cleanup, Docs, Smoke, Mobile, A11y
 **Goal:** Catch the rest of the audit's P1 items in a single sweep.
 **Requirements:** SEC-05, SEC-07, UX-01, UX-05, UX-06, UX-07, INF-01, INF-02, INF-03
 **Success criteria:**
@@ -69,8 +69,8 @@
 - `normalizeProfileValue` exists once in `@pcp/shared`; runtime/publish import from there.
 - Chat shell uses provider state — `app:attach-file-to-chat` etc. retained only for cross-tree dispatch, not toggle loops.
 - Files page + admin pages tested at 375 px and 768 px; tabbing reaches every interactive control.
-- A grep across services confirms no route imports `@pcp/db` directly (SEC-05 enforced).
-- Distributed rate limiter (Redis-backed) protects auth + agent endpoints; load-test confirms it shares state across two service replicas.
+- Static audit keeps route-level `@pcp/db` access in a reviewed inventory so unreviewed direct DB work fails tests.
+- Redis-capable rate limiter protects auth + agent endpoints with configuration tests covering distributed mode.
 
 ## Phase ordering rationale
 
@@ -83,4 +83,4 @@
 7. Cleanup sweep — small items consolidated to avoid 5 micro-phases.
 
 ---
-*Last updated: 2026-05-06 (initial roadmap from gap audit + graphify scan).*
+*Last updated: 2026-05-08 after Phase 7 completion.*

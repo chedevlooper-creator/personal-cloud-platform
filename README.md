@@ -95,22 +95,20 @@ pnpm dev
 
 ```bash
 pnpm smoke:local
+pnpm smoke:web      # Playwright top-3 frontend flows with mocked service responses
 ```
 
-For an infrastructure-backed local run:
+For an infrastructure-backed local run, services expose liveness at `/health` and readiness at `/ready`:
 
 ```bash
 cp infra/docker/.env.example infra/docker/.env
 pnpm infra:up
 pnpm --filter @pcp/db migrate
 
-curl -fsS http://localhost:3001/health
-curl -fsS http://localhost:3002/health
-curl -fsS http://localhost:3003/health
-curl -fsS http://localhost:3004/health
-curl -fsS http://localhost:3005/health
-curl -fsS http://localhost:3006/health
-curl -fsS http://localhost:3007/health
+for port in 3001 3002 3003 3004 3005 3006 3007; do
+  curl -fsS "http://localhost:${port}/health"
+  curl -fsS "http://localhost:${port}/ready"
+done
 ```
 
 ## Project Structure
@@ -215,9 +213,11 @@ pnpm --filter @pcp/workspace-service exec vitest run src/service.test.ts
 - **Authentication:** Argon2 password hashing, HTTP-only session cookies
 - **API Key Encryption:** AES-256-GCM with random IV per key; plaintext never stored/logged
 - **Rate Limiting:** `@fastify/rate-limit` on all services (100 req/min default, 5 req/min for login/register)
+- **Distributed Rate Limiting:** Agent endpoints use the shared Redis-backed sliding-window limiter with in-memory fallback
 - **Path Traversal:** Central `assertSafePath()` guard on all file operations (blocks `..`, null bytes, `~`)
 - **Tenant Isolation:** All DB queries filter by `user_id`; S3 paths are tenant-prefixed
 - **Terminal Policy:** Configurable risk levels (strict/balanced/permissive) with command blocklist
+- **Sandbox Policy:** Runtime/publish command profiles and Docker/seccomp policy are documented in `infra/docker/POLICY.md`
 - **Admin Access:** `ADMIN_EMAIL` env var gates admin routes (MVP; upgrade to role column for production)
 
 ## Documentation
