@@ -43,6 +43,7 @@ export class WorkspaceClient {
         headers: {
           Authorization: `Bearer ${this.internalServiceToken}`,
           'X-User-Id': userId,
+          'X-Service-Audience': 'publish',
         },
       });
     } catch (error) {

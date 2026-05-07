@@ -47,6 +47,7 @@ export class WorkspaceClient {
       headers: {
         Authorization: `Bearer ${env.INTERNAL_SERVICE_TOKEN}`,
         'X-User-Id': userId,
+        'X-Service-Audience': 'runtime',
       },
     });
     if (!res.ok) {
@@ -71,6 +72,7 @@ export class WorkspaceClient {
       headers: {
         Authorization: `Bearer ${env.INTERNAL_SERVICE_TOKEN}`,
         'X-User-Id': userId,
+        'X-Service-Audience': 'runtime',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ path: filePath, content, mimeType }),
