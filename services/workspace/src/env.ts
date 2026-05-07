@@ -21,11 +21,18 @@ const envSchema = z.object({
   S3_REGION: z.string().default('us-east-1'),
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
   ALLOWED_AUDIENCES: z.string().optional(),
+  AUTH_BYPASS: z
+    .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.literal('')])
+    .optional(),
   DATASETS_DATA_DIR: z.string().default('./data/datasets'),
 });
 
 const parsed = envSchema.parse(rawEnv);
 const ctx = { isProduction: parsed.NODE_ENV === 'production' };
+const authBypass = parsed.AUTH_BYPASS === '1' || parsed.AUTH_BYPASS === 'true';
+if (ctx.isProduction && authBypass) {
+  throw new Error('AUTH_BYPASS must not be enabled when NODE_ENV=production');
+}
 
 export const env = {
   NODE_ENV: parsed.NODE_ENV,
@@ -57,6 +64,7 @@ export const env = {
   ALLOWED_AUDIENCES: parsed.ALLOWED_AUDIENCES
     ? parsed.ALLOWED_AUDIENCES.split(',').map((s) => s.trim()).filter(Boolean)
     : undefined,
+  AUTH_BYPASS: !ctx.isProduction && authBypass,
   DATASETS_DATA_DIR: parsed.DATASETS_DATA_DIR,
 };
 
