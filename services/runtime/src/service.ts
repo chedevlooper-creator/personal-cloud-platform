@@ -16,6 +16,7 @@ import {
   assertRuntimeImageAllowed,
   RUNTIME_COMMAND_POLICY,
 } from './policy';
+import { NotFoundError, ValidationError } from '@pcp/shared';
 
 const SYNC_IGNORE_DIRS = new Set(['node_modules', '.git', '.cache', 'dist', '.next', '.venv']);
 const SYNC_BACK_MAX_BYTES = 512 * 1024;
@@ -160,13 +161,13 @@ export class RuntimeService {
     });
 
     if (!workspace) {
-      throw new Error('Workspace not found');
+      throw new NotFoundError('Workspace not found');
     }
   }
 
   async startRuntime(runtimeId: string, userId: string) {
     const runtime = await this.getRuntime(runtimeId, userId);
-    if (!runtime || !runtime.containerId) throw new Error('Runtime or container not found');
+    if (!runtime || !runtime.containerId) throw new NotFoundError('Runtime or container not found');
 
     await this.provider.start(runtime.containerId);
 
@@ -183,7 +184,7 @@ export class RuntimeService {
 
   async stopRuntime(runtimeId: string, userId: string) {
     const runtime = await this.getRuntime(runtimeId, userId);
-    if (!runtime || !runtime.containerId) throw new Error('Runtime or container not found');
+    if (!runtime || !runtime.containerId) throw new NotFoundError('Runtime or container not found');
 
     await this.provider.stop(runtime.containerId);
 
@@ -206,7 +207,7 @@ export class RuntimeService {
   ) {
     const runtime = await this.getRuntime(runtimeId, userId);
     if (!runtime || !runtime.containerId || runtime.status !== 'running') {
-      throw new Error('Runtime not running or container not found');
+      throw new ValidationError('Runtime not running or container not found');
     }
 
     try {
@@ -262,7 +263,7 @@ export class RuntimeService {
 
     const runtime = await this.getRuntime(runtimeId, userId);
     if (!runtime || !runtime.containerId || runtime.status !== 'running') {
-      throw new Error('Runtime not running or container not found');
+      throw new ValidationError('Runtime not running or container not found');
     }
 
     return this.provider.attach(runtime.containerId);
@@ -270,7 +271,7 @@ export class RuntimeService {
 
   async deleteRuntime(runtimeId: string, userId: string) {
     const runtime = await this.getRuntime(runtimeId, userId);
-    if (!runtime || !runtime.containerId) throw new Error('Runtime or container not found');
+    if (!runtime || !runtime.containerId) throw new NotFoundError('Runtime or container not found');
 
     await this.provider.destroy(runtime.containerId);
     await db.delete(runtimes).where(and(eq(runtimes.id, runtimeId), eq(runtimes.userId, userId)));
