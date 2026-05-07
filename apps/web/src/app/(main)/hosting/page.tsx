@@ -11,6 +11,7 @@ import {
   Server,
   Square,
   Trash2,
+  ListCollapse,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -48,6 +49,23 @@ type HostedService = {
   lastHealthOk?: boolean | null;
 };
 
+type HostedServiceLog = {
+  id: string;
+  serviceId: string;
+  stream: string;
+  line: string;
+  createdAt: string;
+};
+
+type HostingConfirmAction =
+  | { type: 'delete' | 'stop' | 'restart'; service: HostedService }
+  | null;
+
+type EnvParseResult = {
+  values: Record<string, string>;
+  errors: string[];
+};
+
 const serviceKindLabels: Record<string, string> = {
   static: 'Static',
   vite: 'Vite',
@@ -82,7 +100,8 @@ export default function HostingPage() {
   const [customDomain, setCustomDomain] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [workspaceId, setWorkspaceId] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<HostingConfirmAction>(null);
+  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
 
   const workspacesQuery = useQuery({
     queryKey: ['workspaces'],
@@ -118,7 +137,10 @@ export default function HostingPage() {
   const createService = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error('You must be signed in.');
-      const envVars = parseEnvVars(envVarsText);
+      const { values: envVars, errors } = parseEnvVars(envVarsText);
+      if (errors.length > 0) {
+        throw new Error(errors[0]);
+      }
       const trimmedStart = startCommand.trim();
       const trimmedDomain = customDomain.trim();
       await publishApi.post('/hosted-services', {
@@ -199,12 +221,14 @@ export default function HostingPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hosted-services'] });
       toast.success('Servis silindi.');
-      setDeleteTarget(null);
+      setConfirmAction(null);
     },
     onError: (e) => toastApiError(e, 'Servis silinemedi.'),
   });
 
-  const canCreate = hostingReady && Boolean(defaultWorkspaceId && name.trim());
+  const envValidation = parseEnvVars(envVarsText);
+  const canCreate =
+    hostingReady && Boolean(defaultWorkspaceId && name.trim()) && envValidation.errors.length === 0;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col p-4 sm:p-6 lg:p-8">
@@ -347,6 +371,13 @@ export default function HostingPage() {
             <p className="text-xs text-muted-foreground">
               Satır başına bir <code>KEY=VALUE</code>. Değerler saklanırken şifrelenir.
             </p>
+            {envValidation.errors.length > 0 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+                {envValidation.errors.map((error) => (
+                  <div key={error}>{error}</div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="svc-domain">Custom domain</Label>
@@ -460,18 +491,23 @@ export default function HostingPage() {
                           size="touch"
                           variant="outline"
                           className="w-full sm:w-auto"
-                          onClick={() => restartService.mutate(svc.id)}
-                          disabled={restartService.isPending}
+                          onClick={() => setConfirmAction({ type: 'restart', service: svc })}
+                          disabled={restartService.isPending && restartService.variables === svc.id}
                           title="Yeniden başlat"
                         >
-                          <RefreshCw className="mr-1 h-3.5 w-3.5" /> Yeniden başlat
+                          {restartService.isPending && restartService.variables === svc.id ? (
+                            <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Yeniden başlat
                         </Button>
                         <Button
                           size="touch"
                           variant="outline"
                           className="w-full sm:w-auto"
-                          onClick={() => stopService.mutate(svc.id)}
-                          disabled={stopService.isPending}
+                          onClick={() => setConfirmAction({ type: 'stop', service: svc })}
+                          disabled={stopService.isPending && stopService.variables === svc.id}
                         >
                           <Square className="mr-1 h-3.5 w-3.5" /> Durdur
                         </Button>
@@ -487,6 +523,16 @@ export default function HostingPage() {
                         <Play className="mr-1 h-3.5 w-3.5" /> Başlat
                       </Button>
                     )}
+                    <Button
+                      size="touch"
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      onClick={() =>
+                        setExpandedServiceId((current) => (current === svc.id ? null : svc.id))
+                      }
+                    >
+                      <ListCollapse className="mr-1 h-3.5 w-3.5" /> Detaylar
+                    </Button>
                     {svc.publicUrl && (
                       <a
                         href={svc.publicUrl}
@@ -504,13 +550,16 @@ export default function HostingPage() {
                       size="icon-touch"
                       variant="ghost"
                       className="justify-self-end text-destructive hover:text-destructive sm:justify-self-auto"
-                      onClick={() => setDeleteTarget(svc.id)}
+                      onClick={() => setConfirmAction({ type: 'delete', service: svc })}
                       title="Servisi sil"
                       aria-label={`${svc.name} servisini sil`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
+                  {expandedServiceId === svc.id && (
+                    <HostedServiceDetails service={svc} workspaceName={workspaceNameById.get(svc.workspaceId)} />
+                  )}
                 </div>
               );
             })}
@@ -529,14 +578,23 @@ export default function HostingPage() {
       </div>
 
       <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        onOpenChange={() => setDeleteTarget(null)}
-        title="Servisi sil"
-        description="Çalışan container durdurulacak ve servis kaldırılacak. Bu işlem geri alınamaz."
-        confirmLabel="Sil"
-        variant="destructive"
+        open={Boolean(confirmAction)}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+        title={getConfirmTitle(confirmAction)}
+        description={getConfirmDescription(confirmAction)}
+        confirmLabel={getConfirmLabel(confirmAction)}
+        variant={confirmAction?.type === 'delete' ? 'destructive' : 'warning'}
         onConfirm={async () => {
-          if (deleteTarget) await deleteService.mutateAsync(deleteTarget);
+          if (!confirmAction) return;
+          if (confirmAction.type === 'delete') {
+            await deleteService.mutateAsync(confirmAction.service.id);
+          } else if (confirmAction.type === 'stop') {
+            await stopService.mutateAsync(confirmAction.service.id);
+            setConfirmAction(null);
+          } else {
+            await restartService.mutateAsync(confirmAction.service.id);
+            setConfirmAction(null);
+          }
         }}
       />
     </div>
@@ -552,16 +610,25 @@ function normalizeSlug(value: string) {
     .slice(0, 48);
 }
 
-function parseEnvVars(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const rawLine of text.split('\n')) {
+function parseEnvVars(text: string): EnvParseResult {
+  const values: Record<string, string> = {};
+  const errors: string[] = [];
+  const keyPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+  for (const [idx, rawLine] of text.split('\n').entries()) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) continue;
     const eq = line.indexOf('=');
-    if (eq <= 0) continue;
+    if (eq <= 0) {
+      errors.push(`Satır ${idx + 1}: KEY=VALUE formatı bekleniyor.`);
+      continue;
+    }
     const key = line.slice(0, eq).trim();
     let value = line.slice(eq + 1).trim();
-    if (!key) continue;
+    if (!keyPattern.test(key)) {
+      errors.push(`Satır ${idx + 1}: Geçersiz env adı "${key}".`);
+      continue;
+    }
     // Strip matching surrounding quotes if present.
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
@@ -569,7 +636,97 @@ function parseEnvVars(text: string): Record<string, string> {
     ) {
       value = value.slice(1, -1);
     }
-    out[key] = value;
+    values[key] = value;
   }
-  return out;
+  return { values, errors };
+}
+
+function getConfirmTitle(action: HostingConfirmAction) {
+  if (!action) return 'Onayla';
+  if (action.type === 'delete') return 'Servisi sil';
+  if (action.type === 'stop') return 'Servisi durdur';
+  return 'Servisi yeniden başlat';
+}
+
+function getConfirmDescription(action: HostingConfirmAction) {
+  if (!action) return undefined;
+  if (action.type === 'delete') {
+    return `"${action.service.name}" servisi kaldırılacak. Çalışan container durdurulacak ve bu işlem geri alınamaz.`;
+  }
+  if (action.type === 'stop') {
+    return `"${action.service.name}" servisi durdurulacak. Kullanıcı trafiği kesilebilir.`;
+  }
+  return `"${action.service.name}" servisi durdurulup yeniden başlatılacak.`;
+}
+
+function getConfirmLabel(action: HostingConfirmAction) {
+  if (!action) return 'Onayla';
+  if (action.type === 'delete') return 'Sil';
+  if (action.type === 'stop') return 'Durdur';
+  return 'Yeniden başlat';
+}
+
+function HostedServiceDetails({
+  service,
+  workspaceName,
+}: {
+  service: HostedService;
+  workspaceName?: string;
+}) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['hosted-service-logs', service.id],
+    queryFn: async () => {
+      const res = await publishApi.get(`/hosted-services/${service.id}/logs`, {
+        params: { limit: 50 },
+      });
+      return res.data as { logs: HostedServiceLog[] };
+    },
+    refetchInterval: service.status === 'running' || service.status === 'starting' ? 5_000 : false,
+  });
+
+  return (
+    <div className="mt-4 rounded-xl border border-border/70 bg-background/60 p-4 text-sm sm:ml-13">
+      <div className="grid gap-3 md:grid-cols-2">
+        <DetailItem label="Tür" value={serviceKindLabels[service.kind] ?? service.kind} />
+        <DetailItem label="Workspace" value={workspaceName ?? service.workspaceId} />
+        <DetailItem label="Root path" value={service.rootPath} />
+        <DetailItem label="Başlatma komutu" value={service.startCommand ?? '—'} />
+        <DetailItem label="Public URL" value={service.publicUrl ?? `${service.slug}.apps.localhost`} />
+        <DetailItem label="Son güncelleme" value={formatDate(service.updatedAt)} />
+      </div>
+
+      <div className="mt-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Son loglar
+        </h4>
+        <div className="mt-2 max-h-56 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-xs">
+          {isLoading ? (
+            <div className="text-muted-foreground">Loglar yükleniyor...</div>
+          ) : isError ? (
+            <div className="text-destructive">Loglar alınamadı.</div>
+          ) : data && data.logs.length > 0 ? (
+            data.logs.map((log) => (
+              <div key={log.id} className="flex gap-2">
+                <span className="shrink-0 text-muted-foreground">{log.stream}</span>
+                <span className={log.stream === 'stderr' ? 'text-destructive' : 'text-foreground/80'}>
+                  {log.line}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="text-muted-foreground">Henüz log yok.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 break-words text-foreground">{value}</dd>
+    </div>
+  );
 }

@@ -81,6 +81,39 @@ export const publishRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
+  app.get(
+    '/hosted-services/:id/logs',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        querystring: z.object({
+          limit: z.coerce.number().int().min(1).max(200).optional(),
+        }),
+        response: {
+          200: z.object({
+            logs: z.array(
+              z.object({
+                id: z.string().uuid(),
+                serviceId: z.string().uuid(),
+                stream: z.string(),
+                line: z.string(),
+                createdAt: z.date(),
+              }),
+            ),
+          }),
+          401: apiErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await resolveAuthenticatedUserId(request);
+      if (!userId) return sendUnauthorized(reply);
+
+      const logs = await publishService.getServiceLogs(request.params.id, userId, request.query.limit);
+      return reply.code(200).send({ logs });
+    },
+  );
+
   app.delete(
     '/hosted-services/:id',
     {

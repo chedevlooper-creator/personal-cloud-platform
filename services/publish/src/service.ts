@@ -114,6 +114,19 @@ export class PublishService {
     return rows.map(sanitize);
   }
 
+  async getServiceLogs(serviceId: string, userId: string, limit = 50) {
+    const service = await db.query.hostedServices.findFirst({
+      where: and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)),
+    });
+    if (!service) throw new NotFoundError('Service not found');
+
+    return db.query.hostedServiceLogs.findMany({
+      where: eq(hostedServiceLogs.serviceId, serviceId),
+      orderBy: [desc(hostedServiceLogs.createdAt)],
+      limit,
+    });
+  }
+
   async startService(serviceId: string, userId: string) {
     const service = await db.query.hostedServices.findFirst({
       where: and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)),
