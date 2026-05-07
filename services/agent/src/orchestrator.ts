@@ -40,6 +40,11 @@ import {
 import { WorkspaceClient } from './clients/workspace';
 import { RuntimeClient } from './clients/runtime';
 import { MemoryClient } from './clients/memory';
+import { MCPClient } from './mcp/client';
+import { loadMcpConfigs } from './mcp/config';
+import { StdioMCPTransport } from './mcp/transport/stdio';
+import { SSETransport } from './mcp/transport/sse';
+import { NotFoundError, ValidationError, ConflictError, QuotaExceededError } from '@pcp/shared';
 
 const TOOL_APPROVAL_TTL_MS = 15 * 60 * 1000;
 const INTERRUPTED_WORK_MESSAGE =
@@ -78,6 +83,29 @@ export class AgentOrchestrator {
     this.registry.register(new BrowserScreenshotTool());
     this.registry.register(new BrowserClickTool());
     this.registry.register(new BrowserFillTool());
+
+    // Register MCP tools (best-effort; failures are logged but not fatal)
+    this.loadMcpTools().catch((err) => {
+      this.logger?.warn?.({ err }, 'Failed to load MCP tools');
+    });
+  }
+
+  private async loadMcpTools(): Promise<void> {
+    const configs = loadMcpConfigs();
+    for (const config of configs) {
+      try {
+        const transport =
+          config.type === 'sse' && config.url
+            ? new SSETransport(config.url)
+            : new StdioMCPTransport(config.command ?? '', config.args ?? [], config.env ?? {});
+        const client = new MCPClient(transport, config.name);
+        await client.connect();
+        this.registry.registerMCP(client, config.name);
+        this.logger?.info?.({ server: config.name }, 'MCP server connected');
+      } catch (err) {
+        this.logger?.warn?.({ err, server: config.name }, 'MCP server connection failed');
+      }
+    }
   }
 
   private buildToolContext(taskId: string, userId: string, workspaceId: string): ToolContext {
@@ -120,6 +148,10 @@ export class AgentOrchestrator {
     this.taskEvents.get(taskId)?.emit('step', data);
   }
 
+  private emitTaskToken(taskId: string, token: string): void {
+    this.taskEvents.get(taskId)?.emit('llm_token', { token });
+  }
+
   private cleanupTaskEmitter(taskId: string): void {
     const emitter = this.taskEvents.get(taskId);
     if (emitter) {
@@ -150,7 +182,7 @@ export class AgentOrchestrator {
     const used = usage?.totalTokens ?? 0;
 
     if (used >= quota) {
-      throw new Error(
+      throw new QuotaExceededError(
         `Monthly token quota exceeded: ${used.toLocaleString()} / ${quota.toLocaleString()} tokens. ` +
           `Quota resets on the 1st of next month.`,
       );
@@ -210,7 +242,7 @@ export class AgentOrchestrator {
     const convo = await db.query.conversations.findFirst({
       where: and(eq(conversations.id, conversationId), eq(conversations.userId, userId)),
     });
-    if (!convo) throw new Error('Conversation not found');
+    if (!convo) throw new NotFoundError('Conversation not found');
     await db
       .update(conversations)
       .set({ archivedAt: new Date() })
@@ -221,7 +253,7 @@ export class AgentOrchestrator {
     const convo = await db.query.conversations.findFirst({
       where: and(eq(conversations.id, conversationId), eq(conversations.userId, userId)),
     });
-    if (!convo) throw new Error('Conversation not found');
+    if (!convo) throw new NotFoundError('Conversation not found');
 
     // For now we map tasks and task steps to messages
     const convoTasks = await db.query.tasks.findMany({
@@ -247,7 +279,7 @@ export class AgentOrchestrator {
       });
 
       let content = '';
-      let calls = [];
+      const calls = [];
 
       for (const s of steps) {
         if (s.type === 'thought') {
@@ -290,11 +322,11 @@ export class AgentOrchestrator {
       });
 
       if (!convo) {
-        throw new Error('Conversation not found');
+        throw new NotFoundError('Conversation not found');
       }
 
       if (convo.workspaceId && convo.workspaceId !== workspaceId) {
-        throw new Error('Conversation workspace mismatch');
+        throw new ValidationError('Conversation workspace mismatch');
       }
     } else {
       const [convo] = await db
@@ -344,7 +376,7 @@ export class AgentOrchestrator {
     });
 
     if (!workspace) {
-      throw new Error('Workspace not found');
+      throw new NotFoundError('Workspace not found');
     }
   }
 
@@ -356,7 +388,7 @@ export class AgentOrchestrator {
 
   async getTaskSteps(taskId: string, userId: string) {
     const task = await this.getTask(taskId, userId);
-    if (!task) throw new Error('Task not found');
+    if (!task) throw new NotFoundError('Task not found');
 
     return db.query.taskSteps.findMany({
       where: eq(taskSteps.taskId, taskId),
@@ -366,9 +398,9 @@ export class AgentOrchestrator {
 
   async cancelTask(taskId: string, userId: string) {
     const task = await this.getTask(taskId, userId);
-    if (!task) throw new Error('Task not found');
+    if (!task) throw new NotFoundError('Task not found');
     if (['completed', 'failed', 'cancelled'].includes(task.status)) {
-      throw new Error(`Task already in final state: ${task.status}`);
+      throw new ConflictError(`Task already in final state: ${task.status}`);
     }
 
     const cancelledTask = { ...task, status: 'cancelled', updatedAt: new Date() };
@@ -535,7 +567,7 @@ export class AgentOrchestrator {
       task.metadata,
     );
 
-    let messages: Message[] = [
+    const messages: Message[] = [
       {
         role: 'system',
         content: systemPrompt,
@@ -606,6 +638,7 @@ export class AgentOrchestrator {
           content: response.content,
         });
         this.emitTaskStep(taskId, step);
+        this.emitTaskToken(taskId, response.content);
       }
 
       if (response.toolCalls && response.toolCalls.length > 0) {
@@ -877,7 +910,7 @@ export class AgentOrchestrator {
   ) {
     const task = await this.getTask(taskId, userId);
     if (!task || task.status !== 'waiting_approval')
-      throw new Error('Task not waiting for approval');
+      throw new ValidationError('Task not waiting for approval');
 
     const pendingCall = await db.query.toolCalls.findFirst({
       where: and(
@@ -887,7 +920,7 @@ export class AgentOrchestrator {
       ),
     });
 
-    if (!pendingCall) throw new Error('No pending tool calls');
+    if (!pendingCall) throw new NotFoundError('No pending tool calls');
 
     const approval = await db.query.approvalRequests.findFirst({
       where: and(
@@ -896,11 +929,11 @@ export class AgentOrchestrator {
         eq(approvalRequests.userId, userId),
       ),
     });
-    if (!approval) throw new Error('No pending approval request');
+    if (!approval) throw new NotFoundError('No pending approval request');
 
     if (approval.expiresAt.getTime() <= Date.now()) {
       await this.expireApproval(userId, taskId, pendingCall.id, approval.id);
-      throw new Error('Tool approval expired');
+      throw new ValidationError('Tool approval expired');
     }
 
     await db
