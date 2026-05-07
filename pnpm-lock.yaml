@@ -152,6 +152,9 @@ importers:
       typescript-eslint:
         specifier: ^8.59.0
         version: 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      vitest:
+        specifier: ^1.4.0
+        version: 1.6.1(@types/node@20.19.39)(lightningcss@1.32.0)
 
   packages/shared:
     dependencies:
