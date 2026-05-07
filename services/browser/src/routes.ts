@@ -7,6 +7,7 @@ import {
   fillSchema,
   navigateSchema,
   sendApiError,
+  defaultApiErrorMessage,
 } from '@pcp/shared';
 import type { ApiErrorCode } from '@pcp/shared';
 import type { BrowserSessionInfo } from './service';
@@ -43,8 +44,21 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
 
   function handle(err: any, reply: any, fallback = 'Internal error') {
     const mapped = browserRouteErrorCodeFromStatus(err?.statusCode ?? 500);
-    if (mapped.statusCode === 500) fastify.log.error({ err }, 'browser route failed');
-    return sendApiError(reply, mapped.statusCode, mapped.code, err?.message ?? fallback);
+    if (mapped.statusCode >= 500) {
+      fastify.log.error({ err }, 'browser route failed');
+      return sendApiError(
+        reply,
+        mapped.statusCode,
+        mapped.code,
+        defaultApiErrorMessage('INTERNAL_ERROR'),
+      );
+    }
+    return sendApiError(
+      reply,
+      mapped.statusCode,
+      mapped.code,
+      err?.message ?? fallback,
+    );
   }
 
   server.get(
