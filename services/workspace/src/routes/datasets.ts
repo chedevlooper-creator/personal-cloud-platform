@@ -12,6 +12,7 @@ import {
   queryResultSchema,
   apiErrorCodeFromStatus,
   sendApiError,
+  defaultApiErrorMessage,
 } from '@pcp/shared';
 import { DatasetsService } from '../datasets/service';
 import { env } from '../env';
@@ -80,6 +81,14 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
         return { success: true };
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
+        if (status >= 500) {
+          return sendApiError(
+            reply,
+            status,
+            apiErrorCodeFromStatus(status),
+            defaultApiErrorMessage('INTERNAL_ERROR'),
+          );
+        }
         return sendApiError(
           reply,
           status,
@@ -114,7 +123,15 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
         });
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
-        if (status === 500) fastify.log.error({ err }, 'dataset query failed');
+        if (status >= 500) {
+          fastify.log.error({ err }, 'dataset query failed');
+          return sendApiError(
+            reply,
+            status,
+            apiErrorCodeFromStatus(status),
+            defaultApiErrorMessage('INTERNAL_ERROR'),
+          );
+        }
         return sendApiError(
           reply,
           status,
@@ -146,7 +163,15 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
         });
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
-        if (status === 500) fastify.log.error({ err }, 'dataset query failed');
+        if (status >= 500) {
+          fastify.log.error({ err }, 'dataset query failed');
+          return sendApiError(
+            reply,
+            status,
+            apiErrorCodeFromStatus(status),
+            defaultApiErrorMessage('INTERNAL_ERROR'),
+          );
+        }
         return sendApiError(
           reply,
           status,
@@ -175,6 +200,14 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
         return await datasetsService.preview(userId, request.params.id, request.query.limit);
       } catch (err: any) {
         const status = err?.statusCode ?? 500;
+        if (status >= 500) {
+          return sendApiError(
+            reply,
+            status,
+            apiErrorCodeFromStatus(status),
+            defaultApiErrorMessage('INTERNAL_ERROR'),
+          );
+        }
         return sendApiError(
           reply,
           status,
@@ -245,7 +278,15 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
       return reply.code(201).send(toResponse(inserted));
     } catch (err: any) {
       const status = err?.statusCode ?? 500;
-      if (status === 500) fastify.log.error({ err }, 'dataset import failed');
+      if (status >= 500) {
+        fastify.log.error({ err }, 'dataset import failed');
+        return sendApiError(
+          reply,
+          status,
+          apiErrorCodeFromStatus(status),
+          defaultApiErrorMessage('INTERNAL_ERROR'),
+        );
+      }
       return sendApiError(
         reply,
         status,
