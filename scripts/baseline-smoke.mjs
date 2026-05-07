@@ -26,7 +26,18 @@ const ALL_PACKAGE_FILTERS = [
   '@pcp/browser-service',
 ];
 
-const LINT_FILTERS = ['--filter', 'web', '--filter', '@pcp/db'];
+const LINT_FILTERS = [
+  '--filter', 'web',
+  '--filter', '@pcp/db',
+  '--filter', '@pcp/shared',
+  '--filter', '@pcp/auth-service',
+  '--filter', '@pcp/workspace-service',
+  '--filter', '@pcp/runtime-service',
+  '--filter', '@pcp/agent-service',
+  '--filter', '@pcp/memory-service',
+  '--filter', '@pcp/publish-service',
+  '--filter', '@pcp/browser-service',
+];
 const TEST_FILTERS = [
   '--filter',
   'web',
@@ -59,6 +70,7 @@ export function makeBaselineSmokeCommands(packageManager = 'corepack pnpm@9.0.0'
     [command, [...baseArgs, ...ALL_PACKAGE_FILTERS, 'typecheck']],
     [command, [...baseArgs, ...LINT_FILTERS, 'lint']],
     [command, [...baseArgs, ...TEST_FILTERS, 'test']],
+    [process.execPath, ['scripts/frontend-smoke.mjs']],
   ];
 }
 

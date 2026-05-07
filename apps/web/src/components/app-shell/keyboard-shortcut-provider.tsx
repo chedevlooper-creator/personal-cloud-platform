@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import type React from 'react';
 import { CommandPalette } from '@/components/app-shell/command-palette';
+import { useChatPanel } from '@/components/chat/chat-panel-context';
 
 export function KeyboardShortcutProvider({ children }: { children: React.ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
+  const { startNewChat, togglePanel } = useChatPanel();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -21,12 +23,12 @@ export function KeyboardShortcutProvider({ children }: { children: React.ReactNo
 
       if (key === 'n') {
         event.preventDefault();
-        window.dispatchEvent(new Event('app:new-chat'));
+        startNewChat();
       }
 
       if (key === 'j') {
         event.preventDefault();
-        window.dispatchEvent(new Event('app:toggle-chat-panel'));
+        togglePanel();
       }
 
       if (key === 'u') {
@@ -36,17 +38,14 @@ export function KeyboardShortcutProvider({ children }: { children: React.ReactNo
     };
 
     const openCommandPalette = () => setCommandOpen(true);
-    const toggleChatPanel = () => window.dispatchEvent(new Event('app:toggle-chat-panel'));
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('app:open-command-palette', openCommandPalette);
-    window.addEventListener('app:toggle-chat-panel', toggleChatPanel);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('app:open-command-palette', openCommandPalette);
-      window.removeEventListener('app:toggle-chat-panel', toggleChatPanel);
     };
-  }, []);
+  }, [startNewChat, togglePanel]);
 
   return (
     <>

@@ -16,7 +16,7 @@ type WorkspacesResponse = { workspaces: WorkspaceSummary[] };
 export default function FilesPage() {
   const { currentWorkspaceId, setCurrentWorkspaceId } = useWorkspaceStore();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['workspaces'],
     queryFn: async () => {
       const res = await workspaceApi.get('/workspaces');
@@ -41,6 +41,16 @@ export default function FilesPage() {
     );
   }
 
+  if (isError) {
+    return (
+      <EmptyState
+        icon={<FolderPlus className="h-6 w-6" />}
+        title="Dosyalar yüklenemedi"
+        description="Çalışma alanları alınamadı. Bağlantınızı kontrol edip tekrar deneyin."
+      />
+    );
+  }
+
   if (workspaces.length === 0) {
     return (
       <EmptyState
@@ -52,14 +62,14 @@ export default function FilesPage() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-w-0 flex-col lg:flex-row">
       {/* File Tree Sidebar */}
-      <div className="hidden w-64 shrink-0 border-r border-border/60 bg-card/60 backdrop-blur-md lg:block">
+      <div className="h-[42dvh] shrink-0 border-b border-border/60 bg-card/60 backdrop-blur-md lg:h-auto lg:w-64 lg:border-b-0 lg:border-r">
         {currentWorkspaceId && <FileTree workspaceId={currentWorkspaceId} />}
       </div>
 
       {/* Editor / Preview Area */}
-      <div className="min-w-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1">
         {currentWorkspaceId ? (
           <WorkspaceEditor />
         ) : (

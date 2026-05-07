@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowRight, FolderKanban, Server } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { CreateWorkspaceDialog, WorkspaceSummary } from '@/components/workspace/create-workspace-dialog';
 import { workspaceApi } from '@/lib/api';
 import { formatBytes, formatDate } from '@/lib/format';
@@ -63,9 +63,12 @@ export default function WorkspacesPage() {
                     </div>
                   </div>
                 </div>
-                <Button variant="outline" render={<Link href={`/workspace/${workspace.id}`} />}>
+                <Link
+                  href={`/workspace/${workspace.id}`}
+                  className={buttonVariants({ variant: 'outline' })}
+                >
                   Open <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover/row:translate-x-0.5" />
-                </Button>
+                </Link>
               </li>
             ))}
           </ul>
