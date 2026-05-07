@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -26,9 +26,11 @@ import { Label } from '@/components/ui/label';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useUser, useLogout } from '@/lib/auth';
-import { authApi } from '@/lib/api';
+import { authApi, workspaceApi } from '@/lib/api';
+import { toastApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useWorkspaceStore } from '@/store/workspace';
 
 type SettingsTab =
   | 'profile'
@@ -80,6 +82,31 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  // --- Profile ---
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profileBio, setProfileBio] = useState(prefs?.bio || '');
+
+  useEffect(() => {
+    setProfileName(user?.name || '');
+  }, [user?.name]);
+
+  useEffect(() => {
+    setProfileBio(prefs?.bio || '');
+  }, [prefs?.bio]);
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { name?: string; bio?: string }) => {
+      await authApi.patch('/user/profile', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+      toast.success('Profile updated');
+    },
+    onError: (error) => toastApiError(error, 'Failed to update profile'),
+  });
 
   // --- Preferences ---
   const { data: prefs } = useQuery({
@@ -101,7 +128,31 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
       toast.success('Preferences updated');
     },
-    onError: () => toast.error('Failed to update preferences'),
+    onError: (error) => toastApiError(error, 'Failed to update preferences'),
+  });
+
+  // --- Workspace Storage ---
+  const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const { data: storageData } = useQuery({
+    queryKey: ['workspace-storage', currentWorkspaceId],
+    queryFn: async () => {
+      if (!currentWorkspaceId) return { usedBytes: 0, totalBytes: 10 * 1024 * 1024 * 1024 };
+      const res = await workspaceApi.get(`/workspaces/${currentWorkspaceId}/storage`);
+      return res.data as { usedBytes: number; totalBytes: number };
+    },
+    enabled: !!currentWorkspaceId,
+  });
+
+  // --- Account Deletion ---
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      await authApi.delete('/user/account');
+    },
+    onSuccess: () => {
+      toast.success('Account deleted');
+      logoutMutation.mutate();
+    },
+    onError: (error) => toastApiError(error, 'Failed to delete account'),
   });
 
   // --- Provider Credentials ---
@@ -164,7 +215,22 @@ export default function SettingsPage() {
       <h2 className="text-lg font-semibold text-foreground">Settings</h2>
       <p className="text-sm text-muted-foreground">Manage your account and preferences</p>
 
-      <div className="mt-6 flex gap-6">
+      <div className="mt-6 flex flex-col gap-6 md:flex-row">
+        {/* Mobile Navigation */}
+        <div className="md:hidden w-full">
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as SettingsTab)}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+          >
+            {settingsTabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>
+                {tab.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Sidebar */}
         <nav className="hidden w-48 shrink-0 space-y-0.5 md:block">
           {settingsTabs.map((tab) => (
@@ -193,7 +259,11 @@ export default function SettingsPage() {
               <div className="mt-4 space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="settings-name">Name</Label>
-                  <Input id="settings-name" defaultValue={user?.name || ''} />
+                  <Input
+                    id="settings-name"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="settings-email">Email</Label>
@@ -208,12 +278,27 @@ export default function SettingsPage() {
                   <Label htmlFor="settings-bio">Bio</Label>
                   <Input
                     id="settings-bio"
-                    defaultValue={prefs?.bio || ''}
+                    value={profileBio}
+                    onChange={(e) => setProfileBio(e.target.value)}
                     placeholder="A short bio about yourself..."
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm">Save changes</Button>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      updateProfileMutation.mutate({
+                        name: profileName,
+                        bio: profileBio,
+                      })
+                    }
+                    disabled={updateProfileMutation.isPending}
+                  >
+                    {updateProfileMutation.isPending ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    Save changes
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => logoutMutation.mutate()}>
                     Sign out
                   </Button>
@@ -363,13 +448,16 @@ export default function SettingsPage() {
               </p>
               <div className="mt-4 space-y-2">
                 {['MiniMax-M2.7', 'MiniMax-Text-01', 'GPT-4o', 'Claude 3.5 Sonnet', 'Gemini 2.0 Flash'].map(
-                  (model, i) => (
+                  (model) => (
                     <button
                       key={model}
                       type="button"
+                      onClick={() => {
+                        updatePrefsMutation.mutate({ defaultModel: model });
+                      }}
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors',
-                        i === 0
+                        prefs?.defaultModel === model
                           ? 'border-primary bg-primary/5 text-foreground'
                           : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-muted hover:text-foreground',
                       )}
@@ -378,7 +466,7 @@ export default function SettingsPage() {
                         <Sparkles className="h-4 w-4" />
                         <span className="font-medium">{model}</span>
                       </div>
-                      {i === 0 && <StatusBadge variant="success">Active</StatusBadge>}
+                      {prefs?.defaultModel === model && <StatusBadge variant="success">Active</StatusBadge>}
                     </button>
                   ),
                 )}
@@ -391,11 +479,22 @@ export default function SettingsPage() {
               <h3 className="text-base font-semibold text-foreground">Workspace Storage</h3>
               <div className="mt-4 space-y-3">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-semibold text-foreground">0 B</span>
-                  <span className="text-sm text-muted-foreground">of 10 GB</span>
+                  <span className="text-2xl font-semibold text-foreground">
+                    {storageData ? formatBytes(storageData.usedBytes) : '0 B'}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    of {storageData ? formatBytes(storageData.totalBytes) : '10 GB'}
+                  </span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-muted">
-                  <div className="h-2 rounded-full bg-primary" style={{ width: '0%' }} />
+                  <div
+                    className="h-2 rounded-full bg-primary"
+                    style={{
+                      width: storageData
+                        ? `${Math.min((storageData.usedBytes / storageData.totalBytes) * 100, 100)}%`
+                        : '0%',
+                    }}
+                  />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Storage includes all files, snapshots, and hosted site assets.
@@ -497,15 +596,55 @@ export default function SettingsPage() {
 
       <ConfirmDialog
         open={showDeleteConfirm}
-        onOpenChange={setShowDeleteConfirm}
+        onOpenChange={(open) => {
+          setShowDeleteConfirm(open);
+          if (!open) setDeleteConfirmText('');
+        }}
         title="Delete account"
         description="This will permanently delete your account, all workspaces, files, conversations, automations, and hosted services. This action cannot be undone."
         confirmLabel="Delete everything"
         variant="destructive"
-        onConfirm={async () => {
-          // Would call API to delete account
+        onConfirm={() => {
+          deleteAccountMutation.mutate();
+          setShowDeleteConfirm(false);
         }}
-      />
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Type <strong className="text-destructive">DELETE</strong> to confirm:
+          </p>
+          <input
+            type="text"
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            placeholder="Type DELETE"
+          />
+        </div>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="mt-3 w-full"
+          onClick={() => {
+            deleteAccountMutation.mutate();
+            setShowDeleteConfirm(false);
+          }}
+          disabled={deleteConfirmText !== 'DELETE' || deleteAccountMutation.isPending}
+        >
+          {deleteAccountMutation.isPending ? (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          ) : null}
+          Delete everything
+        </Button>
+      </ConfirmDialog>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }

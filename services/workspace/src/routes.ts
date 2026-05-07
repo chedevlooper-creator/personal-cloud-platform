@@ -572,4 +572,34 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       };
     },
   );
+
+  server.get(
+    '/workspaces/:id/storage',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        response: {
+          200: z.object({
+            usedBytes: z.number(),
+            totalBytes: z.number(),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+
+      const workspace = await workspaceService.getWorkspace(request.params.id, userId);
+      if (!workspace) return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+
+      return {
+        usedBytes: workspace.storageUsed,
+        totalBytes: workspace.storageLimit,
+      };
+    },
+  );
 }
