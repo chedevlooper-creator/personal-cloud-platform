@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import type React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -93,20 +93,6 @@ export default function SettingsPage() {
       return res.data as UserPreferences;
     },
   });
-
-  // --- Profile ---
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const bioInputRef = useRef<HTMLInputElement>(null);
-
-  // Reset local state when query data changes
-  const userName = user?.name || '';
-  const userBio = prefs?.bio || '';
-  if (nameInputRef.current?.value !== userName && userName) {
-    nameInputRef.current?.value = userName;
-  }
-  if (bioInputRef.current?.value !== userBio && userBio) {
-    bioInputRef.current?.value = userBio;
-  }
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { name?: string; bio?: string }) => {

@@ -41,6 +41,8 @@ type HostedService = {
   slug: string;
   status: string;
   kind: string;
+  rootPath: string;
+  startCommand?: string | null;
   updatedAt: string;
   publicUrl?: string | null;
   autoRestart?: boolean;
