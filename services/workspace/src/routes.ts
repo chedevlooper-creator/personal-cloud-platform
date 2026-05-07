@@ -10,6 +10,7 @@ import {
   workspaceResponseSchema,
   apiErrorCodeFromStatus,
   sendApiError,
+  DomainError,
 } from '@pcp/shared';
 import { WorkspaceError, WorkspaceService } from './service';
 import { z } from 'zod';
@@ -17,6 +18,7 @@ import { setupSnapshotRoutes } from './routes/snapshots';
 import { setupDatasetsRoutes } from './routes/datasets';
 import { env } from './env';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
+import { cache } from './cache';
 
 type WildcardFileParams = {
   id: string;
@@ -168,8 +170,15 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
+      const cacheKey = `workspace:files:${request.params.id}:${userId}:${request.query.path ?? '/'}`;
+      const cached = await cache.get<typeof fileMetadataSchema._type[]>(cacheKey);
+      if (cached) {
+        return { files: cached };
+      }
+
       const { path } = request.query;
       const files = await workspaceService.listFiles(request.params.id, userId, path);
+      await cache.set(cacheKey, files, 30);
 
       return { files };
     },
@@ -199,7 +208,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       try {
         return await workspaceService.getFileContent(request.params.id, userId, request.query.path);
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
@@ -247,7 +256,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
           request.body.mimeType,
         );
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
@@ -297,7 +306,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
           maxInlineBytes: request.query.maxInlineBytes,
         });
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
@@ -473,7 +482,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
           size: parseInt(file.size || '0', 10),
         });
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
