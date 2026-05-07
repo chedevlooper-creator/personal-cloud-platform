@@ -59,6 +59,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const rows = await datasetsService.list(userId);
@@ -74,6 +75,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -111,6 +113,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       const ds = await datasetsService.get(userId, request.params.id);
@@ -153,6 +156,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -194,6 +198,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -223,6 +228,7 @@ export async function setupDatasetsRoutes(fastify: FastifyInstance) {
   server.post('/datasets/import', async (request, reply) => {
     const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
     if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
