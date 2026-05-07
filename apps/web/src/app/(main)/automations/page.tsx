@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { agentApi, apiEndpoints, toastApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -55,6 +56,11 @@ type AutomationRun = {
   output: string | null;
   createdAt: string;
 };
+
+type ConfirmAction =
+  | { type: 'run'; automation: Automation }
+  | { type: 'delete'; automation: Automation }
+  | null;
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'active', label: 'Aktif' },
@@ -114,6 +120,7 @@ export default function AutomationsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('active');
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const queryClient = useQueryClient();
 
   const {
@@ -148,6 +155,7 @@ export default function AutomationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
       toast.success('Otomasyon silindi');
+      setConfirmAction(null);
     },
     onError: (e) => toastApiError(e, 'Otomasyon silinemedi'),
   });
@@ -156,8 +164,10 @@ export default function AutomationsPage() {
     mutationFn: async (id: string) => {
       await agentApi.post(`/automations/${id}/run`);
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['automation-runs', id] });
       toast.success('Otomasyon çalıştırıldı');
+      setConfirmAction(null);
     },
     onError: (e) => toastApiError(e, 'Otomasyon çalıştırılamadı'),
   });
@@ -278,10 +288,15 @@ export default function AutomationsPage() {
                     size="touch"
                     variant="outline"
                     className="w-full sm:w-auto"
-                    onClick={() => runMutation.mutate(auto.id)}
-                    disabled={runMutation.isPending}
+                    onClick={() => setConfirmAction({ type: 'run', automation: auto })}
+                    disabled={runMutation.isPending && runMutation.variables === auto.id}
                   >
-                    <Play className="mr-1 h-3.5 w-3.5" /> Çalıştır
+                    {runMutation.isPending && runMutation.variables === auto.id ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    Çalıştır
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -320,7 +335,7 @@ export default function AutomationsPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
-                        onClick={() => deleteMutation.mutate(auto.id)}
+                        onClick={() => setConfirmAction({ type: 'delete', automation: auto })}
                       >
                         <Trash2 className="mr-2 h-4 w-4" /> Sil
                       </DropdownMenuItem>
@@ -348,6 +363,27 @@ export default function AutomationsPage() {
       <RunHistoryDialog
         automationId={historyId}
         onOpenChange={(open) => !open && setHistoryId(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+        title={confirmAction?.type === 'delete' ? 'Otomasyonu sil' : 'Otomasyonu çalıştır'}
+        description={
+          confirmAction?.type === 'delete'
+            ? `"${confirmAction.automation.title}" otomasyonu silinecek. Bu işlem geri alınamaz.`
+            : `"${confirmAction?.automation.title}" otomasyonu şimdi çalıştırılacak.`
+        }
+        confirmLabel={confirmAction?.type === 'delete' ? 'Sil' : 'Çalıştır'}
+        variant={confirmAction?.type === 'delete' ? 'destructive' : 'warning'}
+        onConfirm={async () => {
+          if (!confirmAction) return;
+          if (confirmAction.type === 'delete') {
+            await deleteMutation.mutateAsync(confirmAction.automation.id);
+          } else {
+            await runMutation.mutateAsync(confirmAction.automation.id);
+          }
+        }}
       />
     </div>
   );
