@@ -317,6 +317,48 @@ describe('PublishService security boundaries', () => {
     }
   });
 
+  it('blocks denied hosted start commands before Docker container creation', async () => {
+    const { PublishService } = await import('./service');
+    mockDb.query.hostedServices.findFirst.mockResolvedValueOnce({
+      id: SERVICE_ID,
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      name: 'Site',
+      slug: 'site',
+      kind: 'node',
+      rootPath: '/',
+      startCommand: 'sudo id',
+      port: null,
+      envVars: {},
+      isPublic: false,
+      autoRestart: true,
+      customDomain: null,
+      status: 'stopped',
+      runnerProcessId: null,
+      publicUrl: null,
+      lastHealthAt: null,
+      lastHealthOk: null,
+      crashCount: 0,
+      createdAt: new Date('2026-04-27T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+    });
+    const service = new PublishService();
+
+    await service.startService(SERVICE_ID, USER_ID);
+
+    await waitForExpectation(() =>
+      expect(updatedValues).toContainEqual(expect.objectContaining({ status: 'crashed' })),
+    );
+    expect(createContainer).not.toHaveBeenCalled();
+    expect(insertedValueCalls).toContainEqual(
+      expect.objectContaining({
+        serviceId: SERVICE_ID,
+        stream: 'stderr',
+        line: 'Command blocked by security policy',
+      }),
+    );
+  });
+
   it('fetches and materializes workspace source before hosted container launch', async () => {
     const workspaceRoot = await mkdtemp(join(tmpdir(), 'pcp-publish-'));
     const originalRoot = process.env.PUBLISH_WORKSPACE_HOST_ROOT;

@@ -9,10 +9,15 @@ import {
   createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
+  createHealthRoute,
+  initTracing,
 } from '@pcp/shared';
+import { checkDbHealth } from '@pcp/db/src/client';
 import { setupRuntimeRoutes } from './routes';
 import { RuntimeService } from './service';
 import { env } from './env';
+
+initTracing('runtime');
 
 const server = Fastify({
   genReqId: createCorrelationIdGenerator(),
@@ -54,11 +59,9 @@ server.register(cookie, {
 
 server.register(websocket);
 
-server.get('/health', async () => {
-  return { status: 'ok', service: 'runtime' };
-});
+server.register(createHealthRoute(checkDbHealth));
 
-server.register(setupRuntimeRoutes, { prefix: '/api' });
+server.register(setupRuntimeRoutes, { prefix: '/v1' });
 
 const start = async () => {
   try {

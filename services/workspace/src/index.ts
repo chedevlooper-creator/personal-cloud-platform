@@ -9,9 +9,14 @@ import {
   createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
+  createHealthRoute,
+  initTracing,
 } from '@pcp/shared';
+import { checkDbHealth } from '@pcp/db/src/client';
 import { setupWorkspaceRoutes } from './routes';
 import { env } from './env';
+
+initTracing('workspace');
 
 const server = Fastify({
   genReqId: createCorrelationIdGenerator(),
@@ -57,11 +62,9 @@ server.register(multipart, {
   },
 });
 
-server.get('/health', async () => {
-  return { status: 'ok', service: 'workspace' };
-});
+server.register(createHealthRoute(checkDbHealth));
 
-server.register(setupWorkspaceRoutes, { prefix: '/api' });
+server.register(setupWorkspaceRoutes, { prefix: '/v1' });
 
 const start = async () => {
   try {

@@ -4,7 +4,7 @@ import { eq, desc, and, isNull } from 'drizzle-orm';
 import Docker from 'dockerode';
 import { encryptEnvVars, decryptEnvVars, redactEnvVars } from './encryption';
 import { env } from './env';
-import { buildPublishSecurityOptions, resolvePublishImage } from './policy';
+import { assertPublishCommandAllowed, buildPublishSecurityOptions, resolvePublishImage } from './policy';
 import { WorkspaceMaterializer } from './workspace-materializer';
 import { NotFoundError, ValidationError } from '@pcp/shared';
 
@@ -199,6 +199,10 @@ export class PublishService {
         cmd = ['npm', 'start'];
       } else if (service.kind === 'vite') {
         cmd = ['npm', 'run', 'dev', '--', '--host'];
+      }
+
+      if (cmd.length > 0) {
+        assertPublishCommandAllowed(cmd);
       }
 
       // We expose it on traefik

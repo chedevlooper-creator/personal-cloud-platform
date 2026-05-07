@@ -8,11 +8,16 @@ import {
   createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
+  createHealthRoute,
+  initTracing,
 } from '@pcp/shared';
+import { checkDbHealth } from '@pcp/db/src/client';
 import { publishRoutes } from './routes';
 import { env } from './env';
 import { startHealthDaemon } from './health';
 import { PublishService } from './service';
+
+initTracing('publish');
 
 let healthDaemon: { stop: () => void } | undefined;
 
@@ -78,11 +83,9 @@ app.register(cors, {
 });
 app.register(cookie);
 
-app.register(publishRoutes, { prefix: '/publish' });
+app.register(publishRoutes, { prefix: '/v1' });
 
-app.get('/health', async () => {
-  return { status: 'ok', service: 'publish', uptimeSeconds: process.uptime() };
-});
+app.register(createHealthRoute(checkDbHealth));
 
 const start = async () => {
   try {

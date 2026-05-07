@@ -1,4 +1,11 @@
 import { env } from './env';
+import {
+  assertSandboxCommandAllowed,
+  getBlockedSandboxCommandCategories,
+  normalizeProfileValue,
+  normalizeSandboxProfile,
+  SANDBOX_COMMAND_POLICY,
+} from '@pcp/shared';
 
 type DockerSecurityProfileConfig = {
   seccompProfile?: string;
@@ -9,28 +16,11 @@ const DOCKER_NO_NEW_PRIVILEGES = 'no-new-privileges:true';
 const SECCOMP_PROFILE_PATTERN = /^\/?[A-Za-z0-9][A-Za-z0-9_./:-]*$/;
 const APPARMOR_PROFILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/;
 
-const BLOCKED_COMMANDS = [
-  {
-    category: 'destructive root deletion',
-    pattern: /rm\s+-rf\s+\//,
-  },
-  {
-    category: 'privilege escalation',
-    pattern: /(?:^|\s)sudo\b/,
-  },
-  {
-    category: 'fork bomb',
-    pattern: /:\(\)\{\s*:\|:&\s*\};:/,
-  },
-] as const;
-
-const MAX_COMMAND_ARGS = 64;
-const MAX_COMMAND_ARG_LENGTH = 4096;
-
 export const RUNTIME_COMMAND_POLICY = {
-  timeoutMs: 60_000,
+  timeoutMs: SANDBOX_COMMAND_POLICY.timeoutMs,
   network: 'disabled',
-  blockedCategories: BLOCKED_COMMANDS.map((rule) => rule.category),
+  profiles: SANDBOX_COMMAND_POLICY.profiles,
+  blockedCategories: SANDBOX_COMMAND_POLICY.blockedCategories,
 } as const;
 
 export function getRuntimeImageAllowlist(): string[] {
@@ -43,19 +33,17 @@ export function assertRuntimeImageAllowed(image: string): void {
   }
 }
 
-export function assertRuntimeCommandAllowed(command: string[]): void {
-  if (command.length === 0 || command.length > MAX_COMMAND_ARGS) {
-    throw new Error('Command blocked by security policy');
-  }
+export function assertRuntimeCommandAllowed(
+  command: readonly string[],
+  profile = env.RUNTIME_SANDBOX_PROFILE,
+): void {
+  assertSandboxCommandAllowed(command, normalizeSandboxProfile(profile));
+}
 
-  if (command.some((arg) => arg.length === 0 || arg.length > MAX_COMMAND_ARG_LENGTH || /\0/.test(arg))) {
-    throw new Error('Command blocked by security policy');
-  }
-
-  const commandStr = command.join(' ');
-  if (BLOCKED_COMMANDS.some((rule) => rule.pattern.test(commandStr))) {
-    throw new Error('Command blocked by security policy');
-  }
+export function getRuntimeBlockedCommandCategories(
+  profile = env.RUNTIME_SANDBOX_PROFILE,
+): readonly string[] {
+  return getBlockedSandboxCommandCategories(normalizeSandboxProfile(profile));
 }
 
 export function buildRuntimeSecurityOptions(config: DockerSecurityProfileConfig = {}): string[] {
@@ -74,20 +62,4 @@ export function buildRuntimeSecurityOptions(config: DockerSecurityProfileConfig 
   if (seccompProfile) securityOptions.push(`seccomp=${seccompProfile}`);
   if (appArmorProfile) securityOptions.push(`apparmor=${appArmorProfile}`);
   return securityOptions;
-}
-
-function normalizeProfileValue(
-  value: string | undefined,
-  envName: string,
-  pattern: RegExp,
-): string | undefined {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  if (trimmed === 'unconfined') {
-    throw new Error(`${envName} must not disable confinement`);
-  }
-  if (trimmed.includes('..') || !pattern.test(trimmed)) {
-    throw new Error(`${envName} contains invalid characters`);
-  }
-  return trimmed;
 }

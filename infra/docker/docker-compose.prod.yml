@@ -1,0 +1,371 @@
+version: "3.9"
+
+name: personal-cloud-platform-prod
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: pcp-traefik-prod
+    restart: unless-stopped
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--ping=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pcp-network
+      - pcp-publish
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    container_name: pcp-web-prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`${APP_HOST:-localhost}`)"
+      - "traefik.http.routers.web.entrypoints=web"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pcp-network
+
+  auth:
+    build:
+      context: ../..
+      dockerfile: services/auth/Dockerfile
+    container_name: pcp-auth-prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=Host(`${APP_HOST:-localhost}`) && PathPrefix(`/v1/auth`)"
+      - "traefik.http.routers.auth.entrypoints=web"
+      - "traefik.http.services.auth.loadbalancer.server.port=3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - COOKIE_SECRET=${COOKIE_SECRET}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+      - FRONTEND_URL=${FRONTEND_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pcp-network
+
+  workspace:
+    build:
+      context: ../..
+      dockerfile: services/workspace/Dockerfile
+    container_name: pcp-workspace-prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.workspace.rule=Host(`${APP_HOST:-localhost}`) && PathPrefix(`/v1/workspaces`)"
+      - "traefik.http.routers.workspace.entrypoints=web"
+      - "traefik.http.services.workspace.loadbalancer.server.port=3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_REGION=${S3_REGION}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pcp-network
+
+  runtime:
+    build:
+      context: ../..
+      dockerfile: services/runtime/Dockerfile
+    container_name: pcp-runtime-prod
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - runtime_workspaces:/var/lib/pcp/workspaces
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.runtime.rule=Host(`${APP_HOST:-localhost}`) && PathPrefix(`/v1/runtimes`)"
+      - "traefik.http.routers.runtime.entrypoints=web"
+      - "traefik.http.services.runtime.loadbalancer.server.port=3003"
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - WORKSPACE_SERVICE_URL=${WORKSPACE_SERVICE_URL}
+      - WORKSPACE_HOST_ROOT=/var/lib/pcp/workspaces
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3003/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pcp-network
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: services/agent/Dockerfile
+    container_name: pcp-agent-prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agent.rule=Host(`${APP_HOST:-localhost}`) && PathPrefix(`/v1/agent`)"
+      - "traefik.http.routers.agent.entrypoints=web"
+      - "traefik.http.services.agent.loadbalancer.server.port=3004"
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - COOKIE_SECRET=${COOKIE_SECRET}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WORKSPACE_SERVICE_URL=${WORKSPACE_SERVICE_URL}
+      - RUNTIME_SERVICE_URL=${RUNTIME_SERVICE_URL}
+      - MEMORY_SERVICE_URL=${MEMORY_SERVICE_URL}
+      - BROWSER_SERVICE_URL=${BROWSER_SERVICE_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3004/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pcp-network
+
+  memory:
+    build:
+      context: ../..
+      dockerfile: services/memory/Dockerfile
+    container_name: pcp-memory-prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memory.rule=Host(`${APP_HOST:-localhost}`) && PathPrefix(`/v1/memory`)"
+      - "traefik.http.routers.memory.entrypoints=web"
+      - "traefik.http.services.memory.loadbalancer.server.port=3005"
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3005/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pcp-network
+
+  publish:
+    build:
+      context: ../..
+      dockerfile: services/publish/Dockerfile
+    container_name: pcp-publish-prod
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - publish_workspaces:/var/lib/pcp/workspaces
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.publish.rule=Host(`${APP_HOST:-localhost}`) && PathPrefix(`/v1/hosted-services`)"
+      - "traefik.http.routers.publish.entrypoints=web"
+      - "traefik.http.services.publish.loadbalancer.server.port=3006"
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - WORKSPACE_SERVICE_URL=${WORKSPACE_SERVICE_URL}
+      - PUBLISH_WORKSPACE_HOST_ROOT=/var/lib/pcp/workspaces
+      - PUBLISH_DOCKER_NETWORK=pcp-publish
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3006/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pcp-network
+      - pcp-publish
+
+  browser:
+    build:
+      context: ../..
+      dockerfile: services/browser/Dockerfile
+    container_name: pcp-browser-prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.browser.rule=Host(`${APP_HOST:-localhost}`) && PathPrefix(`/v1/browser`)"
+      - "traefik.http.routers.browser.entrypoints=web"
+      - "traefik.http.services.browser.loadbalancer.server.port=3007"
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3007/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pcp-network
+
+  db-migrate:
+    build:
+      context: ../..
+      dockerfile: packages/db/Dockerfile
+    container_name: pcp-db-migrate-prod
+    restart: "no"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pcp-network
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pcp-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pcp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pcp_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-pcp}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pcp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pcp-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: pcp-redis-prod
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - pcp-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: pcp-minio-prod
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pcp-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  runtime_workspaces:
+  publish_workspaces:
+
+networks:
+  pcp-network:
+    driver: bridge
+  pcp-publish:
+    driver: bridge

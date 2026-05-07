@@ -77,7 +77,9 @@ export class DockerProvider implements RuntimeProvider {
     const container = this.docker.getContainer(id);
     try {
       await container.stop();
-    } catch (e) {}
+    } catch {
+      // Container may already be stopped; proceed to remove.
+    }
     await container.remove();
   }
 

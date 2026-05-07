@@ -1,17 +1,23 @@
 import { z } from 'zod';
 import crypto from 'crypto';
-import { isUnsafeEnvValue, resolveProductionValue, resolveSecret } from '@pcp/shared';
+import {
+  isUnsafeEnvValue,
+  normalizeSandboxProfile,
+  resolveProductionValue,
+  resolveSecret,
+} from '@pcp/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3006),
   DATABASE_URL: z.string().url().optional(),
   ENCRYPTION_KEY: z.string().optional(),
-  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002/api'),
+  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002/v1'),
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
   PUBLISH_WORKSPACE_HOST_ROOT: z.string().default('/tmp/workspaces'),
   PUBLISH_SECCOMP_PROFILE: z.string().optional(),
   PUBLISH_APPARMOR_PROFILE: z.string().optional(),
+  PUBLISH_SANDBOX_PROFILE: z.string().default('balanced'),
   PUBLISH_DOCKER_NETWORK: z.string().default('pcp-publish'),
 });
 
@@ -33,6 +39,7 @@ export const env = {
   PUBLISH_WORKSPACE_HOST_ROOT: parsed.PUBLISH_WORKSPACE_HOST_ROOT,
   PUBLISH_SECCOMP_PROFILE: parsed.PUBLISH_SECCOMP_PROFILE,
   PUBLISH_APPARMOR_PROFILE: parsed.PUBLISH_APPARMOR_PROFILE,
+  PUBLISH_SANDBOX_PROFILE: normalizeSandboxProfile(parsed.PUBLISH_SANDBOX_PROFILE),
   PUBLISH_DOCKER_NETWORK: parsed.PUBLISH_DOCKER_NETWORK,
 };
 
