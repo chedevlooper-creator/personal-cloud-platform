@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { LLMProvider, Message, ToolDefinition, LLMResponse, ToolCall } from './types';
+import { LLMProvider, Message, ToolDefinition, LLMResponse, ToolCall, StreamChunk } from './types';
 import { withRetry } from './withRetry';
 
 type AnthropicAuthMode = 'api-key' | 'bearer';
@@ -90,5 +90,52 @@ export class AnthropicProvider implements LLMProvider {
         totalTokens: response.usage.input_tokens + response.usage.output_tokens,
       },
     };
+  }
+
+  async *streamChat(messages: Message[], tools?: ToolDefinition[]): AsyncIterable<StreamChunk> {
+    const formattedMessages = messages.filter(m => m.role !== 'system').map(m => ({
+      role: toAnthropicRole(m.role),
+      content: m.content,
+    }));
+
+    const systemMessage = messages.find(m => m.role === 'system')?.content;
+
+    const formattedTools = tools?.map(t => ({
+      name: t.name,
+      description: t.description,
+      input_schema: toAnthropicInputSchema(t.parameters),
+    }));
+
+    const stream = await this.client.messages.create({
+      model: this.modelName,
+      max_tokens: 4096,
+      system: systemMessage,
+      messages: formattedMessages,
+      tools: formattedTools,
+      stream: true,
+    });
+
+    const toolCalls: ToolCall[] = [];
+    let currentTool: Partial<ToolCall> | null = null;
+
+    for await (const event of stream as AsyncIterable<unknown>) {
+      const ev = event as { type: string; delta?: { type: string; text?: string }; content_block?: { type: string; id?: string; name?: string; input?: Record<string, unknown> } };
+      if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
+        yield { type: 'text', content: ev.delta.text };
+      } else if (ev.type === 'content_block_start' && ev.content_block?.type === 'tool_use') {
+        currentTool = {
+          id: ev.content_block.id ?? '',
+          name: ev.content_block.name ?? '',
+          arguments: '',
+        };
+      } else if (ev.type === 'content_block_stop' && currentTool) {
+        toolCalls.push(currentTool as ToolCall);
+        currentTool = null;
+      }
+    }
+
+    for (const tc of toolCalls) {
+      yield { type: 'tool_call', toolCall: { ...tc, arguments: tc.arguments || '{}' } };
+    }
   }
 }

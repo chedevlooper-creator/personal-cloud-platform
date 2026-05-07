@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { Tool, ToolContext } from './registry';
 import { ToolDefinition } from '../llm/types';
-import { internalRequest } from '../clients/http';
+import { createInternalClient } from '@pcp/shared';
 import { env } from '../env';
+
+const workspaceClient = createInternalClient({
+  baseUrl: env.WORKSPACE_SERVICE_URL,
+  internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+});
 
 interface DatasetPreviewResponse {
   columns: Array<{ name: string; type: string }>;
@@ -49,15 +54,12 @@ export class DescribeDatasetTool implements Tool<Input, string> {
   }
 
   async execute(input: Input, context: ToolContext): Promise<string> {
-    const res = await internalRequest<DatasetPreviewResponse>(
-      env.WORKSPACE_SERVICE_URL,
-      {
-        userId: context.userId,
-        method: 'POST',
-        path: '/api/datasets/query',
-        body: { sql: `SELECT * FROM "${input.tableName}" LIMIT 5`, rowLimit: 5 },
-      },
-    );
+    const res = await workspaceClient.request<DatasetPreviewResponse>({
+      userId: context.userId,
+      method: 'POST',
+      path: '/datasets/query',
+      body: { sql: `SELECT * FROM "${input.tableName}" LIMIT 5`, rowLimit: 5 },
+    });
 
     const headerLine = res.columns.map((c) => `${c.name} (${c.type})`).join(' | ');
     const body = res.rows

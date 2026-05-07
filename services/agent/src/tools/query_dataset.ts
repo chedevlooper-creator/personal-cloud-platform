@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { Tool, ToolContext } from './registry';
 import { ToolDefinition } from '../llm/types';
-import { internalRequest } from '../clients/http';
+import { createInternalClient } from '@pcp/shared';
 import { env } from '../env';
+
+const workspaceClient = createInternalClient({
+  baseUrl: env.WORKSPACE_SERVICE_URL,
+  internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+});
 
 const inputSchema = z.object({
   sql: z
@@ -61,10 +66,10 @@ export class QueryDatasetTool implements Tool<Input, string> {
 
   async execute(input: Input, context: ToolContext): Promise<string> {
     const limit = Math.min(input.rowLimit ?? 200, 1000);
-    const result = await internalRequest<QueryResponse>(env.WORKSPACE_SERVICE_URL, {
+    const result = await workspaceClient.request<QueryResponse>({
       userId: context.userId,
       method: 'POST',
-      path: '/api/datasets/query',
+      path: '/datasets/query',
       body: { sql: input.sql, rowLimit: limit },
     });
 

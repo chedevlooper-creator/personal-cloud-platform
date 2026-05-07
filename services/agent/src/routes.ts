@@ -10,6 +10,7 @@ import {
   taskEventStreamQuerySchema,
   sendApiError,
   createAuthMiddleware,
+  createRateLimitHeaders,
 } from '@pcp/shared';
 import { validateSessionUserId } from '@pcp/db/src/session';
 import { db } from '@pcp/db/src/client';
@@ -19,6 +20,7 @@ import { AgentOrchestrator } from './orchestrator';
 import { env } from './env';
 import { z } from 'zod';
 import { checkAgentRateLimit, AGENT_RATE_LIMITS } from './rate-limit';
+import { cache } from './cache';
 
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
@@ -45,11 +47,11 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
   ): Promise<boolean> {
     const { windowMs, maxRequests } = AGENT_RATE_LIMITS[action];
     const result = await checkAgentRateLimit(userId, action, windowMs, maxRequests);
-    reply.header('X-RateLimit-Limit', maxRequests);
-    reply.header('X-RateLimit-Remaining', Math.max(0, result.remaining));
-    reply.header('X-RateLimit-Reset', Math.ceil(result.resetAt / 1000));
+    const headers = createRateLimitHeaders(result, maxRequests);
+    for (const [name, value] of Object.entries(headers)) {
+      reply.header(name, value);
+    }
     if (!result.allowed) {
-      reply.header('Retry-After', Math.ceil((result.resetAt - Date.now()) / 1000));
       sendApiError(reply, 429, 'RATE_LIMITED', 'Rate limit exceeded. Please try again later.');
       return false;
     }
@@ -152,7 +154,14 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const userId = await getAuthenticatedUserId(request.cookies.sessionId);
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
+      const cacheKey = `conversations:${userId}:${request.query.workspaceId ?? 'all'}`;
+      const cached = await cache.get<typeof conversationResponseSchema._type[]>(cacheKey);
+      if (cached) {
+        return { conversations: cached };
+      }
+
       const convos = await orchestrator.getConversations(userId, request.query.workspaceId);
+      await cache.set(cacheKey, convos, 60);
       return { conversations: convos };
     },
   );
@@ -285,13 +294,18 @@ export async function setupAgentRoutes(fastify: FastifyInstance) {
       const onStep = (data: unknown): void => {
         if (!closed) sendEvent('step', data);
       };
+      const onToken = (data: unknown): void => {
+        if (!closed) sendEvent('llm_token', data);
+      };
 
       emitter.on('task', onTask);
       if (!closed) emitter.on('step', onStep);
+      if (!closed) emitter.on('llm_token', onToken);
 
       function cleanup() {
         emitter.off('task', onTask);
         emitter.off('step', onStep);
+        emitter.off('llm_token', onToken);
         orchestrator.releaseTaskSubscription(id, emitter);
       }
 

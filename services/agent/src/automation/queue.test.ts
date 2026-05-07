@@ -20,6 +20,9 @@ const { mockDb, capturedWorker } = vi.hoisted(() => {
       workspaces: {
         findFirst: vi.fn(),
       },
+      automationRuns: {
+        findFirst: vi.fn(),
+      },
     },
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
@@ -96,6 +99,12 @@ describe('automation worker scheduled jobs', () => {
       userId: USER_ID,
       deletedAt: null,
     });
+    mockDb.query.automationRuns.findFirst.mockResolvedValue({
+      id: '550e8400-e29b-41d4-a716-446655440004',
+      automationId: AUTOMATION_ID,
+      userId: USER_ID,
+      status: 'queued',
+    });
   });
 
   it('loads scheduled automation data and creates a fresh run at execution time', async () => {
@@ -148,6 +157,27 @@ describe('automation worker scheduled jobs', () => {
         },
       }),
     ).rejects.toThrow('Automation workspace not found');
+
+    expect(orchestrator.createTask).not.toHaveBeenCalled();
+  });
+
+  it('does not run queued jobs when run id does not belong to automation owner', async () => {
+    const { setupAutomationWorker } = await import('./queue');
+    const orchestrator = createMockOrchestrator();
+    mockDb.query.automationRuns.findFirst.mockResolvedValueOnce(null);
+
+    await setupAutomationWorker(orchestrator as any, pino({ level: 'silent' }));
+    await expect(
+      capturedWorker.processor?.({
+        data: {
+          runId: '550e8400-e29b-41d4-a716-446655440004',
+          automationId: AUTOMATION_ID,
+          userId: USER_ID,
+          workspaceId: WORKSPACE_ID,
+          prompt: 'Summarize',
+        },
+      }),
+    ).rejects.toThrow('Automation run not found');
 
     expect(orchestrator.createTask).not.toHaveBeenCalled();
   });

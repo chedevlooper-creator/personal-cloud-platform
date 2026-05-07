@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { Tool, ToolContext } from './registry';
 import { ToolDefinition } from '../llm/types';
-import { internalRequest } from '../clients/http';
+import { createInternalClient } from '@pcp/shared';
 import { env } from '../env';
+
+const workspaceClient = createInternalClient({
+  baseUrl: env.WORKSPACE_SERVICE_URL,
+  internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+});
 
 interface DatasetCatalogEntry {
   id: string;
@@ -46,14 +51,11 @@ export class ListDatasetsTool implements Tool<Input, string> {
   }
 
   async execute(_input: Input, context: ToolContext): Promise<string> {
-    const res = await internalRequest<{ datasets: DatasetCatalogEntry[] }>(
-      env.WORKSPACE_SERVICE_URL,
-      {
-        userId: context.userId,
-        method: 'GET',
-        path: '/api/datasets',
-      },
-    );
+    const res = await workspaceClient.request<{ datasets: DatasetCatalogEntry[] }>({
+      userId: context.userId,
+      method: 'GET',
+      path: '/datasets',
+    });
 
     const datasets = res.datasets ?? [];
     if (datasets.length === 0) {

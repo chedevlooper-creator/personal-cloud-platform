@@ -1,5 +1,12 @@
+import { createInternalClient, createCircuitBreaker } from '@pcp/shared';
 import { env } from '../env';
-import { internalRequest } from './http';
+
+const client = createInternalClient({
+  baseUrl: env.WORKSPACE_SERVICE_URL,
+  internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+});
+
+const breaker = createCircuitBreaker({ name: 'workspace-client' });
 
 export interface FileMetadata {
   id: string;
@@ -23,12 +30,13 @@ export interface FileContentResponse {
 
 export class WorkspaceClient {
   async listFiles(userId: string, workspaceId: string, path: string): Promise<FileMetadata[]> {
-    const result = await internalRequest<{ files: FileMetadata[] }>(env.WORKSPACE_SERVICE_URL, {
-      userId,
-      method: 'GET',
-      path: `/workspaces/${workspaceId}/files`,
-      query: { path },
-    });
+    const result = await breaker.execute(() =>
+      client.request<{ files: FileMetadata[] }>({
+        userId,
+        path: `/workspaces/${workspaceId}/files`,
+        query: { path },
+      }),
+    );
     return result.files;
   }
 
@@ -37,12 +45,13 @@ export class WorkspaceClient {
     workspaceId: string,
     path: string,
   ): Promise<FileContentResponse> {
-    return internalRequest<FileContentResponse>(env.WORKSPACE_SERVICE_URL, {
-      userId,
-      method: 'GET',
-      path: `/workspaces/${workspaceId}/files/content`,
-      query: { path },
-    });
+    return breaker.execute(() =>
+      client.request<FileContentResponse>({
+        userId,
+        path: `/workspaces/${workspaceId}/files/content`,
+        query: { path },
+      }),
+    );
   }
 
   async writeFile(
@@ -52,14 +61,13 @@ export class WorkspaceClient {
     content: string,
     mimeType = 'text/plain',
   ): Promise<{ bytesWritten: number }> {
-    // Use multipart-style upload via raw PUT body since the existing service exposes streaming upload.
-    // For text content, fall back to creating/updating via the file metadata endpoint and writing content
-    // through the dedicated update-content endpoint if present.
-    return internalRequest<{ bytesWritten: number }>(env.WORKSPACE_SERVICE_URL, {
-      userId,
-      method: 'POST',
-      path: `/workspaces/${workspaceId}/files/write`,
-      body: { path, content, mimeType },
-    });
+    return breaker.execute(() =>
+      client.request<{ bytesWritten: number }>({
+        userId,
+        method: 'POST',
+        path: `/workspaces/${workspaceId}/files/write`,
+        body: { path, content, mimeType },
+      }),
+    );
   }
 }
