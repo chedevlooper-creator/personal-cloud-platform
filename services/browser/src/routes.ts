@@ -72,6 +72,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       return { sessions: browserService.list(userId).map(toJson) };
@@ -85,6 +86,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -103,6 +105,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -127,6 +130,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -151,6 +155,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -175,6 +180,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -203,6 +209,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {
@@ -232,6 +239,7 @@ export async function setupBrowserRoutes(fastify: FastifyInstance) {
       const userId = await resolveAuthenticatedUserId(request, {
         authBypass: env.AUTH_BYPASS,
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
       try {

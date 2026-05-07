@@ -12,8 +12,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   COOKIE_SECRET: z.string().optional(),
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  ALLOWED_AUDIENCES: z.string().optional(),
   WORKSPACE_HOST_ROOT: z.string().default('/var/lib/pcp/workspaces'),
-  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002/v1'),
   RUNTIME_SECCOMP_PROFILE: z.string().optional(),
   RUNTIME_APPARMOR_PROFILE: z.string().optional(),
   RUNTIME_IMAGE_ALLOWLIST: z
@@ -45,6 +46,9 @@ export const env = {
     parsed.INTERNAL_SERVICE_TOKEN,
     32,
   ),
+  ALLOWED_AUDIENCES: parsed.ALLOWED_AUDIENCES
+    ? parsed.ALLOWED_AUDIENCES.split(',').map((s) => s.trim()).filter(Boolean)
+    : undefined,
   WORKSPACE_HOST_ROOT: parsed.WORKSPACE_HOST_ROOT,
   WORKSPACE_SERVICE_URL: parsed.WORKSPACE_SERVICE_URL,
   RUNTIME_SECCOMP_PROFILE: parsed.RUNTIME_SECCOMP_PROFILE,
