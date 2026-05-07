@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { LLMProvider, Message, ToolDefinition, LLMResponse } from './types';
+import { LLMProvider, Message, ToolDefinition, LLMResponse, StreamChunk } from './types';
 import { withRetry } from './withRetry';
 
 function toOpenAIRole(role: Message['role']): 'system' | 'user' | 'assistant' {
@@ -66,5 +66,57 @@ export class OpenAIProvider implements LLMProvider {
         totalTokens: response.usage.total_tokens,
       } : undefined,
     };
+  }
+
+  async *streamChat(messages: Message[], tools?: ToolDefinition[]): AsyncIterable<StreamChunk> {
+    const formattedMessages = messages.map(m => ({
+      role: toOpenAIRole(m.role),
+      content: m.content,
+      name: m.name,
+    }));
+
+    const formattedTools = tools?.map(t => ({
+      type: 'function' as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      }
+    }));
+
+    const stream = await this.client.chat.completions.create({
+      model: this.modelName,
+      messages: formattedMessages,
+      tools: formattedTools,
+      tool_choice: formattedTools ? 'auto' : 'none',
+      stream: true,
+    });
+
+    const toolCallBuffers = new Map<number, { id: string; name: string; args: string }>();
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      if (delta?.content) {
+        yield { type: 'text', content: delta.content };
+      }
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          let buf = toolCallBuffers.get(idx);
+          if (!buf) {
+            buf = { id: tc.id ?? '', name: tc.function?.name ?? '', args: tc.function?.arguments ?? '' };
+            toolCallBuffers.set(idx, buf);
+          } else {
+            if (tc.id) buf.id = tc.id;
+            if (tc.function?.name) buf.name = tc.function.name;
+            if (tc.function?.arguments) buf.args += tc.function.arguments;
+          }
+        }
+      }
+    }
+
+    for (const buf of toolCallBuffers.values()) {
+      yield { type: 'tool_call', toolCall: { id: buf.id, name: buf.name, arguments: buf.args } };
+    }
   }
 }

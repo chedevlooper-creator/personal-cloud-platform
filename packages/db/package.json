@@ -8,7 +8,7 @@
     "build": "tsc",
     "dev": "tsc -w",
     "lint": "eslint .",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
@@ -27,6 +27,7 @@
     "eslint": "^9.39.4",
     "tsx": "^4.7.1",
     "typescript-eslint": "^8.59.0",
-    "typescript": "^5.4.2"
+    "typescript": "^5.4.2",
+    "vitest": "^1.4.0"
   }
 }

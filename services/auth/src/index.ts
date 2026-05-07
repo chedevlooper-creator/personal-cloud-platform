@@ -3,14 +3,20 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import IORedis from 'ioredis';
 import {
   createApiErrorHandler,
   createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
+  createHealthRoute,
+  initTracing,
 } from '@pcp/shared';
+import { checkDbHealth } from '@pcp/db/src/client';
 import { setupAuthRoutes } from './routes';
 import { env } from './env';
+
+initTracing('auth');
 
 const server = Fastify({
   genReqId: createCorrelationIdGenerator(),
@@ -46,9 +52,12 @@ server.register(cors, {
   ...createCorsOptions(env.NODE_ENV),
 });
 
+const rateLimitRedis = process.env.REDIS_URL ? new IORedis(process.env.REDIS_URL) : undefined;
+
 server.register(rateLimit, {
   max: 100,
   timeWindow: '1 minute',
+  redis: rateLimitRedis,
 });
 
 server.register(cookie, {
@@ -56,13 +65,11 @@ server.register(cookie, {
   hook: 'onRequest',
 });
 
-// Health check
-server.get('/health', async () => {
-  return { status: 'ok', service: 'auth' };
-});
+// Health & readiness
+server.register(createHealthRoute(checkDbHealth));
 
 // Register routes
-server.register(setupAuthRoutes, { prefix: '/auth' });
+server.register(setupAuthRoutes, { prefix: '/v1' });
 
 const start = async () => {
   try {

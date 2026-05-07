@@ -3,6 +3,7 @@ import { ToolDefinition } from '../llm/types';
 import { WorkspaceClient } from '../clients/workspace';
 import { RuntimeClient } from '../clients/runtime';
 import { MemoryClient } from '../clients/memory';
+import type { MCPClient } from '../mcp/client';
 
 export interface ToolContext {
   userId: string;
@@ -42,6 +43,33 @@ export class ToolRegistry {
 
   getAllDefinitions(): ToolDefinition[] {
     return Array.from(this.tools.values()).map((t) => t.getDefinition());
+  }
+
+  /**
+   * Register tools exposed by an MCP server as first-class registry entries.
+   * The MCP server is responsible for parameter validation; we accept any object.
+   */
+  registerMCP(client: MCPClient, serverName: string): void {
+    for (const mcpTool of client.getTools()) {
+      const toolName = `${serverName}_${mcpTool.name}`;
+      const tool: Tool<Record<string, unknown>, unknown> = {
+        name: toolName,
+        description: `[MCP ${serverName}] ${mcpTool.description}`,
+        schema: z.record(z.any()),
+        requiresApproval: false,
+        async execute(input: Record<string, unknown>) {
+          return client.invokeTool(mcpTool.name, input);
+        },
+        getDefinition(): ToolDefinition {
+          return {
+            name: toolName,
+            description: `[MCP ${serverName}] ${mcpTool.description}`,
+            parameters: mcpTool.parameters,
+          };
+        },
+      };
+      this.register(tool);
+    }
   }
 
   /**

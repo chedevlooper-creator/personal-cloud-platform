@@ -12,6 +12,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   COOKIE_SECRET: z.string().optional(),
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  ALLOWED_AUDIENCES: z.string().optional(),
   AUTH_BYPASS: z
     .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.literal('')])
     .optional(),
@@ -42,6 +43,9 @@ export const env = {
     parsed.INTERNAL_SERVICE_TOKEN,
     32,
   ),
+  ALLOWED_AUDIENCES: parsed.ALLOWED_AUDIENCES
+    ? parsed.ALLOWED_AUDIENCES.split(',').map((s) => s.trim()).filter(Boolean)
+    : undefined,
   AUTH_BYPASS: !ctx.isProduction && authBypass,
   BROWSER_PROFILE_DIR: parsed.BROWSER_PROFILE_DIR,
   BROWSER_SESSION_TIMEOUT_MS: parsed.BROWSER_SESSION_TIMEOUT_MS,

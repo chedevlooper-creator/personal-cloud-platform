@@ -203,6 +203,7 @@ async function resolveAutomationJobData(data: {
   prompt?: string;
 }) {
   if (data.runId && data.automationId && data.userId && data.workspaceId && data.prompt) {
+    await assertAutomationRunOwned(data.runId, data.automationId, data.userId);
     await assertWorkspaceOwned(data.userId, data.workspaceId);
     return data as {
       runId: string;
@@ -252,6 +253,21 @@ async function resolveAutomationJobData(data: {
     workspaceId: automation.workspaceId,
     prompt: automation.prompt,
   };
+}
+
+async function assertAutomationRunOwned(
+  runId: string,
+  automationId: string,
+  userId: string,
+): Promise<void> {
+  const run = await db.query.automationRuns.findFirst({
+    where: and(
+      eq(automationRuns.id, runId),
+      eq(automationRuns.automationId, automationId),
+      eq(automationRuns.userId, userId),
+    ),
+  });
+  if (!run) throw new Error('Automation run not found');
 }
 
 async function assertWorkspaceOwned(userId: string, workspaceId: string): Promise<void> {

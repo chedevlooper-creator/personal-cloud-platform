@@ -5,6 +5,8 @@ import { createSnapshotSchema, snapshotResponseSchema, sendApiError } from '@pcp
 import { WorkspaceService } from '../service';
 import { db } from '@pcp/db/src/client';
 import { auditLogs } from '@pcp/db/src/schema';
+import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
+import { env } from '../env';
 
 async function emitAudit(
   fastify: FastifyInstance,
@@ -37,7 +39,11 @@ export async function setupSnapshotRoutes(
       },
     },
     async (request, reply) => {
-      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        authBypass: env.AUTH_BYPASS,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const snapshot = await workspaceService.createSnapshot(
@@ -64,7 +70,11 @@ export async function setupSnapshotRoutes(
       },
     },
     async (request, reply) => {
-      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        authBypass: env.AUTH_BYPASS,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const snapshots = await workspaceService.getSnapshots(request.params.id, userId);
@@ -80,7 +90,11 @@ export async function setupSnapshotRoutes(
       },
     },
     async (request, reply) => {
-      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        authBypass: env.AUTH_BYPASS,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const snapshot = await workspaceService.getSnapshot(request.params.id, userId);
@@ -110,7 +124,11 @@ export async function setupSnapshotRoutes(
       },
     },
     async (request, reply) => {
-      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        authBypass: env.AUTH_BYPASS,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       return workspaceService.getUserSnapshotStorageUsage(userId);
@@ -125,7 +143,11 @@ export async function setupSnapshotRoutes(
       },
     },
     async (request, reply) => {
-      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        authBypass: env.AUTH_BYPASS,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       const result = await workspaceService.restoreSnapshot(request.params.id, userId);
@@ -142,7 +164,11 @@ export async function setupSnapshotRoutes(
       },
     },
     async (request, reply) => {
-      const userId = await workspaceService.validateUserFromCookie(request.cookies.sessionId || '');
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        authBypass: env.AUTH_BYPASS,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
       await workspaceService.deleteSnapshot(request.params.id, userId);

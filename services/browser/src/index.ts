@@ -8,9 +8,14 @@ import {
   createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
+  createHealthRoute,
+  initTracing,
 } from '@pcp/shared';
+import { checkDbHealth } from '@pcp/db/src/client';
 import { setupBrowserRoutes } from './routes';
 import { env } from './env';
+
+initTracing('browser');
 
 const server = Fastify({
   genReqId: createCorrelationIdGenerator(),
@@ -43,9 +48,9 @@ server.register(cors, createCorsOptions(env.NODE_ENV));
 server.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 server.register(cookie, { secret: env.COOKIE_SECRET, hook: 'onRequest' });
 
-server.get('/health', async () => ({ status: 'ok', service: 'browser' }));
+server.register(createHealthRoute(checkDbHealth));
 
-server.register(setupBrowserRoutes, { prefix: '/api' });
+server.register(setupBrowserRoutes, { prefix: '/v1' });
 
 const start = async () => {
   try {

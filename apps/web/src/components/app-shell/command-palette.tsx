@@ -16,6 +16,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { useChatPanel } from '@/components/chat/chat-panel-context';
 
 type CommandAction = {
   id: string;
@@ -36,6 +37,7 @@ export function CommandPalette({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const router = useRouter();
+  const { startNewChat } = useChatPanel();
   const listRef = useRef<HTMLDivElement>(null);
 
   const actions = useMemo<CommandAction[]>(
@@ -48,8 +50,7 @@ export function CommandPalette({
           shortcut: '⌘N',
           run: () => {
             router.push('/chats');
-            window.dispatchEvent(new Event('app:new-chat'));
-            window.dispatchEvent(new Event('app:toggle-chat-panel'));
+            startNewChat();
           },
         },
       {
@@ -110,7 +111,7 @@ export function CommandPalette({
         run: () => router.push('/settings'),
       },
     ],
-    [router],
+    [router, startNewChat],
   );
 
   const filtered = useMemo(() => {

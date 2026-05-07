@@ -281,7 +281,7 @@ export class WorkspaceService {
     if (page === 1 && results.length === 0) {
       try {
         await this.createWorkspace(userId, 'Personal workspace');
-      } catch (err) {
+      } catch {
         // Race-safe: if another request created it concurrently, just refetch.
       }
       results = await db.query.workspaces.findMany({

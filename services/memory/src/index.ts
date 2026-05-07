@@ -8,9 +8,14 @@ import {
   createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
+  createHealthRoute,
+  initTracing,
 } from '@pcp/shared';
+import { checkDbHealth } from '@pcp/db/src/client';
 import { setupMemoryRoutes } from './routes';
 import { env } from './env';
+
+initTracing('memory');
 
 const server = Fastify({
   genReqId: createCorrelationIdGenerator(),
@@ -50,11 +55,9 @@ server.register(cookie, {
   hook: 'onRequest',
 });
 
-server.get('/health', async () => {
-  return { status: 'ok', service: 'memory' };
-});
+server.register(createHealthRoute(checkDbHealth));
 
-server.register(setupMemoryRoutes, { prefix: '/api' });
+server.register(setupMemoryRoutes, { prefix: '/v1' });
 
 const start = async () => {
   try {

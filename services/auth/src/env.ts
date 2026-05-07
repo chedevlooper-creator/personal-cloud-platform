@@ -21,7 +21,7 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_CALLBACK_URL: z.string().url().default('http://localhost:3001/auth/oauth/google/callback'),
+  GOOGLE_CALLBACK_URL: z.string().url().default('http://localhost:3001/v1/oauth/google/callback'),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
   ADMIN_EMAIL: z.string().email().optional(),
 });

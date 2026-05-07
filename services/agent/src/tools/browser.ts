@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { Tool, ToolContext } from './registry';
 import { ToolDefinition } from '../llm/types';
-import { internalRequest } from '../clients/http';
+import { createInternalClient } from '@pcp/shared';
 import { env } from '../env';
+
+const browserClient = createInternalClient({
+  baseUrl: env.BROWSER_SERVICE_URL,
+  internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+});
 
 interface SessionDto {
   id: string;
@@ -19,10 +24,10 @@ interface ExtractDto {
 
 async function ensureSession(userId: string, sessionId?: string): Promise<string> {
   if (sessionId) return sessionId;
-  const created = await internalRequest<SessionDto>(env.BROWSER_SERVICE_URL, {
+  const created = await browserClient.request<SessionDto>({
     userId,
     method: 'POST',
-    path: '/api/browser/sessions',
+    path: '/browser/sessions',
   });
   return created.id;
 }
@@ -54,10 +59,10 @@ export class BrowserOpenTool implements Tool<z.infer<typeof openSchema>, string>
   }
   async execute(input: z.infer<typeof openSchema>, ctx: ToolContext): Promise<string> {
     const sessionId = await ensureSession(ctx.userId, input.sessionId);
-    const s = await internalRequest<SessionDto>(env.BROWSER_SERVICE_URL, {
+    const s = await browserClient.request<SessionDto>({
       userId: ctx.userId,
       method: 'POST',
-      path: `/api/browser/sessions/${sessionId}/navigate`,
+      path: `/browser/sessions/${sessionId}/navigate`,
       body: { url: input.url },
     });
     return JSON.stringify({ sessionId: s.id, url: s.url, title: s.title });
@@ -84,10 +89,10 @@ export class BrowserExtractTool implements Tool<z.infer<typeof extractSchema>, s
     };
   }
   async execute(input: z.infer<typeof extractSchema>, ctx: ToolContext): Promise<string> {
-    const r = await internalRequest<ExtractDto>(env.BROWSER_SERVICE_URL, {
+    const r = await browserClient.request<ExtractDto>({
       userId: ctx.userId,
       method: 'GET',
-      path: `/api/browser/sessions/${input.sessionId}/extract`,
+      path: `/browser/sessions/${input.sessionId}/extract`,
     });
     const linksLine = r.links
       .slice(0, 25)
@@ -116,13 +121,13 @@ export class BrowserScreenshotTool implements Tool<z.infer<typeof screenshotSche
     };
   }
   async execute(input: z.infer<typeof screenshotSchema>, ctx: ToolContext): Promise<string> {
-    const r = await internalRequest<{ pngBase64: string }>(env.BROWSER_SERVICE_URL, {
+    const r = await browserClient.request<{ pngBase64: string }>({
       userId: ctx.userId,
       method: 'GET',
-      path: `/api/browser/sessions/${input.sessionId}/screenshot`,
+      path: `/browser/sessions/${input.sessionId}/screenshot`,
     });
     const bytes = Math.floor((r.pngBase64.length * 3) / 4);
-    return `Captured PNG (${bytes} bytes). Display via /api/browser/sessions/${input.sessionId}/screenshot.`;
+    return `Captured PNG (${bytes} bytes). Display via /browser/sessions/${input.sessionId}/screenshot.`;
   }
 }
 
@@ -151,10 +156,10 @@ export class BrowserClickTool implements Tool<z.infer<typeof clickSchema>, strin
     };
   }
   async execute(input: z.infer<typeof clickSchema>, ctx: ToolContext): Promise<string> {
-    const s = await internalRequest<SessionDto>(env.BROWSER_SERVICE_URL, {
+    const s = await browserClient.request<SessionDto>({
       userId: ctx.userId,
       method: 'POST',
-      path: `/api/browser/sessions/${input.sessionId}/click`,
+      path: `/browser/sessions/${input.sessionId}/click`,
       body: { selector: input.selector },
     });
     return `Clicked. Now at ${s.url} (${s.title})`;
@@ -188,10 +193,10 @@ export class BrowserFillTool implements Tool<z.infer<typeof fillSchema>, string>
     };
   }
   async execute(input: z.infer<typeof fillSchema>, ctx: ToolContext): Promise<string> {
-    await internalRequest<SessionDto>(env.BROWSER_SERVICE_URL, {
+    await browserClient.request<SessionDto>({
       userId: ctx.userId,
       method: 'POST',
-      path: `/api/browser/sessions/${input.sessionId}/fill`,
+      path: `/browser/sessions/${input.sessionId}/fill`,
       body: { selector: input.selector, value: input.value },
     });
     return `Filled "${input.selector}".`;

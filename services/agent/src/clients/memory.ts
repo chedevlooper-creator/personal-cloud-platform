@@ -1,5 +1,10 @@
+import { createInternalClient } from '@pcp/shared';
 import { env } from '../env';
-import { internalRequest } from './http';
+
+const client = createInternalClient({
+  baseUrl: env.MEMORY_SERVICE_URL,
+  internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+});
 
 export interface MemoryEntry {
   id: string;
@@ -19,7 +24,7 @@ export class MemoryClient {
     content: string,
     options: { metadata?: unknown; workspaceId?: string } = {},
   ): Promise<MemoryEntry> {
-    return internalRequest<MemoryEntry>(env.MEMORY_SERVICE_URL, {
+    return client.request<MemoryEntry>({
       userId,
       method: 'POST',
       path: '/memory/entries',
@@ -42,7 +47,7 @@ export class MemoryClient {
       minSimilarity?: number;
     } = {},
   ): Promise<MemoryEntry[]> {
-    const result = await internalRequest<{ results: MemoryEntry[] }>(env.MEMORY_SERVICE_URL, {
+    const result = await client.request<{ results: MemoryEntry[] }>({
       userId,
       method: 'POST',
       path: '/memory/search',

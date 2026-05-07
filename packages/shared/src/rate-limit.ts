@@ -3,7 +3,7 @@
  * Services pass their own IORedis instance; the shared package
  * does not depend on ioredis directly.
  */
-export interface RedisLike {
+export interface RateLimitRedisLike {
   pipeline(): {
     zremrangebyscore(key: string, min: number | string, max: number | string): void;
     zcard(key: string): void;
@@ -54,7 +54,7 @@ export async function checkRateLimit(
   action: string,
   windowMs: number,
   maxRequests: number,
-  redis?: RedisLike | null,
+  redis?: RateLimitRedisLike | null,
 ): Promise<RateLimitResult> {
   const key = `ratelimit:${userId}:${action}`;
   const now = Date.now();
@@ -89,4 +89,18 @@ export async function checkRateLimit(
 export interface RateLimitConfig {
   windowMs: number;
   maxRequests: number;
+}
+
+export function createRateLimitHeaders(result: RateLimitResult, limit: number, now = Date.now()) {
+  const retryAfter = Math.max(0, Math.ceil((result.resetAt - now) / 1000));
+  return {
+    'X-RateLimit-Limit': String(limit),
+    'X-RateLimit-Remaining': String(Math.max(0, result.remaining)),
+    'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000)),
+    ...(result.allowed ? {} : { 'Retry-After': String(retryAfter) }),
+  };
+}
+
+export function clearInMemoryRateLimitStore(): void {
+  memoryStore.clear();
 }

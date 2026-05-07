@@ -10,6 +10,7 @@ import {
   workspaceResponseSchema,
   apiErrorCodeFromStatus,
   sendApiError,
+  DomainError,
 } from '@pcp/shared';
 import { WorkspaceError, WorkspaceService } from './service';
 import { z } from 'zod';
@@ -17,6 +18,7 @@ import { setupSnapshotRoutes } from './routes/snapshots';
 import { setupDatasetsRoutes } from './routes/datasets';
 import { env } from './env';
 import { resolveAuthenticatedUserId } from '@pcp/db/src/auth-request';
+import { cache } from './cache';
 
 type WildcardFileParams = {
   id: string;
@@ -49,6 +51,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -80,6 +83,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -107,6 +111,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -134,6 +139,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -162,14 +168,22 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
       }
 
+      const cacheKey = `workspace:files:${request.params.id}:${userId}:${request.query.path ?? '/'}`;
+      const cached = await cache.get<typeof fileMetadataSchema._type[]>(cacheKey);
+      if (cached) {
+        return { files: cached };
+      }
+
       const { path } = request.query;
       const files = await workspaceService.listFiles(request.params.id, userId, path);
+      await cache.set(cacheKey, files, 30);
 
       return { files };
     },
@@ -190,6 +204,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -199,7 +214,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
       try {
         return await workspaceService.getFileContent(request.params.id, userId, request.query.path);
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
@@ -234,6 +249,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -247,7 +263,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
           request.body.mimeType,
         );
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
@@ -288,6 +304,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) {
         return sendApiError(reply, 401, 'UNAUTHORIZED');
@@ -297,7 +314,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
           maxInlineBytes: request.query.maxInlineBytes,
         });
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
@@ -327,6 +344,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -372,6 +390,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -407,6 +426,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -441,6 +461,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -473,7 +494,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
           size: parseInt(file.size || '0', 10),
         });
       } catch (error) {
-        if (error instanceof WorkspaceError) {
+        if (error instanceof WorkspaceError || error instanceof DomainError) {
           return sendApiError(
             reply,
             error.statusCode,
@@ -500,6 +521,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -528,6 +550,7 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
 
       if (!userId) {
@@ -546,6 +569,36 @@ export async function setupWorkspaceRoutes(fastify: FastifyInstance) {
         ...file,
         isDirectory: file.isDirectory === '1',
         size: parseInt(file.size || '0', 10),
+      };
+    },
+  );
+
+  server.get(
+    '/workspaces/:id/storage',
+    {
+      schema: {
+        params: z.object({ id: z.string().uuid() }),
+        response: {
+          200: z.object({
+            usedBytes: z.number(),
+            totalBytes: z.number(),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await resolveAuthenticatedUserId(request, {
+        internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
+      });
+      if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
+
+      const workspace = await workspaceService.getWorkspace(request.params.id, userId);
+      if (!workspace) return sendApiError(reply, 404, 'NOT_FOUND', 'Workspace not found');
+
+      return {
+        usedBytes: workspace.storageUsed,
+        totalBytes: workspace.storageLimit,
       };
     },
   );

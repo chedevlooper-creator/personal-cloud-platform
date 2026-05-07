@@ -9,9 +9,14 @@ import {
   createCorsOptions,
   createCorrelationIdGenerator,
   registerObservability,
+  createHealthRoute,
+  initTracing,
 } from '@pcp/shared';
+import { checkDbHealth } from '@pcp/db/src/client';
 import { setupAgentRoutes } from './routes';
 import { env } from './env';
+
+initTracing('agent');
 
 const server = Fastify({
   genReqId: createCorrelationIdGenerator(),
@@ -59,9 +64,7 @@ server.register(multipart, {
   },
 });
 
-server.get('/health', async () => {
-  return { status: 'ok', service: 'agent' };
-});
+server.register(createHealthRoute(checkDbHealth));
 
 import { setupAutomationRoutes } from './routes/automation';
 import { setupNotificationRoutes } from './routes/notifications';
@@ -73,12 +76,12 @@ import { AgentOrchestrator } from './orchestrator';
 
 const start = async () => {
   try {
-    server.register(setupAgentRoutes, { prefix: '/api' });
-    server.register(setupAutomationRoutes, { prefix: '/api' });
-    server.register(setupNotificationRoutes, { prefix: '/api' });
-    server.register(setupPersonasRoutes, { prefix: '/api' });
-    server.register(setupSkillsRoutes, { prefix: '/api' });
-    server.register(setupChannelsRoutes, { prefix: '/api' });
+    server.register(setupAgentRoutes, { prefix: '/v1' });
+    server.register(setupAutomationRoutes, { prefix: '/v1' });
+    server.register(setupNotificationRoutes, { prefix: '/v1' });
+    server.register(setupPersonasRoutes, { prefix: '/v1' });
+    server.register(setupSkillsRoutes, { prefix: '/v1' });
+    server.register(setupChannelsRoutes, { prefix: '/v1' });
 
     await server.listen({ port: env.PORT, host: '0.0.0.0' });
     server.log.info(`Agent service running on port ${env.PORT}`);

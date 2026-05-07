@@ -75,14 +75,14 @@ export default function FileTree({ workspaceId }: { workspaceId: string }) {
   return (
     <div 
       className={cn(
-        "flex h-full flex-col text-sm transition-colors",
+        "relative flex h-full min-w-0 flex-col text-sm transition-colors",
         isDragging && "bg-primary/5 ring-1 ring-inset ring-primary"
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="flex h-10 items-center px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex h-10 shrink-0 items-center px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Gezgin
       </div>
       <div className="min-h-0 flex-1 overflow-auto py-1">
@@ -96,7 +96,7 @@ export default function FileTree({ workspaceId }: { workspaceId: string }) {
         )}
         <TreeBranch workspaceId={workspaceId} path="/" level={0} />
       </div>
-      <div className="border-t border-border bg-card p-3">
+      <div className="hidden border-t border-border bg-card p-3 sm:block">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Detaylar</p>
         {selectedItem ? (
           <dl className="space-y-1.5 text-xs">

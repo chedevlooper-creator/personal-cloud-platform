@@ -538,9 +538,11 @@ describe('AgentOrchestrator', () => {
     }));
     const orchestrator = new AgentOrchestrator(logger) as unknown as {
       llm: { generate: typeof generate };
+      clients: { memory: { add: ReturnType<typeof vi.fn> } };
       runAgentLoop: (taskId: string, userId: string) => Promise<void>;
     };
     orchestrator.llm = { generate };
+    orchestrator.clients.memory = { add: vi.fn() };
 
     await orchestrator.runAgentLoop(TASK_ID, USER_ID);
 
@@ -698,6 +700,7 @@ describe('AgentOrchestrator', () => {
         getAllDefinitions: () => any[];
         get: (name: string) => { requiresApproval: boolean } | undefined;
       };
+      clients: { memory: { add: ReturnType<typeof vi.fn> } };
       runAgentLoop: (taskId: string, userId: string) => Promise<void>;
     };
     orchestrator.llm = { generate };
@@ -706,6 +709,7 @@ describe('AgentOrchestrator', () => {
       getAllDefinitions: vi.fn(() => []),
       get: () => ({ requiresApproval: false }),
     };
+    orchestrator.clients.memory = { add: vi.fn() };
 
     await orchestrator.runAgentLoop(TASK_ID, USER_ID);
 

@@ -13,6 +13,7 @@ const envSchema = z.object({
   COOKIE_SECRET: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   INTERNAL_SERVICE_TOKEN: z.string().optional(),
+  ALLOWED_AUDIENCES: z.string().optional(),
 });
 
 const parsed = envSchema.parse(rawEnv);
@@ -30,4 +31,7 @@ export const env = {
     parsed.INTERNAL_SERVICE_TOKEN,
     32,
   ),
+  ALLOWED_AUDIENCES: parsed.ALLOWED_AUDIENCES
+    ? parsed.ALLOWED_AUDIENCES.split(',').map((s) => s.trim()).filter(Boolean)
+    : undefined,
 };

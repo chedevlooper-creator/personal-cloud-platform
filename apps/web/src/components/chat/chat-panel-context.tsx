@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useCallback, useContext, useState, useSyncExternalStore } from 'react';
 import type React from 'react';
 
 export type ChatPanelState = {
@@ -35,6 +35,7 @@ export type ChatPanelContextType = {
   startNewChat: () => void;
   setPendingMessage: (message: string | null) => void;
   addAttachment: (attachment: FileAttachment) => void;
+  updateAttachment: (path: string, patch: Partial<FileAttachment>) => void;
   removeAttachment: (path: string) => void;
   clearAttachments: () => void;
 };
@@ -43,8 +44,19 @@ const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 600;
 const STORAGE_KEY = 'chat-panel-state';
+const DEFAULT_STATE: ChatPanelState = {
+  isOpen: true,
+  width: DEFAULT_WIDTH,
+  activeConversationId: null,
+  activeWorkspaceId: null,
+};
+const chatPanelStateListeners = new Set<() => void>();
+let cachedChatPanelState: ChatPanelState = DEFAULT_STATE;
+let hasReadStoredState = false;
 
 function loadState(): Partial<ChatPanelState> {
+  if (typeof window === 'undefined') return {};
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -59,10 +71,12 @@ function loadState(): Partial<ChatPanelState> {
   } catch {
     // ignore
   }
-  return { isOpen: true, width: DEFAULT_WIDTH, activeConversationId: null, activeWorkspaceId: null };
+  return DEFAULT_STATE;
 }
 
 function saveState(state: ChatPanelState) {
+  if (typeof window === 'undefined') return;
+
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
@@ -70,46 +84,90 @@ function saveState(state: ChatPanelState) {
   }
 }
 
+function normalizeState(state: Partial<ChatPanelState>): ChatPanelState {
+  return {
+    isOpen: state.isOpen ?? DEFAULT_STATE.isOpen,
+    width: Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, state.width ?? DEFAULT_STATE.width)),
+    activeConversationId: state.activeConversationId ?? null,
+    activeWorkspaceId: state.activeWorkspaceId ?? null,
+  };
+}
+
+function getChatPanelStateSnapshot(): ChatPanelState {
+  if (typeof window === 'undefined') return DEFAULT_STATE;
+  if (!hasReadStoredState) {
+    cachedChatPanelState = normalizeState(loadState());
+    hasReadStoredState = true;
+  }
+  return cachedChatPanelState;
+}
+
+function getServerChatPanelStateSnapshot(): ChatPanelState {
+  return DEFAULT_STATE;
+}
+
+function subscribeToChatPanelState(listener: () => void): () => void {
+  chatPanelStateListeners.add(listener);
+
+  if (typeof window === 'undefined') {
+    return () => chatPanelStateListeners.delete(listener);
+  }
+
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== STORAGE_KEY) return;
+    hasReadStoredState = false;
+    listener();
+  };
+  window.addEventListener('storage', onStorage);
+
+  return () => {
+    chatPanelStateListeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+function updateChatPanelState(updater: (state: ChatPanelState) => ChatPanelState): void {
+  cachedChatPanelState = normalizeState(updater(getChatPanelStateSnapshot()));
+  hasReadStoredState = true;
+  saveState(cachedChatPanelState);
+  for (const listener of chatPanelStateListeners) listener();
+}
+
 const ChatPanelContext = createContext<ChatPanelContextType | null>(null);
 
 export function ChatPanelProvider({ children }: { children: React.ReactNode }) {
-  const initial = loadState();
-  const [isOpen, setIsOpenState] = useState<boolean>(initial.isOpen ?? true);
-  const [width, setWidthState] = useState<number>(initial.width ?? DEFAULT_WIDTH);
-  const [activeConversationId, setActiveConversationIdState] = useState<string | null>(
-    initial.activeConversationId ?? null,
-  );
-  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(
-    initial.activeWorkspaceId ?? null,
+  const { isOpen, width, activeConversationId, activeWorkspaceId } = useSyncExternalStore(
+    subscribeToChatPanelState,
+    getChatPanelStateSnapshot,
+    getServerChatPanelStateSnapshot,
   );
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [pendingMessage, setPendingMessageState] = useState<string | null>(null);
 
   const setIsOpen = useCallback((open: boolean) => {
-    setIsOpenState(open);
+    updateChatPanelState((state) => ({ ...state, isOpen: open }));
   }, []);
 
   const togglePanel = useCallback(() => {
-    setIsOpenState((prev) => !prev);
+    updateChatPanelState((state) => ({ ...state, isOpen: !state.isOpen }));
   }, []);
 
   const setWidth = useCallback((w: number) => {
-    setWidthState(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w)));
+    updateChatPanelState((state) => ({ ...state, width: w }));
   }, []);
 
   const setActiveConversationId = useCallback((id: string | null) => {
-    setActiveConversationIdState(id);
+    updateChatPanelState((state) => ({ ...state, activeConversationId: id }));
   }, []);
 
   const setActiveWorkspaceId = useCallback((id: string | null) => {
-    setActiveWorkspaceIdState(id);
+    updateChatPanelState((state) => ({ ...state, activeWorkspaceId: id }));
   }, []);
 
   const startNewChat = useCallback(() => {
-    setActiveConversationIdState(null);
+    updateChatPanelState((state) => ({ ...state, isOpen: true, activeConversationId: null }));
     setAttachments([]);
     setPendingMessageState(null);
-    setIsOpenState(true);
   }, []);
 
   const setPendingMessage = useCallback((message: string | null) => {
@@ -121,6 +179,13 @@ export function ChatPanelProvider({ children }: { children: React.ReactNode }) {
       if (prev.some((a) => a.path === attachment.path)) return prev;
       return [...prev, attachment];
     });
+    updateChatPanelState((state) => ({ ...state, isOpen: true }));
+  }, []);
+
+  const updateAttachment = useCallback((path: string, patch: Partial<FileAttachment>) => {
+    setAttachments((prev) =>
+      prev.map((attachment) => (attachment.path === path ? { ...attachment, ...patch } : attachment)),
+    );
   }, []);
 
   const removeAttachment = useCallback((path: string) => {
@@ -130,11 +195,6 @@ export function ChatPanelProvider({ children }: { children: React.ReactNode }) {
   const clearAttachments = useCallback(() => {
     setAttachments([]);
   }, []);
-
-  // Persist state changes
-  useEffect(() => {
-    saveState({ isOpen, width, activeConversationId, activeWorkspaceId });
-  }, [isOpen, width, activeConversationId, activeWorkspaceId]);
 
   return (
     <ChatPanelContext.Provider
@@ -153,6 +213,7 @@ export function ChatPanelProvider({ children }: { children: React.ReactNode }) {
         startNewChat,
         setPendingMessage,
         addAttachment,
+        updateAttachment,
         removeAttachment,
         clearAttachments,
       }}

@@ -7,6 +7,63 @@ on:
     branches: [main, master]
 
 jobs:
+  sandbox-regression:
+    name: Sandbox Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.event_name == 'pull_request' }}
+
+    env:
+      DATABASE_URL: postgres://pcp:pcp@localhost:5432/pcp_test
+      SESSION_SECRET: ci-session-secret-not-used-in-prod-32b
+      JWT_SECRET: ci-jwt-secret-not-used-in-prod-32bytes
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect sandbox changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            sandbox:
+              - 'services/runtime/**'
+              - 'services/publish/**'
+              - 'packages/shared/src/sandbox-policy*'
+              - 'infra/docker/POLICY.md'
+              - 'infra/docker/seccomp-runtime.json'
+              - '.github/workflows/ci.yml'
+
+      - name: Setup pnpm
+        if: steps.changes.outputs.sandbox == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.sandbox == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.changes.outputs.sandbox == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Shared sandbox policy regression
+        if: steps.changes.outputs.sandbox == 'true'
+        run: pnpm --filter @pcp/shared exec vitest run src/sandbox-policy.test.ts
+
+      - name: Runtime sandbox policy regression
+        if: steps.changes.outputs.sandbox == 'true'
+        run: pnpm --filter @pcp/runtime-service exec vitest run src/policy.test.ts
+
+      - name: Publish sandbox policy regression
+        if: steps.changes.outputs.sandbox == 'true'
+        run: pnpm --filter @pcp/publish-service exec vitest run src/policy.test.ts src/service.test.ts
+
   verify:
     name: Typecheck, Lint & Test
     runs-on: ubuntu-latest

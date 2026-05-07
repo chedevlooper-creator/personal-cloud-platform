@@ -65,7 +65,7 @@ export function MainCanvas({
 }) {
   const pathname = usePathname();
   const meta = getPageMeta(pathname);
-  const { isOpen, togglePanel } = useChatPanel();
+  const { isOpen, startNewChat, togglePanel } = useChatPanel();
 
   return (
     <section className="relative min-w-0 flex-1 bg-background text-foreground">
@@ -112,7 +112,7 @@ export function MainCanvas({
               size="touch"
               variant="gradient"
               className="min-w-11 gap-1.5 md:h-8 md:min-w-0 md:px-3"
-              onClick={() => window.dispatchEvent(new Event('app:new-chat'))}
+              onClick={startNewChat}
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Yeni sohbet</span>

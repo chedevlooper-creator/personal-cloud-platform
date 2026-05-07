@@ -15,7 +15,6 @@ try {
   });
   redis.on('error', (err) => {
     redisAvailable = false;
-    // eslint-disable-next-line no-console
     console.warn('Redis rate-limit connection error, falling back to memory:', err.message);
   });
 } catch {

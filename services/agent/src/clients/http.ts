@@ -36,6 +36,7 @@ export async function internalRequest<T = unknown>(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${env.INTERNAL_SERVICE_TOKEN}`,
     'X-User-Id': opts.userId,
+    'X-Service-Audience': 'agent',
   };
   let body: string | undefined;
   if (opts.body !== undefined) {

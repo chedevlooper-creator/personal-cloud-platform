@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "mode": "yolo",
+  "granularity": "coarse",
+  "parallelization": true,
+  "commit_docs": true,
+  "model_profile": "balanced",
+  "workflow": {
+    "research": false,
+    "plan_check": true,
+    "verifier": true,
+    "nyquist_validation": false,
+    "auto_advance": true
+  },
+  "notes": {
+    "research_skipped": "Brownfield repo with existing gap audit + graphify scan; project-researcher subagents redundant.",
+    "granularity": "Coarse — 7 phases mapped to audit themes (security, UX, infra).",
+    "auto_advance": "Phases chain via /gsd-transition without manual gate.",
+    "nyquist": "Disabled at coarse granularity; re-enable per-phase if requirements demand."
+  }
+}

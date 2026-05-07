@@ -3,6 +3,7 @@ import {
   assertRuntimeCommandAllowed,
   assertRuntimeImageAllowed,
   buildRuntimeSecurityOptions,
+  getRuntimeBlockedCommandCategories,
 } from './policy';
 
 describe('runtime sandbox policy', () => {
@@ -21,6 +22,44 @@ describe('runtime sandbox policy', () => {
       'Command blocked by security policy',
     );
     expect(() => assertRuntimeCommandAllowed(['/bin/sh', '-c', 'npm test'])).not.toThrow();
+  });
+
+  it('keeps strict profile regression commands blocked', () => {
+    expect(getRuntimeBlockedCommandCategories('strict')).toEqual([
+      'destructive root deletion',
+      'privilege escalation',
+      'fork bomb',
+      'network fetcher',
+      'package install',
+    ]);
+    expect(() => assertRuntimeCommandAllowed(['/bin/sh', '-c', 'npm install'], 'strict')).toThrow(
+      'Command blocked by security policy',
+    );
+  });
+
+  it('keeps balanced profile regression commands blocked', () => {
+    expect(getRuntimeBlockedCommandCategories('balanced')).toEqual([
+      'destructive root deletion',
+      'privilege escalation',
+      'fork bomb',
+      'network fetcher',
+    ]);
+    expect(() => assertRuntimeCommandAllowed(['/bin/sh', '-c', 'curl https://example.com'], 'balanced')).toThrow(
+      'Command blocked by security policy',
+    );
+    expect(() => assertRuntimeCommandAllowed(['/bin/sh', '-c', 'npm install'], 'balanced')).not.toThrow();
+  });
+
+  it('keeps permissive profile regression commands blocked', () => {
+    expect(getRuntimeBlockedCommandCategories('permissive')).toEqual([
+      'destructive root deletion',
+      'privilege escalation',
+      'fork bomb',
+    ]);
+    expect(() => assertRuntimeCommandAllowed(['/bin/sh', '-c', 'sudo id'], 'permissive')).toThrow(
+      'Command blocked by security policy',
+    );
+    expect(() => assertRuntimeCommandAllowed(['/bin/sh', '-c', 'curl https://example.com'], 'permissive')).not.toThrow();
   });
 
   it('blocks malformed command argv before Docker exec', () => {

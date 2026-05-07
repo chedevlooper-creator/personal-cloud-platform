@@ -97,3 +97,19 @@ export function assertEncryptionKey(name: string, value: string, ctx: EnvResolve
     throw new Error(`${name} must be set to a non-default value in production`);
   }
 }
+
+export function normalizeProfileValue(
+  value: string | undefined,
+  envName: string,
+  pattern: RegExp,
+): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed === 'unconfined') {
+    throw new Error(`${envName} must not disable confinement`);
+  }
+  if (trimmed.includes('..') || !pattern.test(trimmed)) {
+    throw new Error(`${envName} contains invalid characters`);
+  }
+  return trimmed;
+}

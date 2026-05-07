@@ -8,6 +8,7 @@ export const apiErrorCodeSchema = z.enum([
   'CONFLICT',
   'VALIDATION_ERROR',
   'RATE_LIMITED',
+  'QUOTA_EXCEEDED',
   'INTERNAL_ERROR',
 ]);
 
@@ -47,6 +48,7 @@ export function apiErrorCodeFromStatus(
   if (statusCode === 403) return 'FORBIDDEN';
   if (statusCode === 404) return 'NOT_FOUND';
   if (statusCode === 409) return 'CONFLICT';
+  if (statusCode === 413) return 'QUOTA_EXCEEDED';
   if (statusCode === 429) return 'RATE_LIMITED';
   return 'INTERNAL_ERROR';
 }
@@ -67,6 +69,8 @@ export function defaultApiErrorMessage(code: ApiErrorCode): string {
       return 'Bad request';
     case 'RATE_LIMITED':
       return 'Rate limit exceeded';
+    case 'QUOTA_EXCEEDED':
+      return 'Quota exceeded';
     default:
       return 'Internal server error';
   }
@@ -121,4 +125,50 @@ export function sendApiError(
   return reply
     .code(statusCode)
     .send(createApiErrorResponse(code, message ?? defaultApiErrorMessage(code), correlationId));
+}
+
+/* ------------------------------------------------------------------ */
+/* Domain Error Hierarchy                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Abstract base for all domain-level errors that should map to a
+ * well-known HTTP status code and {@link ApiErrorCode}.
+ *
+ * Throw these from repositories / services so route handlers can
+ * `instanceof DomainError` and emit the correct public envelope.
+ */
+export abstract class DomainError extends Error {
+  abstract readonly statusCode: number;
+  abstract readonly code: ApiErrorCode;
+
+  constructor(message: string) {
+    super(message);
+    this.name = this.constructor.name;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+/** 404 – Resource not found. */
+export class NotFoundError extends DomainError {
+  readonly statusCode = 404;
+  readonly code: ApiErrorCode = 'NOT_FOUND';
+}
+
+/** 400 – Validation failed (bad input, missing fields, etc.). */
+export class ValidationError extends DomainError {
+  readonly statusCode = 400;
+  readonly code: ApiErrorCode = 'VALIDATION_ERROR';
+}
+
+/** 409 – Resource conflict (duplicate, already in final state, etc.). */
+export class ConflictError extends DomainError {
+  readonly statusCode = 409;
+  readonly code: ApiErrorCode = 'CONFLICT';
+}
+
+/** 413 – Storage / quota limit exceeded. */
+export class QuotaExceededError extends DomainError {
+  readonly statusCode = 413;
+  readonly code: ApiErrorCode = 'QUOTA_EXCEEDED';
 }

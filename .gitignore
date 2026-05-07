@@ -33,6 +33,9 @@ Thumbs.db
 # Testing
 coverage/
 .nyc_output/
+playwright-report/
+test-results/
+apps/web/test-results/
 
 # Cursor
 .cursor/cache/
@@ -54,10 +57,12 @@ services/browser/data/
 .claude/
 .claude-plugin/
 .opencode/
+.kilo/
+graphify-out/
 sessions/
 statuses/
 labels/
 views.json
 events.jsonl
 config.json
-
+!.planning/config.json

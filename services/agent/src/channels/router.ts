@@ -22,7 +22,7 @@ export async function handleIncoming(
   msg: IncomingMessage,
   orchestrator: AgentOrchestrator,
   adapter: ChannelAdapter,
-  logger: { info: Function; warn: Function; error: Function },
+  logger: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void },
 ): Promise<void> {
   const link = await db.query.channelLinks.findFirst({
     where: and(
@@ -121,7 +121,7 @@ export async function handleIncoming(
 async function waitForTaskCompletion(
   taskId: string,
   userId: string,
-  logger: { warn: Function },
+  logger: { warn: (...args: unknown[]) => void },
 ): Promise<string> {
   const deadline = Date.now() + TASK_TIMEOUT_MS;
   while (Date.now() < deadline) {

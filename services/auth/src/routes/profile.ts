@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { db } from '@pcp/db/src/client';
-import { userPreferences, providerCredentials, auditLogs } from '@pcp/db/src/schema';
+import { userPreferences, providerCredentials, auditLogs, users } from '@pcp/db/src/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import {
   userPreferencesSchema,
@@ -85,6 +85,57 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
       }
 
       return reply.code(200).send(prefs);
+    },
+  );
+
+  server.patch(
+    '/user/profile',
+    {
+      schema: {
+        body: z.object({
+          name: z.string().min(1).max(100).optional(),
+          bio: z.string().max(500).optional(),
+        }),
+        response: {
+          200: z.object({ success: z.boolean() }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = await getUserId(request, reply);
+      if (!userId) return;
+
+      const { name, bio } = request.body;
+
+      if (name !== undefined) {
+        await db
+          .update(users)
+          .set({ name, updatedAt: new Date() })
+          .where(eq(users.id, userId));
+      }
+
+      if (bio !== undefined) {
+        const existing = await db.query.userPreferences.findFirst({
+          where: eq(userPreferences.userId, userId),
+        });
+        if (!existing) {
+          await db.insert(userPreferences).values({ userId, bio });
+        } else {
+          await db
+            .update(userPreferences)
+            .set({ bio, updatedAt: new Date() })
+            .where(eq(userPreferences.userId, userId));
+        }
+      }
+
+      await db.insert(auditLogs).values({
+        userId,
+        action: 'UPDATE_PROFILE',
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'] as string,
+      });
+
+      return reply.code(200).send({ success: true });
     },
   );
 
@@ -248,6 +299,30 @@ export async function setupProfileRoutes(fastify: FastifyInstance) {
         userAgent: request.headers['user-agent'] as string,
       });
 
+      return reply.code(204).send();
+    },
+  );
+
+  // Delete user account (soft delete)
+  server.delete(
+    '/user/account',
+    async (request, reply) => {
+      const userId = await getUserId(request, reply);
+      if (!userId) return;
+
+      await db
+        .update(users)
+        .set({ deletedAt: new Date() })
+        .where(eq(users.id, userId));
+
+      await db.insert(auditLogs).values({
+        userId,
+        action: 'DELETE_ACCOUNT',
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'] as string,
+      });
+
+      reply.clearCookie('sessionId', { path: '/' });
       return reply.code(204).send();
     },
   );

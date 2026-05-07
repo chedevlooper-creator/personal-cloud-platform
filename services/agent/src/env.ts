@@ -34,10 +34,10 @@ const envSchema = z.object({
   AUTH_BYPASS: z
     .union([z.literal('1'), z.literal('true'), z.literal('0'), z.literal('false'), z.literal('')])
     .optional(),
-  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
-  RUNTIME_SERVICE_URL: z.string().url().default('http://localhost:3003'),
-  MEMORY_SERVICE_URL: z.string().url().default('http://localhost:3005'),
-  BROWSER_SERVICE_URL: z.string().url().default('http://localhost:3007'),
+  WORKSPACE_SERVICE_URL: z.string().url().default('http://localhost:3002/v1'),
+  RUNTIME_SERVICE_URL: z.string().url().default('http://localhost:3003/v1'),
+  MEMORY_SERVICE_URL: z.string().url().default('http://localhost:3005/v1'),
+  BROWSER_SERVICE_URL: z.string().url().default('http://localhost:3007/v1'),
   RUNTIME_DEFAULT_IMAGE: z.string().default('node:20-alpine'),
   WEB_SEARCH_PROVIDER: z.enum(['none', 'brave', 'tavily', 'serpapi']).default('none'),
   WEB_SEARCH_API_KEY: z.string().optional(),

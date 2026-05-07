@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SANDBOX_COMMAND_POLICY } from '@pcp/shared';
 import { Tool, ToolContext } from './registry';
 import { ToolDefinition } from '../llm/types';
 
@@ -6,10 +7,10 @@ const MAX_OUTPUT_BYTES = 32 * 1024;
 
 export const RUN_COMMAND_POLICY = {
   approvalRequired: true,
-  timeoutMs: 60_000,
-  network: 'disabled',
+  timeoutMs: SANDBOX_COMMAND_POLICY.timeoutMs,
+  network: SANDBOX_COMMAND_POLICY.network,
   outputLimitBytes: MAX_OUTPUT_BYTES,
-  blockedCategories: ['destructive root deletion', 'privilege escalation', 'fork bomb'],
+  blockedCategories: SANDBOX_COMMAND_POLICY.blockedCategories,
 } as const;
 
 function trim(value: string): string {

@@ -23,6 +23,18 @@ vi.mock('@pcp/db/src/client', () => ({
   db: mockDb,
 }));
 
+vi.mock('@pcp/db/src/auth-request', () => ({
+  resolveAuthenticatedUserId: vi.fn(async () => 'user-1'),
+}));
+
+vi.mock('../env', () => ({
+  env: {
+    INTERNAL_SERVICE_TOKEN: 'test-token',
+    AUTH_BYPASS: false,
+    ALLOWED_AUDIENCES: undefined,
+  },
+}));
+
 describe('snapshot routes audit events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -40,7 +52,6 @@ describe('snapshot routes audit events', () => {
     await app.register(cookie);
 
     await setupSnapshotRoutes(app, {
-      validateUserFromCookie: vi.fn(async () => 'user-1'),
       restoreSnapshot: vi.fn(async () => ({ restoredFiles: 2 })),
     } as any);
 

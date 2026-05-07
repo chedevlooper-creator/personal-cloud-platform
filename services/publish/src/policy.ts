@@ -1,3 +1,12 @@
+import {
+  assertSandboxCommandAllowed,
+  getBlockedSandboxCommandCategories,
+  normalizeProfileValue,
+  normalizeSandboxProfile,
+  SANDBOX_COMMAND_POLICY,
+} from '@pcp/shared';
+import { env } from './env';
+
 type PublishKind = 'static' | 'vite' | 'node';
 
 type DockerSecurityProfileConfig = {
@@ -9,6 +18,13 @@ export const PUBLISH_IMAGE_ALLOWLIST = [
   'node:20-alpine',
   'nginxinc/nginx-unprivileged:alpine',
 ] as const;
+
+export const PUBLISH_COMMAND_POLICY = {
+  timeoutMs: SANDBOX_COMMAND_POLICY.timeoutMs,
+  network: 'restricted-publish-network',
+  profiles: SANDBOX_COMMAND_POLICY.profiles,
+  blockedCategories: SANDBOX_COMMAND_POLICY.blockedCategories,
+} as const;
 
 const DOCKER_NO_NEW_PRIVILEGES = 'no-new-privileges:true';
 const SECCOMP_PROFILE_PATTERN = /^\/?[A-Za-z0-9][A-Za-z0-9_./:-]*$/;
@@ -32,6 +48,19 @@ export function assertPublishImageAllowed(image: string): void {
   }
 }
 
+export function assertPublishCommandAllowed(
+  command: readonly string[],
+  profile = env.PUBLISH_SANDBOX_PROFILE,
+): void {
+  assertSandboxCommandAllowed(command, normalizeSandboxProfile(profile));
+}
+
+export function getPublishBlockedCommandCategories(
+  profile = env.PUBLISH_SANDBOX_PROFILE,
+): readonly string[] {
+  return getBlockedSandboxCommandCategories(normalizeSandboxProfile(profile));
+}
+
 export function buildPublishSecurityOptions(config: DockerSecurityProfileConfig = {}): string[] {
   const securityOptions = [DOCKER_NO_NEW_PRIVILEGES];
   const seccompProfile = normalizeProfileValue(
@@ -48,20 +77,4 @@ export function buildPublishSecurityOptions(config: DockerSecurityProfileConfig 
   if (seccompProfile) securityOptions.push(`seccomp=${seccompProfile}`);
   if (appArmorProfile) securityOptions.push(`apparmor=${appArmorProfile}`);
   return securityOptions;
-}
-
-function normalizeProfileValue(
-  value: string | undefined,
-  envName: string,
-  pattern: RegExp,
-): string | undefined {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  if (trimmed === 'unconfined') {
-    throw new Error(`${envName} must not disable confinement`);
-  }
-  if (trimmed.includes('..') || !pattern.test(trimmed)) {
-    throw new Error(`${envName} contains invalid characters`);
-  }
-  return trimmed;
 }

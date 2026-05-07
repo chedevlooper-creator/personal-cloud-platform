@@ -33,7 +33,7 @@ import { Markdown } from '@/components/app-shell/markdown';
 import { ModelSelector } from '@/components/app-shell/model-selector';
 import { PersonaSelector } from '@/components/app-shell/persona-selector';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { useChatPanel } from '@/components/chat/chat-panel-context';
+import { useChatPanel, type FileAttachment } from '@/components/chat/chat-panel-context';
 
 type ToolCallInfo = {
   id: string;
@@ -51,16 +51,6 @@ type Message = {
   taskId: string;
   taskStatus: string;
   toolCalls?: ToolCallInfo[];
-};
-
-type Attachment = {
-  path: string;
-  name: string;
-  size?: number;
-  type?: string;
-  preview?: string;
-  uploading?: boolean;
-  uploadProgress?: number;
 };
 
 function FileIconRenderer({ filename, className }: { filename: string; className?: string }) {
@@ -92,15 +82,23 @@ export function ChatCore({
   onConversationChange?: (id: string | null) => void;
 }) {
   const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const { setIsOpen, pendingMessage, setPendingMessage } = useChatPanel();
+  const {
+    attachments,
+    pendingMessage,
+    setPendingMessage,
+    addAttachment,
+    updateAttachment,
+    clearAttachments,
+    removeAttachment,
+  } = useChatPanel();
   const isNearBottomRef = useRef(true);
 
   const { data: messagesData, isLoading } = useQuery({
@@ -148,15 +146,11 @@ export function ChatCore({
         type?: string;
       };
       if (!detail) return;
-      setAttachments((prev) => {
-        if (prev.some((a) => a.path === detail.path)) return prev;
-        return [...prev, { path: detail.path, name: detail.name, size: detail.size, type: detail.type }];
-      });
-      setIsOpen(true);
+      addAttachment({ path: detail.path, name: detail.name, size: detail.size, type: detail.type });
     };
     window.addEventListener('app:attach-file-to-chat', handleAttachFile);
     return () => window.removeEventListener('app:attach-file-to-chat', handleAttachFile);
-  }, [setIsOpen]);
+  }, [addAttachment]);
 
   // Scroll detection
   useEffect(() => {
@@ -201,12 +195,23 @@ export function ChatCore({
       const url = `${apiEndpoints.agent}/agent/tasks/${tid}/events`;
       const es = new EventSource(url, { withCredentials: true });
       es.addEventListener('step', invalidate);
+      es.addEventListener('llm_token', (ev: MessageEvent) => {
+        try {
+          const payload = JSON.parse(ev.data) as { token?: string };
+          if (payload.token) {
+            setStreamingText((prev) => prev + payload.token);
+          }
+        } catch {
+          // ignore
+        }
+      });
       es.addEventListener('task', (ev: MessageEvent) => {
         invalidate();
         try {
           const payload = JSON.parse(ev.data) as { status?: string; conversationId?: string | null };
           if (payload.status && ['completed', 'failed', 'cancelled'].includes(payload.status)) {
             setIsStreaming(false);
+            setStreamingText('');
             es.close();
           }
         } catch {
@@ -215,6 +220,7 @@ export function ChatCore({
       });
       es.onerror = () => {
         setIsStreaming(false);
+        setStreamingText('');
         es.close();
       };
       sources.push(es);
@@ -227,6 +233,7 @@ export function ChatCore({
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       setIsStreaming(true);
+      setStreamingText('');
       const personaId = usePersonaStore.getState().activePersonaId;
       const skillIds = useActiveSkillsStore.getState().activeSkillIds;
       const composed =
@@ -245,7 +252,7 @@ export function ChatCore({
     },
     onSuccess: (data) => {
       setInput('');
-      setAttachments([]);
+      clearAttachments();
       if (data.conversationId && data.conversationId !== conversationId) {
         onConversationChange?.(data.conversationId);
       }
@@ -285,7 +292,7 @@ export function ChatCore({
         return null;
       }
 
-      const tempAttachment: Attachment = {
+      const tempAttachment: FileAttachment = {
         path: `/chat-uploads/${Date.now()}-${file.name}`,
         name: file.name,
         size: file.size,
@@ -298,14 +305,12 @@ export function ChatCore({
       if (isImageFile(file.name)) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          setAttachments((prev) =>
-            prev.map((a) => (a.path === tempAttachment.path ? { ...a, preview: e.target?.result as string } : a)),
-          );
+          updateAttachment(tempAttachment.path, { preview: e.target?.result as string });
         };
         reader.readAsDataURL(file);
       }
 
-      setAttachments((prev) => [...prev, tempAttachment]);
+      addAttachment(tempAttachment);
 
       try {
         const form = new FormData();
@@ -316,25 +321,22 @@ export function ChatCore({
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
               const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-              setAttachments((prev) =>
-                prev.map((a) => (a.path === tempAttachment.path ? { ...a, uploadProgress: progress } : a)),
-              );
+              updateAttachment(tempAttachment.path, { uploadProgress: progress });
             }
           },
         });
 
         const path = res.data?.path ?? tempAttachment.path;
-        setAttachments((prev) =>
-          prev.map((a) => (a.path === tempAttachment.path ? { ...a, path, uploading: false, uploadProgress: 100 } : a)),
-        );
+        removeAttachment(tempAttachment.path);
+        addAttachment({ ...tempAttachment, path, uploading: false, uploadProgress: 100 });
         return path;
       } catch (err) {
         toastApiError(err, `"${file.name}" yüklenemedi`);
-        setAttachments((prev) => prev.filter((a) => a.path !== tempAttachment.path));
+        removeAttachment(tempAttachment.path);
         return null;
       }
     },
-    [workspaceId],
+    [addAttachment, removeAttachment, updateAttachment, workspaceId],
   );
 
   const handleFilesSelected = useCallback(
@@ -381,10 +383,7 @@ export function ChatCore({
             size: number;
             workspaceId: string;
           };
-          setAttachments((prev) => {
-            if (prev.some((a) => a.path === fileInfo.path)) return prev;
-            return [...prev, { path: fileInfo.path, name: fileInfo.name, size: fileInfo.size }];
-          });
+          addAttachment({ path: fileInfo.path, name: fileInfo.name, size: fileInfo.size });
           toast.success(`"${fileInfo.name}" eklendi`);
           return;
         } catch {
@@ -402,12 +401,8 @@ export function ChatCore({
         toast.success(`${successCount} dosya eklendi.`);
       }
     },
-    [uploadFile],
+    [addAttachment, uploadFile],
   );
-
-  const removeAttachment = useCallback((path: string) => {
-    setAttachments((prev) => prev.filter((a) => a.path !== path));
-  }, []);
 
   const stopGeneration = useCallback(() => {
     setIsStreaming(false);
@@ -499,6 +494,18 @@ export function ChatCore({
         ))}
 
         {isStreaming && messages[messages.length - 1]?.role === 'user' && <TypingIndicator />}
+        {isStreaming && streamingText && (
+          <div className="mb-4 flex gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <Bot className="h-4 w-4 text-primary" />
+            </div>
+            <div className="max-w-[85%]">
+              <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5 text-sm text-foreground">
+                <Markdown text={streamingText} />
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
 
         {/* Scroll to bottom button */}
@@ -605,7 +612,7 @@ export function ChatCore({
   );
 }
 
-function AttachmentChip({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
+function AttachmentChip({ attachment, onRemove }: { attachment: FileAttachment; onRemove: () => void }) {
   const isImage = isImageFile(attachment.name);
 
   return (
@@ -725,7 +732,7 @@ function MessageBubble({
                     {isImg ? (
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
                         <Image
-                          src={`${process.env.NEXT_PUBLIC_WORKSPACE_API_URL || 'http://localhost:3002/api'}/files${filePath}`}
+                          src={`${process.env.NEXT_PUBLIC_WORKSPACE_API_URL || 'http://localhost:3002/v1'}/files${filePath}`}
                           alt={filename}
                           width={40}
                           height={40}

@@ -1,0 +1,15 @@
+# Workspace root .dockerignore
+node_modules
+dist
+.next
+out
+coverage
+*.log
+.env
+.env.local
+.DS_Store
+.git
+.gitignore
+*.md
+Dockerfile*
+docker-compose*

@@ -27,6 +27,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
@@ -49,6 +50,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
@@ -67,6 +69,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
@@ -86,6 +89,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
@@ -107,6 +111,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
@@ -139,6 +144,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) return sendApiError(reply, 401, 'UNAUTHORIZED');
 
@@ -164,6 +170,7 @@ export async function setupRuntimeRoutes(fastify: FastifyInstance) {
     async (connection, request) => {
       const userId = await resolveAuthenticatedUserId(request, {
         internalServiceToken: env.INTERNAL_SERVICE_TOKEN,
+        allowedAudiences: env.ALLOWED_AUDIENCES,
       });
       if (!userId) {
         connection.socket.send(JSON.stringify({ error: 'Unauthorized' }));

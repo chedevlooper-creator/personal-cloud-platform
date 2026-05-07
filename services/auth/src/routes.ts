@@ -177,7 +177,7 @@ export async function setupAuthRoutes(fastify: FastifyInstance) {
 
   // Google OAuth callback
   server.get('/oauth/google/callback', async function (request, reply) {
-    // @ts-ignore
+    // @ts-expect-error fastify instance augmentation
     const { token } = await this.googleOAuth2.getAccessTokenFromAuthorizationCodeFlow(request);
 
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {

@@ -18,6 +18,13 @@ export interface ResolveAuthOptions {
    * is disabled and only the cookie session is honored.
    */
   internalServiceToken?: string;
+  /**
+   * Optional list of allowed service audiences for internal token calls.
+   * When set, the caller must include an `X-Service-Audience` header that
+   * matches one of these values. When unset or empty, any audience is accepted
+   * (backward-compatible dev behaviour).
+   */
+  allowedAudiences?: string[];
   /** Development bypass: return this user id immediately without checking credentials. */
   authBypass?: boolean;
   /** User id returned when authBypass is true. Defaults to 'local-dev-user'. */
@@ -78,6 +85,14 @@ export async function resolveAuthenticatedUserId(
       if (token && constantTimeEquals(token, internalToken)) {
         const headerUserId = readHeader(request.headers, 'x-user-id');
         if (typeof headerUserId === 'string' && headerUserId.length > 0) {
+          // Audience scoping: verify the caller is allowed to impersonate
+          const audience = readHeader(request.headers, 'x-service-audience');
+          const allowed = options.allowedAudiences;
+          if (allowed && allowed.length > 0) {
+            if (!audience || !allowed.includes(audience)) {
+              return null; // Invalid or missing audience
+            }
+          }
           return verifyUserExists(headerUserId);
         }
       }

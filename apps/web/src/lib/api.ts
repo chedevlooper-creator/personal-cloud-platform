@@ -2,11 +2,11 @@ import axios, { type AxiosInstance } from 'axios';
 import { toast } from 'sonner';
 
 export const apiEndpoints = {
-  auth: process.env.NEXT_PUBLIC_AUTH_API_URL || 'http://localhost:3001/auth',
-  workspace: process.env.NEXT_PUBLIC_WORKSPACE_API_URL || 'http://localhost:3002/api',
-  agent: process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://localhost:3004/api',
-  publish: process.env.NEXT_PUBLIC_PUBLISH_API_URL || 'http://localhost:3006/publish',
-  browser: process.env.NEXT_PUBLIC_BROWSER_API_URL || 'http://localhost:3007/api',
+  auth: process.env.NEXT_PUBLIC_AUTH_API_URL || 'http://localhost:3001/v1',
+  workspace: process.env.NEXT_PUBLIC_WORKSPACE_API_URL || 'http://localhost:3002/v1',
+  agent: process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://localhost:3004/v1',
+  publish: process.env.NEXT_PUBLIC_PUBLISH_API_URL || 'http://localhost:3006/v1',
+  browser: process.env.NEXT_PUBLIC_BROWSER_API_URL || 'http://localhost:3007/v1',
 };
 
 /**
@@ -114,7 +114,7 @@ export const agentApi = installInterceptors(
 
 export const runtimeApi = installInterceptors(
   axios.create({
-    baseURL: process.env.NEXT_PUBLIC_RUNTIME_API_URL || 'http://localhost:3003/api',
+    baseURL: process.env.NEXT_PUBLIC_RUNTIME_API_URL || 'http://localhost:3003/v1',
     withCredentials: true,
   }),
 );
