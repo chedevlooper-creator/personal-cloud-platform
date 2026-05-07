@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import type React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -46,6 +46,7 @@ type UserPreferences = {
   bio?: string;
   terminalRiskLevel?: TerminalPolicy;
   theme?: string;
+  defaultModel?: string;
 };
 
 const settingsTabs: {
@@ -84,17 +85,28 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+  // --- Preferences ---
+  const { data: prefs } = useQuery({
+    queryKey: ['user-preferences'],
+    queryFn: async () => {
+      const res = await authApi.get('/user/preferences');
+      return res.data as UserPreferences;
+    },
+  });
+
   // --- Profile ---
-  const [profileName, setProfileName] = useState(user?.name || '');
-  const [profileBio, setProfileBio] = useState(prefs?.bio || '');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const bioInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setProfileName(user?.name || '');
-  }, [user?.name]);
-
-  useEffect(() => {
-    setProfileBio(prefs?.bio || '');
-  }, [prefs?.bio]);
+  // Reset local state when query data changes
+  const userName = user?.name || '';
+  const userBio = prefs?.bio || '';
+  if (nameInputRef.current?.value !== userName && userName) {
+    nameInputRef.current?.value = userName;
+  }
+  if (bioInputRef.current?.value !== userBio && userBio) {
+    bioInputRef.current?.value = userBio;
+  }
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { name?: string; bio?: string }) => {
@@ -106,15 +118,6 @@ export default function SettingsPage() {
       toast.success('Profile updated');
     },
     onError: (error) => toastApiError(error, 'Failed to update profile'),
-  });
-
-  // --- Preferences ---
-  const { data: prefs } = useQuery({
-    queryKey: ['user-preferences'],
-    queryFn: async () => {
-      const res = await authApi.get('/user/preferences');
-      return res.data as UserPreferences;
-    },
   });
 
   const [terminalPolicyOverride, setTerminalPolicyOverride] = useState<TerminalPolicy | null>(null);
@@ -256,49 +259,14 @@ export default function SettingsPage() {
           {activeTab === 'profile' && (
             <section className="rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md p-6">
               <h3 className="text-base font-semibold text-foreground">Profile</h3>
-              <div className="mt-4 space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="settings-name">Name</Label>
-                  <Input
-                    id="settings-name"
-                    value={profileName}
-                    onChange={(e) => setProfileName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="settings-email">Email</Label>
-                  <Input
-                    id="settings-email"
-                    defaultValue={user?.email || ''}
-                    readOnly
-                    className="opacity-60"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="settings-bio">Bio</Label>
-                  <Input
-                    id="settings-bio"
-                    value={profileBio}
-                    onChange={(e) => setProfileBio(e.target.value)}
-                    placeholder="A short bio about yourself..."
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      updateProfileMutation.mutate({
-                        name: profileName,
-                        bio: profileBio,
-                      })
-                    }
-                    disabled={updateProfileMutation.isPending}
-                  >
-                    {updateProfileMutation.isPending ? (
-                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                    ) : null}
-                    Save changes
-                  </Button>
+              <div className="mt-4">
+                <ProfileForm
+                  userName={user?.name || ''}
+                  userBio={prefs?.bio || ''}
+                  onSave={(data) => updateProfileMutation.mutate(data)}
+                  isPending={updateProfileMutation.isPending}
+                />
+                <div className="mt-4 flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => logoutMutation.mutate()}>
                     Sign out
                   </Button>
@@ -647,4 +615,43 @@ function formatBytes(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+function ProfileForm({
+  userName,
+  userBio,
+  onSave,
+  isPending,
+}: {
+  userName: string;
+  userBio: string;
+  onSave: (data: { name: string; bio: string }) => void;
+  isPending: boolean;
+}) {
+  const [name, setName] = useState(userName);
+  const [bio, setBio] = useState(userBio);
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="settings-name">Name</Label>
+        <Input id="settings-name" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="settings-bio">Bio</Label>
+        <Input
+          id="settings-bio"
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          placeholder="A short bio about yourself..."
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => onSave({ name, bio })} disabled={isPending}>
+          {isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+          Save changes
+        </Button>
+      </div>
+    </div>
+  );
 }
