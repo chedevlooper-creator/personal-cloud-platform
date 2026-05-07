@@ -6,6 +6,7 @@ import { encryptEnvVars, decryptEnvVars, redactEnvVars } from './encryption';
 import { env } from './env';
 import { buildPublishSecurityOptions, resolvePublishImage } from './policy';
 import { WorkspaceMaterializer } from './workspace-materializer';
+import { NotFoundError, ValidationError } from '@pcp/shared';
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/;
@@ -97,7 +98,7 @@ export class PublishService {
       .where(and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)))
       .returning();
 
-    if (!service) throw new Error('Service not found or update failed');
+    if (!service) throw new NotFoundError('Service not found or update failed');
     await emitAudit(userId, 'HOSTED_SERVICE_UPDATE', {
       serviceId,
       fields: Object.keys(updates),
@@ -118,7 +119,7 @@ export class PublishService {
       where: and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)),
     });
 
-    if (!service) throw new Error('Service not found');
+    if (!service) throw new NotFoundError('Service not found');
     await this.assertWorkspaceOwned(service.workspaceId, userId);
 
     // Update status to starting
@@ -139,7 +140,7 @@ export class PublishService {
       where: and(eq(hostedServices.id, serviceId), eq(hostedServices.userId, userId)),
     });
 
-    if (!service) throw new Error('Service not found');
+    if (!service) throw new NotFoundError('Service not found');
 
     if (service.runnerProcessId) {
       try {
@@ -297,7 +298,7 @@ export class PublishService {
     });
 
     if (!workspace) {
-      throw new Error('Workspace not found');
+      throw new NotFoundError('Workspace not found');
     }
   }
 }
@@ -336,7 +337,7 @@ function normalizeHostedServiceUpdate(data: HostedServiceUpdate): HostedServiceU
 function normalizeSlug(slug: string): string {
   const normalized = slug.trim().toLowerCase();
   if (!SLUG_PATTERN.test(normalized)) {
-    throw new Error('Invalid hosted service slug');
+    throw new ValidationError('Invalid hosted service slug');
   }
 
   return normalized;
@@ -350,7 +351,7 @@ function normalizeRootPath(rootPath: string): string {
     normalized.includes('\0') ||
     normalized.startsWith('~')
   ) {
-    throw new Error('Invalid hosted service root path');
+    throw new ValidationError('Invalid hosted service root path');
   }
 
   const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
@@ -361,7 +362,7 @@ function normalizeStartCommand(startCommand: string | null | undefined): string 
   if (!startCommand) return undefined;
   const normalized = startCommand.trim();
   if (!normalized || /[\r\n\0]/.test(normalized)) {
-    throw new Error('Invalid hosted service start command');
+    throw new ValidationError('Invalid hosted service start command');
   }
 
   return normalized;
